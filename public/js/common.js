@@ -1,305 +1,127 @@
-'use strict';
-
-// ####################################################################
-// NEW CALL
-// ####################################################################
-
-const adjectives = [
-    'small',
-    'big',
-    'large',
-    'smelly',
-    'new',
-    'happy',
-    'shiny',
-    'old',
-    'clean',
-    'nice',
-    'bad',
-    'cool',
-    'hot',
-    'cold',
-    'warm',
-    'hungry',
-    'slow',
-    'fast',
-    'red',
-    'white',
-    'black',
-    'blue',
-    'green',
-    'basic',
-    'strong',
-    'cute',
-    'poor',
-    'nice',
-    'huge',
-    'rare',
-    'lucky',
-    'weak',
-    'tall',
-    'short',
-    'tiny',
-    'great',
-    'long',
-    'single',
-    'rich',
-    'young',
-    'dirty',
-    'fresh',
-    'brown',
-    'dark',
-    'crazy',
-    'sad',
-    'loud',
-    'brave',
-    'calm',
-    'silly',
-    'smart',
-];
-
-const nouns = [
-    'dog',
-    'bat',
-    'wrench',
-    'apple',
-    'pear',
-    'ghost',
-    'cat',
-    'wolf',
-    'squid',
-    'goat',
-    'snail',
-    'hat',
-    'sock',
-    'plum',
-    'bear',
-    'snake',
-    'turtle',
-    'horse',
-    'spoon',
-    'fork',
-    'spider',
-    'tree',
-    'chair',
-    'table',
-    'couch',
-    'towel',
-    'panda',
-    'bread',
-    'grape',
-    'cake',
-    'brick',
-    'rat',
-    'mouse',
-    'bird',
-    'oven',
-    'phone',
-    'photo',
-    'frog',
-    'bear',
-    'camel',
-    'sheep',
-    'shark',
-    'tiger',
-    'zebra',
-    'duck',
-    'eagle',
-    'fish',
-    'kitten',
-    'lobster',
-    'monkey',
-    'owl',
-    'puppy',
-    'pig',
-    'rabbit',
-    'fox',
-    'whale',
-    'beaver',
-    'gorilla',
-    'lizard',
-    'parrot',
-    'sloth',
-    'swan',
-];
-
-let adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
-let noun = nouns[Math.floor(Math.random() * nouns.length)];
-let num = getRandomNumber(5);
-noun = noun.charAt(0).toUpperCase() + noun.substring(1);
-adjective = adjective.charAt(0).toUpperCase() + adjective.substring(1);
+"use strict";
 
 /**
- * Get random number
- * @param {integer} length of string
- * @returns {string} random number
+ * Tạo mã phòng ngẫu nhiên 6 ký tự (bao gồm chữ cái và số)
  */
-function getRandomNumber(length) {
-    let result = '';
-    const characters = '0123456789';
-    const charactersLength = characters.length;
-    for (let i = 0; i < length; i++) {
-        result += characters.charAt(Math.floor(Math.random() * charactersLength));
-    }
-    return result;
+function getRandomRoomCode() {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
+  for (let i = 0; i < 10; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 }
 
-// Shuffle Text Effect
-
-let txt = num + adjective + noun;
-
 /**
- * Shuffle text effect for input fields
- * @param {HTMLInputElement} input
- * @param {string} finalValue
- * @param {number} duration
+ * Hiệu ứng xáo trộn ký tự (Shuffle text) cho ô nhập tên phòng
  */
 function shuffleText(input, finalValue, duration = 600) {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    const steps = 10;
-    const interval = duration / steps;
-    let step = 0;
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const steps = 10;
+  const interval = duration / steps;
+  let step = 0;
 
-    input.classList.add('shuffle-active');
+  input.classList.add("shuffle-active");
 
-    const timer = setInterval(() => {
-        step++;
-        const progress = step / steps;
-        let display = '';
-        for (let i = 0; i < finalValue.length; i++) {
-            if (i < finalValue.length * progress) {
-                display += finalValue[i];
-            } else {
-                display += chars[Math.floor(Math.random() * chars.length)];
-            }
-        }
-        input.value = display;
+  const timer = setInterval(() => {
+    step++;
+    const progress = step / steps;
+    let display = "";
+    for (let i = 0; i < finalValue.length; i++) {
+      if (i < finalValue.length * progress) {
+        display += finalValue[i];
+      } else {
+        display += chars[Math.floor(Math.random() * chars.length)];
+      }
+    }
+    input.value = display;
 
-        if (step >= steps) {
-            clearInterval(timer);
-            input.value = finalValue;
-            setTimeout(() => input.classList.remove('shuffle-active'), 300);
-        }
-    }, interval);
+    if (step >= steps) {
+      clearInterval(timer);
+      input.value = finalValue;
+      setTimeout(() => input.classList.remove("shuffle-active"), 300);
+    }
+  }, interval);
 }
 
-const roomName = document.getElementById('roomName');
+// ---------------------------------------------------------
+// 1. Tự động điền tên phòng ngẫu nhiên khi mới vào trang
+// ---------------------------------------------------------
+const roomName = document.getElementById("roomName");
 if (roomName) {
-    roomName.value = '';
-    shuffleText(roomName, txt);
+  roomName.value = "";
+  shuffleText(roomName, getRandomRoomCode());
 
-    roomName.onkeyup = (e) => {
-        if (e.keyCode === 13) {
-            e.preventDefault();
-            joinRoom();
-        }
-    };
+  // Bấm Enter ở ô nhập tên phòng để truy cập
+  roomName.onkeyup = (e) => {
+    if (e.keyCode === 13) {
+      e.preventDefault();
+      joinRoom();
+    }
+  };
 }
 
-// ####################################################################
-// LANDING | NEW CALL
-// ####################################################################
-
-const lastRoomContainer = document.getElementById('lastRoomContainer');
-const lastRoom = document.getElementById('lastRoom');
-const lastRoomName = window.localStorage.lastRoom ? window.localStorage.lastRoom : '';
+// ---------------------------------------------------------
+// 2. Hiển thị phòng truy cập gần nhất (Last Room)
+// ---------------------------------------------------------
+const lastRoomContainer = document.getElementById("lastRoomContainer");
+const lastRoom = document.getElementById("lastRoom");
+const lastRoomName = window.localStorage.lastRoom ? window.localStorage.lastRoom : "";
 
 if (lastRoomContainer && lastRoom && lastRoomName) {
-    lastRoom.setAttribute('href', '/join/' + lastRoomName);
-    lastRoom.innerText = lastRoomName;
+  lastRoom.setAttribute("href", "/join/" + lastRoomName);
+  lastRoom.innerText = lastRoomName;
+  lastRoomContainer.style.display = "inline-flex"; // Hiển thị nếu có dữ liệu
 }
 
-const genRoomButton = document.getElementById('genRoomButton');
-const joinRoomButton = document.getElementById('joinRoomButton');
-const customizeRoomButton = document.getElementById('customizeRoomButton');
-const adultCnt = document.getElementById('adultCnt');
+// ---------------------------------------------------------
+// 3. Xử lý các nút bấm (Tạo phòng & Tham gia)
+// ---------------------------------------------------------
+const genRoomButton = document.getElementById("genRoomButton");
+const joinRoomButton = document.getElementById("joinRoomButton");
 
 if (genRoomButton) {
-    genRoomButton.onclick = (e) => {
-        genRoomButton.classList.remove('spin');
-        void genRoomButton.offsetWidth;
-        genRoomButton.classList.add('spin');
-        genRoom();
-    };
-    genRoomButton.addEventListener('animationend', () => {
-        genRoomButton.classList.remove('spin');
-    });
+  genRoomButton.onclick = (e) => {
+    e.preventDefault();
+    genRoomButton.classList.remove("spin");
+    void genRoomButton.offsetWidth; // Kích hoạt lại animation
+    genRoomButton.classList.add("spin");
+    shuffleText(document.getElementById("roomName"), getRandomRoomCode());
+  };
+  genRoomButton.addEventListener("animationend", () => {
+    genRoomButton.classList.remove("spin");
+  });
 }
 
 if (joinRoomButton) {
-    joinRoomButton.onclick = (e) => {
-        joinRoom();
-    };
+  joinRoomButton.onclick = (e) => {
+    e.preventDefault();
+    joinRoom();
+  };
 }
 
-if (customizeRoomButton) {
-    customizeRoomButton.onclick = (e) => {
-        window.location.href = '/customizeRoom';
-    };
-}
-
-if (adultCnt) {
-    adultCnt.onclick = (e) => {
-        adultContent();
-    };
-}
-
-function genRoom() {
-    const input = document.getElementById('roomName');
-    shuffleText(input, getUUID4());
-}
-
-function getUUID4() {
-    return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c) =>
-        (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
-    );
-}
-
+/**
+ * Xử lý kiểm tra tên và chuyển hướng người dùng vào phòng
+ */
 function joinRoom() {
-    const roomName = filterXSS(document.getElementById('roomName').value).trim().replace(/\s+/g, '-');
-    const roomValid = isValidRoomName(roomName);
+  const inputVal = document.getElementById("roomName").value;
+  // Lọc XSS và định dạng lại tên phòng (đổi dấu cách thành gạch ngang)
+  const room = filterXSS(inputVal).trim().replace(/\s+/g, "-");
+  
+  if (!room) {
+    popup("warning", "Tên phòng đang trống!\nVui lòng nhập tên phòng.");
+    return;
+  }
 
-    if (!roomName) {
-        popup('warning', 'Room name empty!\nPlease pick a room name.');
-        return;
-    }
-    if (!roomValid) {
-        popup('warning', 'Invalid Room name!\nPath traversal pattern detected!');
-        return;
-    }
+  // Chặn lỗi Path Traversal
+  const pathTraversalPattern = /(\.\.(\/|\\))+/;
+  if (pathTraversalPattern.test(room)) {
+    popup("warning", "Tên phòng không hợp lệ!");
+    return;
+  }
 
-    window.location.href = '/join/' + roomName;
-    window.localStorage.lastRoom = roomName;
+  // Lưu phòng vào LocalStorage để lần sau hiển thị ở "Last Room"
+  window.localStorage.lastRoom = room;
+  // Chuyển hướng người dùng vào URL phòng họp
+  window.location.href = "/join/" + room;
 }
-
-function isValidRoomName(input) {
-    if (typeof input !== 'string') {
-        return false;
-    }
-    const pathTraversalPattern = /(\.\.(\/|\\))+/;
-    return !pathTraversalPattern.test(input);
-}
-
-function adultContent() {
-    if (
-        confirm(
-            '18+ WARNING! ADULTS ONLY!\n\nExplicit material for viewing by adults 18 years of age or older. You must be at least 18 years old to access to this site!\n\nProceeding you are agree and confirm to have 18+ year.'
-        )
-    ) {
-        window.open('https://luvlounge.ca', '_blank');
-    }
-}
-
-// #########################################################
-// PERMISSIONS
-// #########################################################
-
-const qs = new URLSearchParams(window.location.search);
-const room_id = filterXSS(qs.get('room_id'));
-const message = filterXSS(qs.get('message'));
-const showMessage = document.getElementById('message');
-console.log('Allow Camera or Audio', {
-    room_id: room_id,
-    message: message,
-});
-if (showMessage) showMessage.innerHTML = message;

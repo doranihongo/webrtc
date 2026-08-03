@@ -10,9 +10,9 @@
 #goog-gt-tt *,
 #goog-gt-vt,
 #goog-gt-vt * {
-    display: none !important;
+  display: none !important;
 }
 
 #google_translate_element {
-    display: none !important;
+  display: none !important;
 }

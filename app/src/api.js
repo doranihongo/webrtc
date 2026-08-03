@@ -1,130 +1,159 @@
-'use strict';
+"use strict";
 
-const jwt = require('jsonwebtoken');
-const CryptoJS = require('crypto-js');
+const jwt = require("jsonwebtoken");
+const CryptoJS = require("crypto-js");
 
-const { v4: uuidV4 } = require('uuid');
+const { v4: uuidV4 } = require("uuid");
 
-const config = require('./config');
+const config = require("./config");
 const JWT_KEY = config.jwt.key;
 const JWT_EXP = config.jwt.exp;
 module.exports = class ServerApi {
-    constructor(host = null, authorization = null, api_key_secret = null) {
-        this._host = host;
-        this._authorization = authorization;
-        this._api_key_secret = api_key_secret;
+  constructor(host = null, authorization = null, api_key_secret = null) {
+    this._host = host;
+    this._authorization = authorization;
+    this._api_key_secret = api_key_secret;
+  }
+
+  isAuthorized() {
+    if (!this._api_key_secret || typeof this._api_key_secret !== "string")
+      return false;
+    if (!this._authorization || typeof this._authorization !== "string")
+      return false;
+    if (this._authorization !== this._api_key_secret) return false;
+    return true;
+  }
+
+  getStats(peers, timestamp = new Date().toISOString()) {
+    const metaKeys = new Set(["lock", "password"]);
+    let totalRooms = 0;
+    let totalPeers = 0;
+
+    for (const room_id in peers) {
+      totalRooms++; // Increment room count
+      totalPeers += Object.keys(peers[room_id]).filter(
+        (k) => !metaKeys.has(k),
+      ).length;
     }
 
-    isAuthorized() {
-        if (!this._api_key_secret || typeof this._api_key_secret !== 'string') return false;
-        if (!this._authorization || typeof this._authorization !== 'string') return false;
-        if (this._authorization !== this._api_key_secret) return false;
-        return true;
+    return {
+      timestamp,
+      totalRooms,
+      totalPeers,
+    };
+  }
+
+  getActiveRooms(roomList) {
+    const metaKeys = new Set(["lock", "password"]);
+    return Object.entries(roomList).map(([roomId, room]) => ({
+      id: roomId,
+      peers:
+        room && typeof room === "object"
+          ? Object.keys(room).filter((k) => !metaKeys.has(k)).length
+          : 0,
+      join: this.getProtocol() + this._host + "/" + roomId,
+    }));
+  }
+
+  getMeetings(peers) {
+    const meetings = {};
+    for (const room_id in peers) {
+      const meeting = peers[room_id];
+      meetings[room_id] = meeting;
     }
+    return meetings;
+  }
 
-    getStats(peers, timestamp = new Date().toISOString()) {
-        const metaKeys = new Set(['lock', 'password']);
-        let totalRooms = 0;
-        let totalPeers = 0;
+  getMeetingURL() {
+    return this.getProtocol() + this._host + "/join/" + uuidV4();
+  }
 
-        for (const room_id in peers) {
-            totalRooms++; // Increment room count
-            totalPeers += Object.keys(peers[room_id]).filter((k) => !metaKeys.has(k)).length;
-        }
+  getJoinURL(data) {
+    // Get data
+    const {
+      room,
+      name,
+      avatar,
+      audio,
+      video,
+      screen,
+      chat,
+      notify,
+      hide,
+      duration,
+      token,
+    } = data;
 
-        return {
-            timestamp,
-            totalRooms,
-            totalPeers,
-        };
-    }
+    const roomValue = room || uuidV4();
+    const nameValue = name || "User-" + this.getRandomNumber();
+    const avatarValue = avatar || false;
+    const audioValue = audio || false;
+    const videoValue = video || false;
+    const screenValue = screen || false;
+    const chatValue = chat || false;
+    const hideValue = hide || false;
+    const notifyValue = notify || false;
+    const durationValue = duration || "unlimited";
+    const jwtToken = token ? "&token=" + this.getToken(token) : "";
 
-    getActiveRooms(roomList) {
-        const metaKeys = new Set(['lock', 'password']);
-        return Object.entries(roomList).map(([roomId, room]) => ({
-            id: roomId,
-            peers: room && typeof room === 'object' ? Object.keys(room).filter((k) => !metaKeys.has(k)).length : 0,
-            join: this.getProtocol() + this._host + '/' + roomId,
-        }));
-    }
+    const joinURL =
+      this.getProtocol() +
+      this._host +
+      "/join?" +
+      `room=${roomValue}` +
+      `&name=${encodeURIComponent(nameValue)}` +
+      `&avatar=${encodeURIComponent(avatarValue)}` +
+      `&audio=${audioValue}` +
+      `&video=${videoValue}` +
+      `&screen=${screenValue}` +
+      `&chat=${chatValue}` +
+      `&hide=${hideValue}` +
+      `&notify=${notifyValue}` +
+      `&duration=${durationValue}` +
+      jwtToken;
 
-    getMeetings(peers) {
-        const meetings = {};
-        for (const room_id in peers) {
-            const meeting = peers[room_id];
-            meetings[room_id] = meeting;
-        }
-        return meetings;
-    }
+    return joinURL;
+  }
 
-    getMeetingURL() {
-        return this.getProtocol() + this._host + '/join/' + uuidV4();
-    }
+  getToken(token) {
+    if (!token) return "";
 
-    getJoinURL(data) {
-        // Get data
-        const { room, name, avatar, audio, video, screen, chat, notify, hide, duration, token } = data;
+    const {
+      username = "username",
+      password = "password",
+      presenter = false,
+      expire,
+    } = token;
 
-        const roomValue = room || uuidV4();
-        const nameValue = name || 'User-' + this.getRandomNumber();
-        const avatarValue = avatar || false;
-        const audioValue = audio || false;
-        const videoValue = video || false;
-        const screenValue = screen || false;
-        const chatValue = chat || false;
-        const hideValue = hide || false;
-        const notifyValue = notify || false;
-        const durationValue = duration || 'unlimited';
-        const jwtToken = token ? '&token=' + this.getToken(token) : '';
+    const expireValue = expire || JWT_EXP;
 
-        const joinURL =
-            this.getProtocol() +
-            this._host +
-            '/join?' +
-            `room=${roomValue}` +
-            `&name=${encodeURIComponent(nameValue)}` +
-            `&avatar=${encodeURIComponent(avatarValue)}` +
-            `&audio=${audioValue}` +
-            `&video=${videoValue}` +
-            `&screen=${screenValue}` +
-            `&chat=${chatValue}` +
-            `&hide=${hideValue}` +
-            `&notify=${notifyValue}` +
-            `&duration=${durationValue}` +
-            jwtToken;
+    // Constructing payload
+    const payload = {
+      username: String(username),
+      password: String(password),
+      presenter: String(presenter),
+    };
 
-        return joinURL;
-    }
+    // Encrypt payload using AES encryption
+    const payloadString = JSON.stringify(payload);
+    const encryptedPayload = CryptoJS.AES.encrypt(
+      payloadString,
+      JWT_KEY,
+    ).toString();
 
-    getToken(token) {
-        if (!token) return '';
+    // Constructing JWT token
+    const jwtToken = jwt.sign({ data: encryptedPayload }, JWT_KEY, {
+      expiresIn: expireValue,
+    });
 
-        const { username = 'username', password = 'password', presenter = false, expire } = token;
+    return jwtToken;
+  }
 
-        const expireValue = expire || JWT_EXP;
+  getProtocol() {
+    return "http" + (this._host.includes("localhost") ? "" : "s") + "://";
+  }
 
-        // Constructing payload
-        const payload = {
-            username: String(username),
-            password: String(password),
-            presenter: String(presenter),
-        };
-
-        // Encrypt payload using AES encryption
-        const payloadString = JSON.stringify(payload);
-        const encryptedPayload = CryptoJS.AES.encrypt(payloadString, JWT_KEY).toString();
-
-        // Constructing JWT token
-        const jwtToken = jwt.sign({ data: encryptedPayload }, JWT_KEY, { expiresIn: expireValue });
-
-        return jwtToken;
-    }
-
-    getProtocol() {
-        return 'http' + (this._host.includes('localhost') ? '' : 's') + '://';
-    }
-
-    getRandomNumber() {
-        return Math.floor(Math.random() * 999999);
-    }
+  getRandomNumber() {
+    return Math.floor(Math.random() * 999999);
+  }
 };
