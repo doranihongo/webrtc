@@ -66,7 +66,9 @@ if (roomName) {
 // ---------------------------------------------------------
 const lastRoomContainer = document.getElementById("lastRoomContainer");
 const lastRoom = document.getElementById("lastRoom");
-const lastRoomName = window.localStorage.lastRoom ? window.localStorage.lastRoom : "";
+const lastRoomName = window.localStorage.lastRoom
+  ? window.localStorage.lastRoom
+  : "";
 
 if (lastRoomContainer && lastRoom && lastRoomName) {
   lastRoom.setAttribute("href", "/join/" + lastRoomName);
@@ -107,7 +109,7 @@ function joinRoom() {
   const inputVal = document.getElementById("roomName").value;
   // Lọc XSS và định dạng lại tên phòng (đổi dấu cách thành gạch ngang)
   const room = filterXSS(inputVal).trim().replace(/\s+/g, "-");
-  
+
   if (!room) {
     popup("warning", "Tên phòng đang trống!\nVui lòng nhập tên phòng.");
     return;

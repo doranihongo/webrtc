@@ -1066,138 +1066,9 @@ body {
 # Chat room aka msger
 --------------------------------------------------------------*/
 
-.msger-draggable {
-  z-index: 14;
-  display: none;
-  position: fixed;
-  height: var(--msger-height);
-  width: var(--msger-width);
-  min-height: var(--msger-height);
-  min-width: var(--msger-width);
-  background: var(--msger-bg);
-  border: var(--border);
-  resize: none;
-  overflow: hidden;
-  border-radius: 20px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(22px);
-  transition: width 0.5s ease-in-out;
-}
-
-.msger-draggable.msger-pinned {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.msger-draggable.msger-pinned.msger-pinned-sidebar-open {
-  overflow: visible;
-}
-
-.msger-draggable.msger-pinned #msgerCPBtn {
-  display: inline-flex !important;
-}
-
-.msger-draggable.msger-pinned .msger-layout {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.msger-draggable.msger-pinned .msger-sidebar {
-  display: none;
-}
-
-.msger-draggable.msger-pinned.msger-pinned-sidebar-open .msger-sidebar {
-  z-index: 16;
-  display: flex;
-  position: absolute;
-  inset: 0;
-  gap: 16px;
-  padding: 20px 16px;
-  border-right: none;
-  background: var(--msger-private-bg);
-  overflow: visible;
-}
-
-.msger-draggable.msger-pinned.msger-pinned-sidebar-open #msgerSidebarCloseBtn {
-  display: inline-flex;
-}
-
-.msger-draggable.msger-pinned.msger-pinned-sidebar-open .msger-main {
-  visibility: hidden;
-}
-
-.msger-draggable.msger-pinned .msger-chat-item {
-  padding: 12px;
-}
-
-.msger-draggable.msger-pinned .msger-conversation-banner {
-  padding: 16px 18px;
-}
-
-.msger-draggable.msger-pinned .msger-chat {
-  padding: 18px 18px 14px;
-}
-
-.msger-draggable.msger-pinned .msger-composer {
-  padding: 14px 18px 18px;
-}
-
-@media (max-width: 1500px) {
-  .msger-draggable.msger-pinned .msger-header {
-    gap: 10px;
-    padding: 15px 16px;
-  }
-
-  .msger-draggable.msger-pinned .msger-header-options {
-    gap: 6px;
-  }
-
-  .msger-draggable.msger-pinned .msger-panel-heading h3 {
-    font-size: 1rem;
-  }
-
-  .msger-draggable.msger-pinned .msger-sidebar-label {
-    font-size: 0.66rem;
-    letter-spacing: 0.06em;
-  }
-
-  .msger-draggable.msger-pinned .msger-header-title > button,
-  .msger-draggable.msger-pinned .msger-header-options > button,
-  .msger-draggable.msger-pinned .msger-header-options .dropdown-toggle-custom {
-    width: 36px;
-    height: 36px;
-    font-size: 0.92rem;
-    border-radius: 10px;
-  }
-}
-
-@media (max-width: 1280px) {
-  .msger-draggable.msger-pinned .msger-header {
-    gap: 8px;
-    padding: 12px 14px;
-  }
-
-  .msger-draggable.msger-pinned .msger-header-options {
-    gap: 4px;
-  }
-
-  .msger-draggable.msger-pinned .msger-panel-heading h3 {
-    font-size: 0.92rem;
-  }
-
-  .msger-draggable.msger-pinned .msger-sidebar-label {
-    font-size: 0.6rem;
-    letter-spacing: 0.05em;
-  }
-
-  .msger-draggable.msger-pinned .msger-header-title > button,
-  .msger-draggable.msger-pinned .msger-header-options > button,
-  .msger-draggable.msger-pinned .msger-header-options .dropdown-toggle-custom {
-    width: 32px;
-    height: 32px;
-    font-size: 0.84rem;
-    border-radius: 9px;
-  }
-}
+/* Sizing/appearance is fully handled by the Tailwind classes already on
+   #msgerDraggable (backdrop) and #msger (panel: w-full h-full max-w-lg ...),
+   plus the responsive pinned/docked rules in client.html. Nothing else needed here. */
 
 .msger {
   display: flex;
@@ -1212,7 +1083,7 @@ body {
 .msger-layout {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr); 
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -2686,8 +2557,6 @@ button {
 #msgerCPBtn {
   display: none !important;
 }
-
-
 
 @media (min-width: 1201px) {
   #msgerCPCloseBtn,
@@ -5416,131 +5285,199 @@ z-index
 # Top Header Bar (Custom UI)
 --------------------------------------------------------------*/
 .top-header-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 40;
-    padding: 8px 16px;
-    background: linear-gradient(to bottom, rgba(2, 6, 23, 0.9), transparent);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-family: system-ui, -apple-system, sans-serif;
-    pointer-events: none; /* Allows clicking through empty spaces */
-    transition: all 0.5s;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  padding: 8px 16px;
+  background: linear-gradient(to bottom, rgba(2, 6, 23, 0.9), transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  pointer-events: none; /* Allows clicking through empty spaces */
+  transition: all 0.5s;
 }
 
 .flex-center {
-    display: flex;
-    align-items: center;
+  display: flex;
+  align-items: center;
 }
 
 .gap-2 {
-    gap: 8px;
+  gap: 8px;
 }
 
 .header-badge {
-    background-color: rgba(15, 23, 42, 0.9);
-    border: 1px solid #1e293b;
-    padding: 4px 10px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    pointer-events: auto; /* Re-enable clicks for buttons */
+  background-color: rgba(15, 23, 42, 0.9);
+  border: 1px solid #1e293b;
+  padding: 4px 10px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  pointer-events: auto; /* Re-enable clicks for buttons */
 }
 
-.text-blue-400 { color: #60a5fa; }
-.text-slate-400 { color: #94a3b8; }
-
-.label-text { 
-    color: #94a3b8; 
-    font-size: 11px; 
-    font-weight: 400;
+.text-blue-400 {
+  color: #60a5fa;
+}
+.text-slate-400 {
+  color: #94a3b8;
 }
 
-.room-id-text { 
-    color: #60a5fa; 
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; 
-    font-weight: 700; 
-    font-size: 12px; 
-    text-transform: uppercase; 
-    letter-spacing: 0.05em; 
+.label-text {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.room-id-text {
+  color: #60a5fa;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .header-copy-btn {
-    background: transparent !important;
-    border: none !important;
-    padding: 2px !important;
-    color: #94a3b8;
-    cursor: pointer;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-left: 2px;
-    min-width: unset !important;
-    width: auto !important;
-    height: auto !important;
-    transition: color 0.2s, background-color 0.2s;
+  background: transparent !important;
+  border: none !important;
+  padding: 2px !important;
+  color: #94a3b8;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 2px;
+  min-width: unset !important;
+  width: auto !important;
+  height: auto !important;
+  transition:
+    color 0.2s,
+    background-color 0.2s;
 }
 
 .header-copy-btn:hover {
-    color: #e2e8f0 !important;
-    background-color: #1e293b !important;
-    transform: none !important;
+  color: #e2e8f0 !important;
+  background-color: #1e293b !important;
+  transform: none !important;
 }
 
 .header-copy-btn i {
-    font-size: 12px;
+  font-size: 12px;
 }
 
 .timer-text,
 .timer-text * {
-    color: #cbd5e1 !important;
-    font-family: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-    font-size: 12px !important;
-    font-weight: 600 !important;
-    font-variant-numeric: tabular-nums !important;
-    -webkit-font-smoothing: antialiasing !important;
-    display: inline-block;
-    min-width: 48px !important; 
-    text-align: center;
+  color: #cbd5e1 !important;
+  font-family:
+    "Montserrat",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  font-variant-numeric: tabular-nums !important;
+  -webkit-font-smoothing: antialiasing !important;
+  display: inline-block;
+  min-width: 48px !important;
+  text-align: center;
 }
 
 .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
-.status-dot.success { 
-    background-color: #10b981; 
-    animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; 
+.status-dot.success {
+  background-color: #10b981;
+  animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
-.status-dot.warning { 
-    background-color: #f59e0b; 
+.status-dot.warning {
+  background-color: #f59e0b;
 }
 
-.peer-count-text { 
-    font-family: ui-monospace, SFMono-Regular, monospace; 
-    font-weight: 700; 
-    font-size: 12px; 
+.peer-count-text {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-weight: 700;
+  font-size: 12px;
 }
-.peer-count-text.success-text { color: #34d399; }
-.peer-count-text.warning-text { color: #fbbf24; }
+.peer-count-text.success-text {
+  color: #34d399;
+}
+.peer-count-text.warning-text {
+  color: #fbbf24;
+}
 
 @keyframes pulse-dot {
-    0%, 100% { opacity: 1; }
-    50% { opacity: .5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 @media (max-width: 640px) {
-    .label-text { display: none; }
-    .header-badge { padding: 4px 8px; }
+  .label-text {
+    display: none;
+  }
+  .header-badge {
+    padding: 4px 8px;
+  }
 }
-
+section#msgerDraggable:nth-of-type(1)
+  > section#msger:nth-of-type(1)
+  > div:nth-of-type(1)
+  > section:nth-of-type(1)
+  > main#msgerChat:nth-of-type(1) {
+  background-color: #161535 !important;
+}
+section#msgerDraggable:nth-of-type(1)
+  > section#msger:nth-of-type(1)
+  > header#msgerHeader:nth-of-type(1) {
+  background-color: #25375b !important;
+}
+section#msgerDraggable:nth-of-type(1)
+  > section#msger:nth-of-type(1)
+  > div:nth-of-type(1)
+  > section:nth-of-type(1)
+  > div:nth-of-type(1)
+  > button#msgerSendBtn:nth-of-type(2) {
+  background-color: #0016ff !important;
+  border-color: #ffffff !important;
+}
+section#msgerDraggable:nth-of-type(1)
+  > section#msger:nth-of-type(1)
+  > header#msgerHeader:nth-of-type(1)
+  > div:nth-of-type(2)
+  > button#msgerClose:nth-of-type(1)
+  > svg:nth-of-type(1) {
+  color: #ff2200 !important;
+}
+section#msgerDraggable:nth-of-type(1)
+  > section#msger:nth-of-type(1)
+  > div:nth-of-type(1)
+  > section:nth-of-type(1)
+  > div:nth-of-type(1) {
+  background-color: #1d2651 !important;
+  border-color: #000000 !important;
+}

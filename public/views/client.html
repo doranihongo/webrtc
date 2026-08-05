@@ -1,6 +1,36 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      #bottomButtons {
+        opacity: 0 !important;
+        pointer-events: none !important;
+        position: absolute !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
+        z-index: -9999 !important;
+      }
+
+      #msgerChat::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+
+      @media (max-width: 640px) {
+        #msgerDraggable {
+          padding: 0 !important;
+        }
+        #msger {
+          border-radius: 0 !important;
+          border: none !important;
+          max-width: 100% !important;
+        }
+      }
+    </style>
+
     <!-- Title and Icon -->
 
     <title id="clientTitle">
@@ -97,6 +127,143 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/atom-one-dark.min.css"
     />
 
+    <!-- Custom Chat Styling -->
+    <style>
+      /* Override JS inline positioning */
+      #msgerDraggable {
+        top: 0 !important;
+        left: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        height: 100% !important;
+      }
+      /* Desktop pinned state */
+      @media (min-width: 1024px) and (orientation: landscape) {
+        #msgerDraggable.msger-pinned {
+          position: absolute !important;
+          top: 50px !important;
+          right: 16px !important;
+          left: auto !important;
+          bottom: auto !important;
+          width: 320px !important;
+          height: calc(100% - 130px) !important;
+          background: transparent !important;
+          backdrop-filter: none !important;
+          padding: 0 !important;
+        }
+      }
+      @media (min-width: 1280px) and (orientation: landscape) {
+        #msgerDraggable.msger-pinned {
+          width: 384px !important;
+        }
+      }
+
+      /* Adjust video container when chat is pinned and visible */
+      @media (min-width: 1024px) and (orientation: landscape) {
+        body:has(#msgerDraggable.msger-pinned[style*="display: flex"])
+          #videoMediaContainer,
+        body:has(#msgerDraggable.msger-pinned[style*="display: block"])
+          #videoMediaContainer {
+          width: calc(100% - 320px - 48px) !important;
+        }
+      }
+      @media (min-width: 1280px) and (orientation: landscape) {
+        body:has(#msgerDraggable.msger-pinned[style*="display: flex"])
+          #videoMediaContainer,
+        body:has(#msgerDraggable.msger-pinned[style*="display: block"])
+          #videoMediaContainer {
+          width: calc(100% - 384px - 48px) !important;
+        }
+      }
+
+      /* Waiting room 3-column layout when chat is open */
+      @media (min-width: 1024px) and (orientation: landscape) {
+        body:has(#waitingRoomCard[style*="display: flex"]):has(
+            #msgerDraggable.msger-pinned[style*="display: flex"]
+          ),
+        body:has(#waitingRoomCard[style*="display: flex"]):has(
+            #msgerDraggable.msger-pinned[style*="display: block"]
+          ) {
+          #msgerDraggable.msger-pinned {
+            width: calc((100vw - 64px) / 3) !important;
+          }
+          #videoMediaContainer {
+            width: calc(((100vw - 64px) / 3) * 2 + 16px) !important;
+          }
+        }
+      }
+
+      /* Message Bubbles Styling */
+      .msg {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 0.5rem;
+      }
+      .msg.left-msg {
+        align-items: flex-start;
+      }
+      .msg.right-msg {
+        align-items: flex-end;
+      }
+      .msg-bubble,
+      .private-msg-bubble {
+        max-width: 85%;
+        padding: 0.625rem 0.875rem;
+        border-radius: 1rem;
+        word-wrap: break-word;
+        line-height: 1.625;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        font-size: 0.875rem;
+      }
+      .msg.left-msg .msg-bubble,
+      .msg.left-msg .private-msg-bubble {
+        background-color: #1e293b;
+        border: 1px solid rgba(51, 65, 85, 0.8);
+        color: #f1f5f9;
+        border-bottom-left-radius: 0.125rem;
+      }
+      .msg.right-msg .msg-bubble,
+      .msg.right-msg .private-msg-bubble {
+        background-color: #2563eb;
+        color: #ffffff;
+        border-bottom-right-radius: 0.125rem;
+      }
+      .msg-footer {
+        margin-top: 0.125rem;
+        padding: 0 0.25rem;
+        font-size: 10px;
+        color: #94a3b8;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        user-select: none;
+      }
+      .msg.right-msg .msg-footer {
+        text-align: right;
+      }
+      .msg.left-msg .msg-footer {
+        text-align: left;
+      }
+
+      #msgerChat:empty::before {
+        content: "Chưa có tin nhắn nào.\A\A Gửi tin nhắn để bắt đầu trò chuyện trong phòng gọi.";
+        white-space: pre-wrap;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: #64748b;
+        font-size: 0.75rem;
+        padding: 2rem 0;
+        height: 100%;
+        opacity: 0.8;
+      }
+      #msgerChat::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+      }
+    </style>
   </head>
 
   <body>
@@ -283,7 +450,6 @@ access to use this app.
         aria-label="Toggle chat"
         aria-pressed="false"
       ></button>
-     
 
       <div id="settingsSplit" class="split-btn">
         <button id="mySettingsBtn" class="fas fa-cogs"></button>
@@ -371,68 +537,433 @@ access to use this app.
           <button id="exitLeaveBtn">
             <i class="fas fa-sign-out-alt"></i> Leave room
           </button>
-         
         </div>
       </div>
     </div>
 
     <!-- End bottom buttons -->
 
-    <!-- Start chat room 
-        https://codepen.io/sajadhsm/pen/odaBdd
-        https://getemoji.com
-        -->
+    <!-- NEW CONTROL BAR (Tailwind + Lucide) -->
+    <div
+      id="newControlBar"
+      class="w-max mx-auto fixed bottom-4 sm:bottom-4 max-lg:landscape:bottom-2 left-1/2 -translate-x-1/2 z-40 max-w-full px-2 sm:px-4 transition-all duration-500 transform translate-y-0 opacity-100"
+    >
+      <div
+        class="bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-2xl max-lg:landscape:rounded-xl px-3 sm:px-3 max-lg:landscape:px-2 py-2 sm:py-2 max-lg:landscape:py-1.5 shadow-2xl flex items-center gap-2 sm:gap-2.5 max-lg:landscape:gap-1.5"
+      >
+        <!-- Audio -->
+        <button
+          id="newAudioBtn"
+          title="Bật Micro"
+          class="cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-slate-800 hover:bg-slate-700 text-slate-200"
+        >
+          <i
+            data-lucide="mic"
+            class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"
+          ></i>
+        </button>
 
-    <section id="msgerDraggable" class="msger-draggable fadein">
-      <section id="msger" class="msger">
-        <header id="msgerHeader" class="msger-header">
-          <div class="msger-header-title">
-            <div class="msger-panel-heading msger-panel-heading-compact">
-              <span class="msger-sidebar-label">Chat</span>
-              <h3>Messages</h3>
-            </div>
+        <!-- Video -->
+        <button
+          id="newVideoBtn"
+          title="Bật Camera"
+          class="cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-slate-800 hover:bg-slate-700 text-slate-200"
+        >
+          <i
+            data-lucide="video"
+            class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"
+          ></i>
+        </button>
+
+        <!-- Screen Share -->
+        <button
+          id="newScreenBtn"
+          title="Chia sẻ màn hình"
+          class="cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg items-center justify-center transition-all bg-slate-800 hover:bg-slate-700 text-slate-200"
+        >
+          <svg
+            class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="12" rx="2"></rect>
+            <path d="M12 13V6"></path>
+            <path d="m8 9 4-4 4 4"></path>
+            <path d="M2 19h20"></path>
+          </svg>
+        </button>
+
+        <!-- Record -->
+        <button
+          id="newRecordBtn"
+          title="Ghi hình"
+          class="cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all"
+        >
+          <i
+            data-lucide="circle-dot"
+            class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"
+          ></i>
+        </button>
+
+        <!-- Chat -->
+        <button
+          id="newChatBtn"
+          title="Trò chuyện"
+          class="cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all relative bg-slate-800 hover:bg-slate-700 text-slate-200"
+        >
+          <svg
+            class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+            ></path>
+            <path d="M7.5 7.5h9"></path>
+            <path d="M7.5 10.5h9"></path>
+            <path d="M7.5 13.5h5.5"></path>
+          </svg>
+          <span
+            id="newChatBadge"
+            class="hidden absolute -top-1.5 -right-1.5 max-lg:landscape:-top-1 max-lg:landscape:-right-1 bg-red-600 text-white text-[10px] max-lg:landscape:text-[8px] font-bold min-w-[20px] max-lg:landscape:min-w-[14px] h-5 max-lg:landscape:h-3.5 px-1 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-lg animate-pulse"
+            >0</span
+          >
+        </button>
+
+        <!-- PiP Mode -->
+        <button
+          id="newPipBtn"
+          title="Mở Hình trong hình"
+          style="opacity: 0.5; pointer-events: none"
+          class="cursor-not-allowed hidden md:flex opacity-50 p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all"
+        >
+          <i
+            data-lucide="picture-in-picture"
+            class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"
+          ></i>
+        </button>
+
+        <!-- Fullscreen Video (Mobile only) -->
+        <button
+          id="newFullscreenBtn"
+          title="Toàn màn hình video"
+          class="hidden sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all"
+        >
+          <i
+            data-lucide="maximize"
+            class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"
+          ></i>
+        </button>
+
+        <!-- Settings -->
+        <button
+          id="newSettingsBtn"
+          title="Cài đặt"
+          class="cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition-all"
+        >
+          <i
+            data-lucide="settings"
+            class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"
+          ></i>
+        </button>
+
+        <!-- Divider -->
+        <div
+          class="w-px h-5 max-lg:landscape:h-3.5 bg-slate-800 my-auto hidden md:block"
+        ></div>
+
+        <!-- Leave Call -->
+        <button
+          id="newLeaveBtn"
+          title="Rời cuộc gọi"
+          class="cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all shadow-lg shadow-rose-600/30 font-medium"
+        >
+          <i
+            data-lucide="phone-off"
+            class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"
+          ></i>
+        </button>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        setTimeout(() => {
+          if (window.lucide) window.lucide.createIcons();
+
+          const oldAudio = document.getElementById("audioBtn");
+          const newAudio = document.getElementById("newAudioBtn");
+          const oldVideo = document.getElementById("videoBtn");
+          const newVideo = document.getElementById("newVideoBtn");
+          const oldScreen = document.getElementById("screenShareBtn");
+          const newScreen = document.getElementById("newScreenBtn");
+          const oldRecord = document.getElementById("recordStreamBtn");
+          const newRecord = document.getElementById("newRecordBtn");
+          const oldChat = document.getElementById("chatRoomBtn");
+          const newChat = document.getElementById("newChatBtn");
+          const oldPip = document.getElementById("documentPiPBtn");
+          const newPip = document.getElementById("newPipBtn");
+          const oldFs = document.getElementById("fullScreenBtn");
+          const newFs = document.getElementById("newFullscreenBtn");
+          const oldSettings = document.getElementById("mySettingsBtn");
+          const newSettings = document.getElementById("newSettingsBtn");
+          const oldLeave = document.getElementById("leaveRoomBtn");
+          const newLeave = document.getElementById("newLeaveBtn");
+          const msger = document.getElementById("msgerDraggable");
+          const oldBottom = document.getElementById("bottomButtons");
+          const newBottom = document.getElementById("newControlBar");
+
+          // Bind clicks
+          newAudio?.addEventListener("click", () => oldAudio?.click());
+          newVideo?.addEventListener("click", () => oldVideo?.click());
+          newScreen?.addEventListener("click", () => oldScreen?.click());
+          newRecord?.addEventListener("click", () => oldRecord?.click());
+          newChat?.addEventListener("click", () => oldChat?.click());
+          newPip?.addEventListener("click", () => oldPip?.click());
+          newFs?.addEventListener("click", () => oldFs?.click());
+          newSettings?.addEventListener("click", () => oldSettings?.click());
+          newLeave?.addEventListener("click", () => {
+            if (typeof leaveRoom === "function") leaveRoom();
+            else oldLeave?.click();
+          });
+
+          const updateUI = () => {
+            // Audio state
+            if (oldAudio?.className.includes("fa-microphone-slash")) {
+              newAudio.className =
+                "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30";
+              newAudio.title = "Bật Micro";
+              if (newAudio.getAttribute("data-state") !== "off") {
+                newAudio.innerHTML =
+                  '<i data-lucide="mic-off" class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"></i>';
+                newAudio.setAttribute("data-state", "off");
+                if (window.lucide) window.lucide.createIcons();
+              }
+            } else {
+              newAudio.className =
+                "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-slate-800 hover:bg-slate-700 text-slate-200";
+              newAudio.title = "Tắt Micro";
+              if (newAudio.getAttribute("data-state") !== "on") {
+                newAudio.innerHTML =
+                  '<i data-lucide="mic" class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"></i>';
+                newAudio.setAttribute("data-state", "on");
+                if (window.lucide) window.lucide.createIcons();
+              }
+            }
+
+            // Screen sharing state
+            const isScreenSharing =
+              oldScreen?.className.includes("fa-stop-circle");
+
+            // Video state
+            if (isScreenSharing) {
+              newVideo.className =
+                "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-slate-800/50 text-slate-500 cursor-not-allowed opacity-50";
+              newVideo.title = "Không thể bật camera khi đang chia sẻ màn hình";
+              newVideo.disabled = true;
+            } else if (oldVideo?.className.includes("fa-video-slash")) {
+              newVideo.className =
+                "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30";
+              newVideo.title = "Bật Camera";
+              newVideo.disabled = false;
+              if (newVideo.getAttribute("data-state") !== "off") {
+                newVideo.innerHTML =
+                  '<i data-lucide="video-off" class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"></i>';
+                newVideo.setAttribute("data-state", "off");
+                if (window.lucide) window.lucide.createIcons();
+              }
+            } else {
+              newVideo.className =
+                "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-slate-800 hover:bg-slate-700 text-slate-200";
+              newVideo.title = "Tắt Camera";
+              newVideo.disabled = false;
+              if (newVideo.getAttribute("data-state") !== "on") {
+                newVideo.innerHTML =
+                  '<i data-lucide="video" class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"></i>';
+                newVideo.setAttribute("data-state", "on");
+                if (window.lucide) window.lucide.createIcons();
+              }
+            }
+
+            // Screen state
+            if (isScreenSharing) {
+              newScreen.className =
+                "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg items-center justify-center transition-all bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30";
+              newScreen.title = "Dừng chia sẻ màn hình";
+            } else {
+              newScreen.className =
+                "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg items-center justify-center transition-all bg-slate-800 hover:bg-slate-700 text-slate-200";
+              newScreen.title = "Chia sẻ màn hình";
+            }
+
+            // Chat state
+            const isChatActive = oldChat?.classList.contains("is-active");
+            if (isChatActive) {
+              newChat.className =
+                "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all relative bg-blue-600 text-white";
+            } else {
+              newChat.className =
+                "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all relative bg-slate-800 hover:bg-slate-700 text-slate-200";
+            }
+
+            // Record state
+            const isRecording =
+              oldRecord?.querySelector("i")?.style.color === "red";
+            if (isRecording) {
+              newRecord.className =
+                "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-red-600 text-white items-center justify-center transition-all shadow-lg shadow-red-600/30";
+            } else {
+              newRecord.className =
+                "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all";
+            }
+
+            // PiP state
+            const isPipActive = oldPip?.classList.contains("isActive");
+            if (isPipActive) {
+              newPip.className =
+                "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-blue-600 text-white items-center justify-center transition-all";
+              newPip.title = "Đóng Hình trong hình";
+            } else {
+              newPip.className =
+                "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all";
+              newPip.title = "Mở Hình trong hình";
+            }
+
+            if (oldBottom && newBottom) {
+              if (oldBottom.style.display === "none") {
+                newBottom.className =
+                  "fixed bottom-4 sm:bottom-4 max-lg:landscape:bottom-2 left-1/2 -translate-x-1/2 z-40 max-w-full px-2 sm:px-4 transition-all duration-500 transform max-md:translate-y-24 max-md:opacity-0 max-md:pointer-events-none max-lg:landscape:translate-y-24 max-lg:landscape:opacity-0 max-lg:landscape:pointer-events-none";
+              } else {
+                newBottom.className =
+                  "fixed bottom-4 sm:bottom-4 max-lg:landscape:bottom-2 left-1/2 -translate-x-1/2 z-40 max-w-full px-2 sm:px-4 transition-all duration-500 transform translate-y-0 opacity-100";
+              }
+            }
+          };
+
+          const observer = new MutationObserver(updateUI);
+
+          [
+            oldAudio,
+            oldVideo,
+            oldScreen,
+            oldChat,
+            oldRecord,
+            oldPip,
+            msger,
+            oldBottom,
+          ].forEach((el) => {
+            if (el)
+              observer.observe(el, {
+                attributes: true,
+                attributeFilter: ["class", "style"],
+              });
+          });
+
+          updateUI(); // run once
+        }, 1500);
+      });
+    </script>
+
+    <!-- Start chat room -->
+    <section
+      id="msgerDraggable"
+      class="msger-draggable fixed inset-0 z-50 p-2 sm:p-3 bg-slate-950/85 backdrop-blur-md flex items-center justify-center pointer-events-auto"
+      style="display: none"
+    >
+      <section
+        id="msger"
+        class="w-full h-full max-w-lg lg:landscape:max-w-none flex flex-col bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl overflow-hidden text-slate-100"
+      >
+        <!-- Panel Header -->
+        <header
+          id="msgerHeader"
+          class="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between shrink-0 cursor-default"
+        >
+          <div
+            class="flex items-center gap-2 text-slate-100 font-semibold text-sm tracking-wide"
+          >
+            <i data-lucide="message-circle" class="w-4 h-4 text-blue-400"></i>
+            <span>TRÒ CHUYỆN</span>
           </div>
-          <div class="msger-header-options">
-           
-            <button id="msgerClose" class="fas fa-times"></button>
+          <div class="flex items-center gap-1">
+            <button
+              id="msgerClose"
+              title="Đóng"
+              class="cursor-pointer p-2 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 active:bg-slate-700 transition-colors"
+            >
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
           </div>
         </header>
 
-        <div class="msger-layout">
-  
-
-          <section class="msger-main">
-
-            <main id="msgerChat" class="msger-chat">
+        <!-- Messages List Area -->
+        <div class="msger-layout relative flex-1 overflow-hidden flex flex-col">
+          <section class="msger-main flex-1 overflow-hidden flex flex-col">
+            <main
+              id="msgerChat"
+              class="msger-chat flex-1 p-4 overflow-y-auto space-y-2 font-sans text-xs sm:text-sm no-scrollbar flex flex-col"
+            >
+              <div
+                id="msgerEmptyState"
+                class="h-full flex flex-col items-center justify-center text-center text-slate-500 py-8 m-auto"
+              >
+                <i
+                  data-lucide="message-circle"
+                  class="w-10 h-10 mb-2 opacity-40 text-slate-500"
+                  style="stroke-width: 1.5"
+                ></i>
+                <p class="text-xs">Chưa có tin nhắn nào.</p>
+                <p class="text-[11px] text-slate-600 mt-1">
+                  Gửi tin nhắn để bắt đầu trò chuyện trong phòng gọi.
+                </p>
+              </div>
               <!-- Chat messages will be appended here -->
             </main>
 
-            <div class="msger-composer">
+            <!-- Floating Down Arrow Button -->
+            <button
+              id="msgerScrollBottomBtn"
+              title="Cuộn xuống tin nhắn mới nhất"
+              class="absolute bottom-16 left-1/2 -translate-x-1/2 p-2 bg-slate-800/95 hover:bg-slate-700 backdrop-blur-md text-blue-400 border border-slate-700 rounded-full shadow-xl transition-all flex items-center justify-center z-10 hover:scale-105 active:scale-95 hidden"
+            >
+              <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            </button>
 
+            <!-- Chat Input -->
+            <div
+              class="msger-composer p-3 bg-slate-900 border-t border-slate-800 flex items-center gap-2 shrink-0"
+            >
+              <button
+                id="msgerVideoUrlBtn"
+                class="hidden"
+                style="display: none"
+              ></button>
 
-              <div class="msger-inputarea">
-                <textarea
-                  rows="1"
-                  cols="1"
-                  id="msgerInput"
-                  class="msger-input"
-                  placeholder="Write a message..."
-                ></textarea>
-              </div>
-
-              <div class="msger-input-buttons">
-               <button id="msgerVideoUrlBtn" class="fab fa-youtube"></button>
-               <button id="msgerSendBtn" class="fas fa-paper-plane"></button>
-
-              </div>
+              <textarea
+                id="msgerInput"
+                rows="1"
+                placeholder="Nhập tin nhắn..."
+                class="msger-input flex-1 px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-[16px] sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-none"
+              ></textarea>
+              <button
+                id="msgerSendBtn"
+                class="cursor-pointer p-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl transition-all shadow-md shadow-blue-600/20"
+              >
+                <i data-lucide="send" class="w-4 h-4"></i>
+              </button>
             </div>
           </section>
-
-
         </div>
       </section>
     </section>
-
     <!-- End chat room -->
 
     <!-- Start my settings -->
@@ -461,7 +992,7 @@ access to use this app.
           <button id="tabProfileBtn" class="fa-solid fa-user tablinks">
             <p class="tabButtonText">Profile</p>
           </button>
-       
+
           <button id="tabNetworkBtn" class="fa-solid fa-network-wired tablinks">
             <p class="tabButtonText">Network</p>
           </button>
@@ -484,7 +1015,7 @@ access to use this app.
                 </td>
               </tr>
             </table>
-         
+
             <div id="tabRoomSecurity">
               <button id="lockRoomBtn" class="orange">
                 <i class="fas fa-lock-open orange"></i>&nbsp;Lock room
@@ -494,11 +1025,10 @@ access to use this app.
               </button>
               <br />
             </div>
-          
+
             <br />
             <br />
             <table id="mySettingsTable">
-              
               <tr>
                 <td class="w-80">
                   <div class="title">
@@ -759,7 +1289,6 @@ access to use this app.
             </div>
           </div>
 
-
           <div id="tabProfile" class="tabcontent">
             <div id="tabRoomPeerName">
               <div id="myProfileAvatarContainer">
@@ -846,8 +1375,6 @@ access to use this app.
                 <td><p id="networkTurn">🔴</p></td>
               </tr>
             </table>
-
-           
           </div>
 
           <div id="tabLanguages" class="tabcontent">
@@ -913,10 +1440,48 @@ access to use this app.
     <!-- Start Video container -->
 
     <div id="videoPinMediaContainer"></div>
-    <div id="videoMediaContainer">
-      <!-- <div class="Camera">
-                <video></video>
-            </div> -->
+    <div
+      id="videoMediaContainer"
+      class="grid grid-cols-1 grid-rows-2 max-lg:landscape:grid-cols-2 max-lg:landscape:grid-rows-1 md:grid-cols-2 md:grid-rows-1 gap-2 sm:gap-4"
+    >
+      <div
+        id="waitingRoomCard"
+        class="Camera bg-slate-900/60 border-2 border-dashed border-slate-800 rounded-2xl flex flex-col items-center justify-center p-6 text-center w-full h-full"
+        style="display: flex"
+      >
+        <div
+          class="hidden md:flex w-16 h-16 bg-blue-500/10 text-blue-400 rounded-2xl items-center justify-center mb-4 border border-blue-500/20 animate-pulse"
+        >
+          <i data-lucide="user-check" class="w-8 h-8"></i>
+        </div>
+
+        <h3 class="hidden md:block text-lg font-semibold text-slate-200 mb-1">
+          Đang chờ người tham gia...
+        </h3>
+        <h3 class="md:hidden text-lg font-semibold text-slate-200 mb-4">
+          Đang chờ người tham gia...
+        </h3>
+
+        <p class="hidden md:block text-xs text-slate-400 max-w-xs mb-4">
+          Gửi mã phòng&nbsp;<span
+            class="font-mono text-blue-400 font-bold uppercase"
+            id="waitingRoomIdSpan"
+          ></span
+          >&nbsp;để mời người tham gia.
+        </p>
+
+        <button
+          id="waitingCopyRoomLink"
+          class="cursor-pointer px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-medium flex items-center gap-2 transition-all mx-auto"
+        >
+          <i
+            data-lucide="copy"
+            class="w-4 h-4 text-blue-400"
+            id="waitingCopyIcon"
+          ></i>
+          <span id="waitingCopyText">Sao chép mã phòng</span>
+        </button>
+      </div>
     </div>
 
     <div id="audioMediaContainer">
@@ -938,23 +1503,19 @@ access to use this app.
         data-template-attr-data-chat-peer="chatPeer"
         data-template-attr-data-msg-id="messageId"
       >
-        <img class="msg-img" data-template-attr-id="messageAvatarTmpId" />
         <div data-template-attr-class="messageBubbleClass">
-          <div class="msg-info">
-            <div class="msg-info-name" data-template-text="senderName"></div>
-            <div class="msg-info-time" data-template-text="messageTime"></div>
-          </div>
           <div class="msg-text">
             <span data-template-attr-id="messageTextId"></span>
-            <hr />
-            <div class="msg-footer">
-              <div
-                class="msg-actions"
-                data-template-html="messageActions"
-              ></div>
-              <div class="message-reactions"></div>
-            </div>
           </div>
+        </div>
+        <div class="msg-footer">
+          <span data-template-text="messageTime"></span>
+          <div
+            class="msg-actions"
+            data-template-html="messageActions"
+            style="display: none"
+          ></div>
+          <div class="message-reactions" style="display: none"></div>
         </div>
       </div>
     </template>
@@ -970,7 +1531,6 @@ access to use this app.
         </div>
       </div>
     </template>
-
 
     <template id="tpl-share-room-modal">
       <div id="qrRoomContainer">
@@ -1150,7 +1710,6 @@ Note</textarea>
     <script defer src="../js/helpers.js"></script>
     <script defer src="../js/common.js"></script>
     <script defer src="../js/buttons.js"></script>
-    <script defer src="../js/videoGrid.js"></script>
     <script defer src="../js/translate.js"></script>
     <script defer src="../js/fixWebmDuration.js"></script>
 
@@ -1164,37 +1723,59 @@ Note</textarea>
     <!-- 
 		the <video> and <audio> tags are all added and removed dynamically
 		in 'onAddStream', 'setupLocalMedia', and 'removePeer'/'disconnect'
-		--></body>
-<!-- Start Top Header Bar -->
-    <header id="topHeaderBar" class="top-header-bar">
+    <!-- Start Top Header Bar -->
+    <header
+      id="topHeaderBar"
+      class="fixed top-0 left-0 right-0 z-40 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-b from-slate-950/90 to-transparent backdrop-blur-sm flex max-lg:landscape:hidden items-center justify-between text-xs transition-all duration-500 transform translate-y-0 opacity-100"
+    >
       <!-- Room Code Badge -->
-      <div class="flex-center gap-2">
-        <div class="header-badge">
-          <i class="fa-solid fa-shield-halved text-blue-400" style="font-size: 14px;"></i>
-          <span class="label-text">Mã phòng:</span>
-          <span id="headerRoomId" class="room-id-text"></span>
-          <button id="headerCopyBtn" title="Sao chép mã phòng" class="header-copy-btn">
-            <i id="headerCopyIcon" class="fa-regular fa-copy"></i>
+      <div class="flex items-center gap-2">
+        <div
+          class="bg-slate-900/90 border border-slate-800 text-slate-200 px-2 sm:px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-md"
+        >
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-blue-400"></i>
+          <span class="text-slate-400 font-normal hidden sm:inline text-[11px]"
+            >Mã phòng:</span
+          >
+          <span
+            id="headerRoomId"
+            class="font-mono font-bold tracking-wider text-blue-400 uppercase text-xs"
+          ></span>
+          <button
+            id="headerCopyBtn"
+            title="Sao chép mã phòng"
+            class="p-0.5 hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition-colors ml-0.5 cursor-pointer"
+          >
+            <i id="headerCopyIcon" data-lucide="copy" class="w-3 h-3"></i>
           </button>
         </div>
       </div>
 
       <!-- Timer & Peer Status -->
-      <div class="flex-center gap-2">
+      <div class="flex items-center gap-1.5 sm:gap-2">
         <!-- Call Timer -->
-        <div class="header-badge">
-          <i class="fa-regular fa-clock text-slate-400" style="font-size: 12px;"></i>
-          <span id="headerTimer" class="timer-text notranslate" translate="no">00:00</span>
+        <div
+          class="bg-slate-900/90 border border-slate-800 text-slate-300 px-2 sm:px-2.5 py-1 rounded-lg font-mono text-[11px] sm:text-xs flex items-center gap-1.5 shadow-md"
+        >
+          <i data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
+          <span id="headerTimer" class="notranslate" translate="no">00:00</span>
         </div>
 
-        <!-- Peer Status Badge -->
-        <div class="header-badge">
-          <span id="headerStatusDot" class="status-dot warning"></span>
-          <i class="fa-solid fa-user-group text-slate-400" style="font-size: 12px;"></i>
-          <span id="headerPeerCount" class="peer-count-text warning-text">1/2</span>
+        <!-- Peer Status Badge - Number count only -->
+        <div
+          class="bg-slate-900/90 border border-slate-800 px-2 sm:px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-md"
+        >
+          <span
+            id="headerStatusDot"
+            class="w-2 h-2 rounded-full bg-amber-500"
+          ></span>
+          <i data-lucide="users" class="w-3 h-3 text-slate-400"></i>
+          <span class="text-[11px] sm:text-xs font-bold font-mono">
+            <span id="headerPeerCount" class="text-amber-400">1/2</span>
+          </span>
         </div>
       </div>
     </header>
     <!-- End Top Header Bar -->
-
+  </body>
 </html>

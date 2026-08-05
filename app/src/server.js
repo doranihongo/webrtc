@@ -355,10 +355,9 @@ const dir = {
 };
 // html views
 const views = {
- 
   client: path.join(__dirname, "../../", "public/views/client.html"),
   landing: path.join(__dirname, "../../", "public/views/landing.html"),
-  
+
   customizeRoom: path.join(
     __dirname,
     "../../",
@@ -371,11 +370,7 @@ const views = {
 const brandHtmlInjection = config.brand?.htmlInjection ?? true;
 
 // File to cache and inject custom HTML data like OG tags and any other elements.
-const filesPath = [
-  views.landing,
-  views.client,
-  views.customizeRoom,
-];
+const filesPath = [views.landing, views.client, views.customizeRoom];
 const htmlInjector = new HtmlInjector(filesPath, config.brand || null);
 
 const channels = {}; // collect channels
@@ -608,7 +603,6 @@ app.get("/", OIDCAuth, (req, res) => {
   }
 });
 
-
 // Get Custom room
 app.get("/customizeRoom", OIDCAuth, (req, res) => {
   htmlInjector.injectHtml(views.customizeRoom, res);
@@ -619,7 +613,6 @@ app.get("/stats", (req, res) => {
   //log.debug('Send stats', statsData);
   res.send(statsData);
 });
-
 
 // test Stun and Turn connections
 app.get(["/icetest"], (req, res) => {
@@ -755,7 +748,7 @@ app.get("/join/", async (req, res) => {
       // only room mandatory
       return htmlInjector.injectHtml(views.client, res);
     } else {
-     return htmlInjector.injectHtml(views.landing, res);
+      return htmlInjector.injectHtml(views.landing, res);
     }
   }
 });
@@ -783,10 +776,10 @@ app.get("/join/:roomId", function (req, res) {
     roomId,
   );
 
-if (allowRoomAccess) {
+  if (allowRoomAccess) {
     htmlInjector.injectHtml(views.client, res);
   } else if (OIDC.enabled || hostCfg.protected) {
-    htmlInjector.injectHtml(views.login, res); 
+    htmlInjector.injectHtml(views.login, res);
   } else {
     res.redirect("/");
   }
@@ -796,7 +789,6 @@ if (allowRoomAccess) {
 app.get("/join/\\*", function (req, res) {
   res.redirect("/");
 });
-
 
 // UI buttons configuration
 app.get("/buttons", (req, res) => {

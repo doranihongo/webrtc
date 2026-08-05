@@ -27,7 +27,12 @@ body {
 }
 
 /* Basic Elements */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: "Fira Sans", sans-serif;
   font-weight: 600;
   clear: both;
@@ -289,9 +294,15 @@ button,
 }
 
 @keyframes roomGenSpin {
-  0% { transform: translateY(-50%) rotate(0deg) scale(1); }
-  50% { transform: translateY(-50%) rotate(180deg) scale(1.25); }
-  100% { transform: translateY(-50%) rotate(360deg) scale(1); }
+  0% {
+    transform: translateY(-50%) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translateY(-50%) rotate(180deg) scale(1.25);
+  }
+  100% {
+    transform: translateY(-50%) rotate(360deg) scale(1);
+  }
 }
 
 /* Form Layout (Desktop vs Mobile) */
@@ -402,12 +413,22 @@ button,
   border: 0;
 }
 
-.m-0 { margin: 0; }
-.mb-0 { margin-bottom: 0; }
-.mb-32 { margin-bottom: 32px; }
+.m-0 {
+  margin: 0;
+}
+.mb-0 {
+  margin-bottom: 0;
+}
+.mb-32 {
+  margin-bottom: 32px;
+}
 
-.br-6 { border-radius: 6px; }
-.br-12 { border-radius: 12px; }
+.br-6 {
+  border-radius: 6px;
+}
+.br-12 {
+  border-radius: 12px;
+}
 
 @media (max-width: 640px) {
   .center-content-mobile {
@@ -471,7 +492,8 @@ button,
 }
 
 /* Webkit-Scrollbar Styles */
-html, body {
+html,
+body {
   scrollbar-width: thin;
   scrollbar-color: #4678f9 #1a1b1f;
 }

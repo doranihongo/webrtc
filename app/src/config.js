@@ -99,7 +99,7 @@ module.exports = {
     ]),
     maxLoginAttempts: parseInt(process.env.HOST_MAX_LOGIN_ATTEMPTS) || 5,
     minLoginBlockTime: parseInt(process.env.HOST_MIN_LOGIN_BLOCK_TIME) || 15, // in minutes
-    maxRoomParticipants: parseInt(process.env.ROOM_MAX_PARTICIPANTS) || 1000,
+    maxRoomParticipants: 2,
     showActiveRooms: getEnvBoolean(process.env.SHOW_ACTIVE_ROOMS) || false,
   },
 

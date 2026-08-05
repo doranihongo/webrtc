@@ -1,3 +1,73 @@
+window.setAspectRatio = function () {};
+
+window.resizeVideoMedia = function () {
+  const v = document.getElementById("videoMediaContainer");
+  if (v) {
+    const c = v.childElementCount <= 2;
+    document.documentElement.style.setProperty(
+      "--vmi-wh",
+      (c ? Math.min(200, Math.max(120, v.offsetHeight * 0.25)) : 100) + "px",
+    );
+  }
+};
+window.isHideALLVideosActive = false;
+
+function setPeerNameHTML(element, name, isMe, peerId = "", isScreen = false) {
+  if (!element) return;
+  element.setAttribute("data-name", name);
+  element.setAttribute("data-isme", isMe);
+  element.setAttribute("data-peerid", peerId);
+  element.setAttribute("data-isscreen", isScreen);
+  refreshPeerNameTag(element);
+}
+
+function refreshPeerNameTag(element) {
+  if (!element) return;
+  const name = element.getAttribute("data-name");
+  const isMe = element.getAttribute("data-isme") === "true";
+  const peerId = element.getAttribute("data-peerid");
+  const isScreenTag = element.getAttribute("data-isscreen") === "true";
+
+  let isVideoOff = false;
+  let isAudioMuted = false;
+  let isScreenShare = false;
+
+  if (isMe) {
+    if (myVideoStatus === false) isVideoOff = true;
+    if (myAudioStatus === false) isAudioMuted = true;
+    if (isScreenStreaming || isScreenTag) isScreenShare = true;
+  } else {
+    if (isScreenTag) isScreenShare = true;
+    const vStatus = document.getElementById(peerId + "_videoStatus");
+    if (vStatus && vStatus.className.includes("Off")) isVideoOff = true;
+    const aStatus = document.getElementById(peerId + "_audioStatus");
+    if (aStatus && aStatus.className.includes("Off")) isAudioMuted = true;
+  }
+
+  let html =
+    '<div style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:rgba(59,130,246,0.2);color:#60a5fa;flex-shrink:0;"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>';
+  html +=
+    '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px;">' +
+    name +
+    "</span>";
+
+  if (isMe) {
+    html +=
+      '<span style="background:rgba(59,130,246,0.2);color:#60a5fa;font-size:10px;padding:2px 6px;border-radius:6px;font-family:ui-monospace, monospace;font-weight:500;flex-shrink:0;">(Bạn)</span>';
+  }
+
+  if (isScreenShare) {
+    html +=
+      '<div style="display:flex;align-items:center;padding-left:4px;border-left:1px solid rgba(51,65,85,0.8);flex-shrink:0;"><svg class="w-3.5 h-3.5" style="width:14px;height:14px;color:#60a5fa;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></div>';
+  }
+
+  if (isAudioMuted) {
+    html +=
+      '<div style="display:flex;align-items:center;padding-left:4px;border-left:1px solid rgba(51,65,85,0.8);flex-shrink:0;"><svg class="w-3.5 h-3.5" style="width:14px;height:14px;color:#fb7185;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg></div>';
+  }
+
+  element.innerHTML = html;
+}
 
 /**
  * MiroTalk P2P - Client component
@@ -12,7 +82,7 @@
  *
  */
 
-"use strict";
+("use strict");
 
 // https://www.w3schools.com/js/js_strict.asp
 
@@ -148,7 +218,7 @@ const isEmbedded = window.self !== window.top;
 const showVideoPipBtn = document.pictureInPictureEnabled;
 
 // Check if Document PIP is supported by this browser
-const showDocumentPipBtn = !isEmbedded && "documentPictureInPicture" in window;
+const showDocumentPipBtn = "documentPictureInPicture" in window;
 
 // Loading div
 const loadingDiv = getId("loadingDiv");
@@ -210,7 +280,6 @@ const exitDropdown = getId("exitDropdown");
 const exitMenu = getId("exitMenu");
 const exitLeaveBtn = getId("exitLeaveBtn");
 
-
 // Room Emoji Picker
 const closeEmojiPickerContainer = getId("closeEmojiPickerContainer");
 const emojiPickerContainer = getId("emojiPickerContainer");
@@ -221,22 +290,66 @@ const msgerDraggable = getId("msgerDraggable");
 const msgerClose = getId("msgerClose");
 const msgerHeader = getId("msgerHeader");
 
-
 const msgerCPBtn = getId("msgerCPBtn") || document.createElement("button");
 
-const msgerSidebarDropDownMenuBtn = getId("msgerSidebarDropDownMenuBtn") || document.createElement("button");
-const msgerSidebarDropDownContent = getId("msgerSidebarDropDownContent") || document.createElement("ul");
-
+const msgerSidebarDropDownMenuBtn =
+  getId("msgerSidebarDropDownMenuBtn") || document.createElement("button");
+const msgerSidebarDropDownContent =
+  getId("msgerSidebarDropDownContent") || document.createElement("ul");
 
 const msgerChat = getId("msgerChat");
 const msgerEmptyParticipantsNotice = getId("msgerEmptyParticipantsNotice");
 const msgerMain = document.querySelector(".msger-main");
 const msgerVideoUrlBtn = getId("msgerVideoUrlBtn");
+
+const msgerScrollBottomBtn = getId("msgerScrollBottomBtn");
+let isAutoScrollingMsger = false;
+
+if (msgerChat) {
+  msgerChat.addEventListener("scroll", () => {
+    if (isAutoScrollingMsger) return;
+    const { scrollTop, scrollHeight, clientHeight } = msgerChat;
+    const isScrollable = scrollHeight > clientHeight + 10;
+    if (!isScrollable) {
+      if (msgerScrollBottomBtn) msgerScrollBottomBtn.classList.add("hidden");
+      return;
+    }
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    if (distanceFromBottom > 60) {
+      if (msgerScrollBottomBtn) msgerScrollBottomBtn.classList.remove("hidden");
+    } else {
+      if (msgerScrollBottomBtn) msgerScrollBottomBtn.classList.add("hidden");
+    }
+  });
+}
+
+if (msgerScrollBottomBtn) {
+  msgerScrollBottomBtn.addEventListener("click", () => {
+    isAutoScrollingMsger = true;
+    msgerChat.scrollTo({
+      top: msgerChat.scrollHeight,
+      behavior: "smooth",
+    });
+    msgerScrollBottomBtn.classList.add("hidden");
+    setTimeout(() => {
+      isAutoScrollingMsger = false;
+    }, 350);
+  });
+}
+
+function scrollToBottomInstant() {
+  if (!msgerChat) return;
+  isAutoScrollingMsger = true;
+  if (msgerScrollBottomBtn) msgerScrollBottomBtn.classList.add("hidden");
+  msgerChat.scrollTop = msgerChat.scrollHeight;
+  setTimeout(() => {
+    isAutoScrollingMsger = false;
+  }, 50);
+}
+
 const msgerInput = getId("msgerInput");
 
-
 const msgerSendBtn = getId("msgerSendBtn");
-
 
 const roomEmojiBurstState = {
   startedAt: 0,
@@ -249,13 +362,15 @@ const roomEmojiBurstState = {
 const msgerCP = getId("msgerCP") || document.createElement("div");
 const msgerCPChat = getId("msgerCPChat") || document.createElement("div");
 const msgerCPHeader = getId("msgerCPHeader") || document.createElement("div");
-const msgerCPCloseBtn = getId("msgerCPCloseBtn") || document.createElement("button");
+const msgerCPCloseBtn =
+  getId("msgerCPCloseBtn") || document.createElement("button");
 const msgerCPList = getId("msgerCPList") || document.createElement("div");
-const searchPeerBarName = getId("searchPeerBarName") || document.createElement("input");
-const msgerCPDropDownMenuBtn = getId("msgerCPDropDownMenuBtn") || document.createElement("button");
-const msgerCPDropDownContent = getId("msgerCPDropDownContent") || document.createElement("div");
-
-
+const searchPeerBarName =
+  getId("searchPeerBarName") || document.createElement("input");
+const msgerCPDropDownMenuBtn =
+  getId("msgerCPDropDownMenuBtn") || document.createElement("button");
+const msgerCPDropDownContent =
+  getId("msgerCPDropDownContent") || document.createElement("div");
 
 // My settings
 const mySettings = getId("mySettings");
@@ -314,7 +429,6 @@ const noiseSuppressionBtn = getId("noiseSuppressionBtn");
 const isPeerPresenter = getId("isPeerPresenter");
 const peersCount = getId("peersCount");
 const screenFpsDiv = getId("screenFpsDiv");
-
 
 // Audio options
 const micOptionsDiv = getId("micOptionsDiv");
@@ -384,7 +498,7 @@ const useAvatarSvg = true; // if false the cam-Off avatar = images.avatar
 const ZOOM_CENTER_MODE = false;
 const ZOOM_IN_OUT_ENABLED = true; // Video Zoom in/out default (true)
 // Room
-let thisMaxRoomParticipants = 8;
+let thisMaxRoomParticipants = 2;
 
 // misc
 let swBg = "rgba(0, 0, 0, 0.7)"; // swAlert background color
@@ -618,7 +732,6 @@ function setButtonsToolTip() {
   refreshMainButtonsToolTipPlacement();
   // Chat room buttons
   setTippy(msgerClose, "Close", "bottom");
-
 
   setTippy(msgerCPBtn, "Participants", "bottom");
   setTippy(msgerSendBtn, "Send", "top");
@@ -1357,8 +1470,6 @@ function handleServerInfo(config) {
   console.log("New connection - presenter status from server:", isPresenter);
   isPeerPresenter.innerText = isPresenter;
 
-
-
   if (isRulesActive) {
     handleRules(isPresenter);
   }
@@ -1441,7 +1552,7 @@ function handleRules(isPresenter) {
     buttons.settings.showTabRoomSecurity = false;
     buttons.settings.showTabEmailInvitation = false;
     buttons.remote.showKickOutBtn = false;
-   
+
     //...
   } else {
     buttons.settings.showMicOptionsBtn = true;
@@ -1493,10 +1604,9 @@ function handleButtonsRule() {
     { element: mySettingsBtn, display: buttons.main.showMySettingsBtn },
   ]);
 
-// Chat buttons
+  // Chat buttons
   displayElements([
     { element: msgerVideoUrlBtn, display: buttons.chat.showShareVideoAudioBtn },
-  
   ]);
 
   // Caption buttons
@@ -1521,7 +1631,6 @@ function handleButtonsRule() {
 
   // Settings buttons
   displayElements([
-   
     {
       element: micOptionsDiv,
       display: buttons.settings.showMicOptionsBtn || isPresenter,
@@ -2198,7 +2307,6 @@ async function changeLocalMicrophone(deviceId) {
         "Success attached local microphone stream",
         micStream,
       );
-   
 
       if (
         lsSettings.mic_noise_suppression &&
@@ -2406,13 +2514,13 @@ async function restartNoiseSuppression() {
  * Room and Peer name are ok Join Channel
  */
 async function whoAreYouJoin() {
-  myVideoPeerName.innerText = myPeerName + " (me)";
+  setPeerNameHTML(myVideoPeerName, myPeerName, true);
   setPeerAvatarImgName("myVideoAvatarImage", myPeerName, myPeerAvatar);
   setPeerAvatarImgName("myProfileAvatar", myPeerName, myPeerAvatar);
   setPeerChatAvatarImgName("right", myPeerName, myPeerAvatar);
   joinToChannel();
   handleHideMe(isHideMeActive);
-  
+
   // Load screen media if needed
   await loadScreenMedia();
 
@@ -2420,7 +2528,6 @@ async function whoAreYouJoin() {
   if (isScreenStreaming && useVideo) {
     await changeLocalCamera(videoSelect.value);
   }
-
 }
 
 /**
@@ -2540,8 +2647,6 @@ async function handleAddPeer(config) {
   await wbUpdate();
   playSound("addPeer");
   updateTopHeaderPeerCount();
-
-
 }
 
 /**
@@ -3088,11 +3193,11 @@ function handleDisconnect(reason) {
     "Set isPeerReconnected=true, will attempt to rejoin on reconnect",
   );
   // Set reconnection flag to trigger proper rejoin
-    isPeerReconnected = true;
-    console.log(
-        "Set isPeerReconnected=true, will attempt to rejoin on reconnect",
-    );
-    updateTopHeaderPeerCount();
+  isPeerReconnected = true;
+  console.log(
+    "Set isPeerReconnected=true, will attempt to rejoin on reconnect",
+  );
+  updateTopHeaderPeerCount();
 }
 
 /**
@@ -3179,10 +3284,9 @@ function handleRemovePeer(config) {
       ? allPeers[peer_id]["peer_name"]
       : "Participant";
 
-
   console.log("ALL PEERS", allPeers);
   console.log("ALL PEERS", allPeers);
-    updateTopHeaderPeerCount();
+  updateTopHeaderPeerCount();
 }
 
 /**
@@ -3685,7 +3789,6 @@ async function loadLocalMedia(stream, kind) {
       const myDropdownContent = document.createElement("div");
       const myVideoAvatarImage = document.createElement("img");
 
-
       //my current session time
       myCurrentSessionTime.setAttribute("id", "myCurrentSessionTime");
       myCurrentSessionTime.className = "notranslate";
@@ -3760,14 +3863,11 @@ async function loadLocalMedia(stream, kind) {
       myVideoAvatarImage.setAttribute("id", "myVideoAvatarImage");
       myVideoAvatarImage.className = "videoAvatarImage"; // pulsate
 
- 
-
       // my video nav bar
       myVideoNavBar.className = "navbar fadein";
 
       myVideoNavBar.appendChild(myCurrentSessionTime);
       !isMobileDevice && myVideoNavBar.appendChild(myVideoPinBtn);
-
 
       buttons.local.showVideoFocusBtn &&
         myVideoNavBar.appendChild(myVideoFocusBtn);
@@ -3815,7 +3915,6 @@ async function loadLocalMedia(stream, kind) {
 
       myVideoNavBar.appendChild(myDropdownDiv);
 
-
       // hand display none on default menad is raised == false
       elemDisplay(myHandStatusIcon, false);
 
@@ -3839,7 +3938,10 @@ async function loadLocalMedia(stream, kind) {
 
       createVideoLoadingSpinner(myVideoWrap, myLocalMedia);
 
-      videoMediaContainer.appendChild(myVideoWrap);
+      videoMediaContainer.insertBefore(
+        myVideoWrap,
+        videoMediaContainer.firstChild,
+      );
       elemDisplay(myVideoWrap, false);
 
       logStreamSettingsInfo("localVideoMediaStream", stream);
@@ -3924,7 +4026,7 @@ async function loadLocalMedia(stream, kind) {
       // my screen peer name
       myScreenPeerName.setAttribute("id", "myScreenPeerName");
       myScreenPeerName.className = "videoPeerName notranslate fadein";
-      myScreenPeerName.innerText = myPeerName + " (me)";
+      setPeerNameHTML(myScreenPeerName, myPeerName, true, "", true);
 
       // my screen to image
 
@@ -4147,7 +4249,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       const remoteVideoAudioUrlBtn = document.createElement("button");
       const remotePrivateMsgBtn = document.createElement("button");
 
-    
       const remotePeerKickOut = document.createElement("button");
       const remoteVideoFullScreenBtn = document.createElement("button");
       const remoteVideoPinBtn = document.createElement("button");
@@ -4167,8 +4268,7 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       remotePeerName.setAttribute("id", peer_id + "_name");
       remotePeerName.className = "videoPeerName notranslate fadein";
 
-      const peerVideoText = document.createTextNode(peer_name);
-      remotePeerName.appendChild(peerVideoText);
+      setPeerNameHTML(remotePeerName, peer_name, false, peer_id);
 
       // remote hand status element
       remoteHandStatusIcon.setAttribute("id", peer_id + "_handStatus");
@@ -4191,9 +4291,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       remoteAudioVolume.min = 0;
       remoteAudioVolume.max = 100;
       remoteAudioVolume.value = 100;
-
-
-   
 
       // remote share file
 
@@ -4249,7 +4346,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       remoteVideoAvatarImage.setAttribute("id", peer_id + "_avatar");
       remoteVideoAvatarImage.className = "videoAvatarImage"; // pulsate
 
-
       // remote video nav bar
       remoteVideoNavBar.className = "navbar fadein";
 
@@ -4292,7 +4388,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
         );
       }
 
-    
       buttons.remote.showShareVideoAudioBtn &&
         remoteDropdownContent.appendChild(
           createDropdownItem(
@@ -4438,7 +4533,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       // handle remote peers video on-off
       handlePeerVideoBtn(peer_id);
 
-
       // handle remote send file
       // handle remote video - audio URL
       buttons.remote.showShareVideoAudioBtn &&
@@ -4510,7 +4604,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
         document.createTextNode(peer_name + " (screen)"),
       );
 
-
       remoteScreenVideoAudioUrlBtn.setAttribute(
         "id",
         peer_id + "_screen_videoAudioUrl",
@@ -4565,7 +4658,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       }
       isVideoFullScreenSupported &&
         remoteScreenNavBar.appendChild(remoteScreenFullScreenBtn);
-
 
       buttons.remote.showShareVideoAudioBtn &&
         remoteScreenNavBar.appendChild(remoteScreenVideoAudioUrlBtn);
@@ -4865,63 +4957,19 @@ function logStreamSettingsInfo(name, stream) {
  *    0      1       2      3      4
  */
 function adaptAspectRatio() {
-  const participantsCount = videoMediaContainer.childElementCount;
-  if (peersCount) peersCount.innerText = participantsCount;
-  let desktop,
+  let participantsCount = videoMediaContainer.childElementCount;
+  let desktop = 2,
+    mobile = 2; // 16:9 for 1-4 people
+
+  if (participantsCount > 4) {
+    desktop = 1; // 4:3
     mobile = 1;
+  }
+  if (participantsCount > 9) {
+    desktop = 3; // 1:1
+    mobile = 3;
+  }
 
-
-  // desktop aspect ratio
-  switch (participantsCount) {
-    // case 1:
-    //     desktop = 0; // (0:0)
-    //     break;
-    case 1:
-    case 3:
-    case 4:
-    case 7:
-    case 9:
-      desktop = 2; // (16:9)
-      break;
-    case 5:
-    case 6:
-    case 10:
-    case 11:
-      desktop = 1; // (4:3)
-      break;
-    case 2:
-    case 8:
-      desktop = 3; // (1:1)
-      break;
-    default:
-      desktop = 0; // (0:0)
-  }
-  // mobile aspect ratio
-  switch (participantsCount) {
-    case 3:
-    case 9:
-    case 10:
-      mobile = 2; // (16:9)
-      break;
-    case 2:
-    case 7:
-    case 8:
-    case 11:
-      mobile = 1; // (4:3)
-      break;
-    case 1:
-    case 4:
-    case 5:
-    case 6:
-      mobile = 3; // (1:1)
-      break;
-    default:
-      mobile = 3; // (1:1)
-  }
-  if (participantsCount > 11) {
-    desktop = 1; // (4:3)
-    mobile = 3; // (1:1)
-  }
   setAspectRatio(isMobileDevice ? mobile : desktop);
 }
 
@@ -4960,46 +5008,21 @@ function isValidEmail(email) {
  * @param {integer} avatarImgSize width and height in px
  */
 function genAvatarSvg(peerName, avatarImgSize) {
-  const charCodeRed = peerName.charCodeAt(0);
-  const charCodeGreen = peerName.charCodeAt(1) || charCodeRed;
-  const red = Math.pow(charCodeRed, 7) % 200;
-  const green = Math.pow(charCodeGreen, 7) % 200;
-  const blue = (red + green) % 200;
-  const bgColor = `rgb(${red}, ${green}, ${blue})`;
-  const textColor = "#ffffff";
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" 
-    xmlns:xlink="http://www.w3.org/1999/xlink" 
-    width="${avatarImgSize}px" 
-    height="${avatarImgSize}px" 
-    viewBox="0 0 ${avatarImgSize} ${avatarImgSize}" 
-    version="1.1">
-        <circle 
-            fill="${bgColor}" 
-            width="${avatarImgSize}" 
-            height="${avatarImgSize}" 
-            cx="${avatarImgSize / 2}" 
-            cy="${avatarImgSize / 2}" 
-            r="${avatarImgSize / 2}"/>
-        <text 
-            x="50%" 
-            y="50%" 
-            style="color:${textColor};
-            line-height:1;
-            font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu, Fira Sans, Droid Sans, Helvetica Neue, sans-serif" 
-            alignment-baseline="middle" 
-            text-anchor="middle" 
-            font-size="${Math.round(avatarImgSize * 0.4)}" 
-            font-weight="normal" 
-            dy=".1em" 
-            dominant-baseline="middle" 
-            fill="${textColor}">${peerName.substring(0, 2).toUpperCase()}
-        </text>
-    </svg>`;
-  return (
-    "data:image/svg+xml," +
-    svg.replace(/#/g, "%23").replace(/"/g, "'").replace(/&/g, "&amp;")
-  );
+  const initial = peerName ? peerName.charAt(0).toUpperCase() : "?";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
+    <rect width="100%" height="100%" fill="#0f172a" />
+    <defs>
+      <linearGradient id="grad" x1="0%" y1="100%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#1e293b" />
+        <stop offset="100%" stop-color="#334155" />
+      </linearGradient>
+    </defs>
+    <circle cx="200" cy="160" r="50" fill="url(#grad)" stroke="#475569" stroke-width="4" />
+    <text x="200" y="175" font-family="system-ui, -apple-system, sans-serif" font-size="40" font-weight="bold" fill="#e2e8f0" text-anchor="middle">${initial}</text>
+    <text x="200" y="245" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="500" fill="#cbd5e1" text-anchor="middle">${peerName}</text>
+    <text x="200" y="275" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#64748b" text-anchor="middle">Camera đang tắt</text>
+  </svg>`;
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
 
 /**
@@ -5772,12 +5795,10 @@ function setShareRoomBtn() {
   shareRoomBtn.addEventListener("mouseenter", () => {
     if (isMobileDevice || !buttons.main.showShareQr) return;
     elemDisplay(qrRoomPopupContainer, true);
-  
   });
   shareRoomBtn.addEventListener("mouseleave", () => {
     if (isMobileDevice || !buttons.main.showShareQr) return;
     elemDisplay(qrRoomPopupContainer, false);
-    
   });
 }
 
@@ -5927,6 +5948,11 @@ function setChatRoomBtn() {
       if (isMobileDevice) {
         setSP("--msger-width", "99%");
         setSP("--msger-height", "99%");
+      } else if (canBePinned() && !isCaptionPinned) {
+        if (!isChatPinned) chatPin();
+      } else {
+        if (isChatPinned) chatUnpin();
+        chatCenter();
       }
     }
   });
@@ -5981,9 +6007,6 @@ function setChatRoomBtn() {
   if (isMobileDevice) msgerInput.style.fontSize = "xx-small";
 }
 
-
-
-
 async function sendChatMessage() {
   try {
     if (!msgerInput) return;
@@ -5994,27 +6017,20 @@ async function sendChatMessage() {
       isChatPasteTxt = false;
       return;
     }
-    
+
     myPeerName = filterXSS(myPeerName);
-    
+
     if (isHtml(myPeerName)) {
       msgerInput.value = "";
       isChatPasteTxt = false;
       return;
     }
-    
+
     const msgId = createChatMessageId();
     emitMsg(myPeerName, myPeerAvatar, "all", msg, false, myPeerId, msgId);
-    
-    appendMessage(
-      myPeerName,
-      rightChatAvatar,
-      "right",
-      msg,
-      false,
-      msgId
-    );
-    
+
+    appendMessage(myPeerName, rightChatAvatar, "right", msg, false, msgId);
+
     msgerInput.value = "";
     isChatPasteTxt = false;
     checkLineBreaks();
@@ -6022,9 +6038,6 @@ async function sendChatMessage() {
     console.error("Send error: " + err.message);
   }
 }
-
-
-
 
 /**
  * Set my hand button click event
@@ -6202,6 +6215,15 @@ async function documentPictureInPictureOpen() {
       childList: true,
     });
 
+    if (videoMediaContainer) {
+      const ro = new ResizeObserver(() => {
+        if (typeof resizeVideoMedia === "function") {
+          resizeVideoMedia();
+        }
+      });
+      ro.observe(videoMediaContainer);
+    }
+
     const documentObserver = new MutationObserver(() => {
       updateCustomProperties();
     });
@@ -6314,8 +6336,6 @@ function setMySettingsBtn() {
       playSound("switch");
     });
   }
-
-
 
   // make chat room draggable for desktop
   if (!isMobileDevice) dragElement(mySettings, mySettingsHeader);
@@ -6448,31 +6468,55 @@ function handleExitLeave() {
   leaveRoom();
 }
 
-
 function handleExitMenuOutsideClick(e) {
   if (!exitDropdown || !exitMenu) return;
   if (exitMenu.classList.contains("hidden")) return;
   if (!exitDropdown.contains(e.target)) exitMenu.classList.add("hidden");
 }
 
-
-
 /**
  * Handle left buttons - status menù show - hide on body mouse move
  */
 function handleBodyOnMouseMove() {
-  document.body.addEventListener("mousemove", (e) => {
+  document.body.addEventListener("mousemove", () => {
     showButtonsBarAndMenu();
+    resetMobileIdleTimer();
+  });
+  document.body.addEventListener("touchstart", () => {
+    showButtonsBarAndMenu();
+    resetMobileIdleTimer();
   });
 
-  bottomButtons.addEventListener("mouseover", () => {
-    isButtonsBarOver = true;
-  });
-  bottomButtons.addEventListener("mouseout", () => {
-    isButtonsBarOver = false;
-  });
+  const newControlBar = document.getElementById("newControlBar");
+  if (newControlBar) {
+    newControlBar.addEventListener("mouseover", () => {
+      isButtonsBarOver = true;
+      resetMobileIdleTimer();
+    });
+    newControlBar.addEventListener("mouseout", () => {
+      isButtonsBarOver = false;
+      resetMobileIdleTimer();
+    });
+  }
 
-  checkButtonsBarAndMenu();
+  // Initial call
+  resetMobileIdleTimer();
+}
+
+let mobileIdleTimer = null;
+function resetMobileIdleTimer() {
+  if (!isMobileDevice) return; // Only apply auto-hide on mobile
+  if (mobileIdleTimer) clearTimeout(mobileIdleTimer);
+  mobileIdleTimer = setTimeout(() => {
+    if (
+      !isButtonsBarOver &&
+      isMobileDevice &&
+      !isChatRoomVisible &&
+      !isMySettingsVisible
+    ) {
+      hideButtonsBarAndMenu();
+    }
+  }, 5000); // 5 seconds idle time
 }
 
 /**
@@ -6509,7 +6553,6 @@ function setupMySettings() {
   myRoomId.addEventListener("click", () => {
     isMobileDevice ? shareRoomUrl() : copyRoomURL();
   });
-
 
   // tab media
   shareMediaAudioVideoBtn.addEventListener("click", (e) => {
@@ -6611,9 +6654,6 @@ function setupMySettings() {
   });
 }
 
-
-
-
 /**
  * Load settings from local storage
  */
@@ -6628,7 +6668,7 @@ function loadSettingsFromLocalStorage() {
       ? lsSettings.transcript_send_to_all
       : true;
 
-pinChatByDefault = lsSettings.pin_chat_by_default;
+  pinChatByDefault = lsSettings.pin_chat_by_default;
   screenFpsSelect.selectedIndex = lsSettings.screen_fps;
 
   videoFpsSelect.selectedIndex = lsSettings.video_fps;
@@ -6644,7 +6684,6 @@ pinChatByDefault = lsSettings.pin_chat_by_default;
   switchShare.checked = notify;
   switchKeepButtonsVisible.checked = isKeepButtonsVisible;
   switchPinChatByDefault.checked = pinChatByDefault;
-
 
   switchNoiseSuppression.checked = lsSettings.mic_noise_suppression;
 
@@ -6700,7 +6739,6 @@ async function handleLocalCameraMirror() {
     myVideo.classList.add("mirror");
   }
 }
-
 
 /**
  * Toggle vide mirror
@@ -7105,41 +7143,64 @@ function createVideoLoadingSpinner(wrap, videoEl) {
  * if mobile and mySettings open do nothing return
  */
 function showButtonsBarAndMenu() {
-  if (
-    wbIsBgTransparent ||
-    isButtonsBarOver ||
-    isButtonsVisible ||
-    (isMobileDevice && isChatRoomVisible) ||
-    (isMobileDevice && isCaptionBoxVisible) ||
-    (isMobileDevice && isMySettingsVisible)
-  )
-    return;
-  toggleClassElements("navbar", "block");
-  toggleClassElements("videoPeerName", "flex");
-  elemDisplay(bottomButtons, true, "flex");
+  if (wbIsBgTransparent || isButtonsVisible) return;
+
+  const topHeaderBar = document.getElementById("topHeaderBar");
+  const newControlBar = document.getElementById("newControlBar");
+
+  if (topHeaderBar) {
+    topHeaderBar.style.transform = "translateY(0)";
+    topHeaderBar.style.opacity = "1";
+    topHeaderBar.style.pointerEvents = "auto";
+  }
+  if (newControlBar) {
+    newControlBar.style.transform = "translate(-50%, 0)";
+    newControlBar.style.opacity = "1";
+    newControlBar.style.pointerEvents = "auto";
+  }
+
+  const videoMediaContainer = document.getElementById("videoMediaContainer");
+  if (videoMediaContainer && isMobileDevice) {
+    videoMediaContainer.classList.remove("expanded");
+    setTimeout(() => {
+      if (typeof resizeVideoMedia === "function") resizeVideoMedia();
+    }, 500);
+  }
+
   isButtonsVisible = true;
 }
 
+function hideButtonsBarAndMenu() {
+  const topHeaderBar = document.getElementById("topHeaderBar");
+  const newControlBar = document.getElementById("newControlBar");
+
+  if (topHeaderBar) {
+    topHeaderBar.style.transform = "translateY(-100%)";
+    topHeaderBar.style.opacity = "0";
+    topHeaderBar.style.pointerEvents = "none";
+  }
+  if (newControlBar) {
+    newControlBar.style.transform = "translate(-50%, 100%)";
+    newControlBar.style.opacity = "0";
+    newControlBar.style.pointerEvents = "none";
+  }
+
+  const videoMediaContainer = document.getElementById("videoMediaContainer");
+  if (videoMediaContainer && isMobileDevice) {
+    videoMediaContainer.classList.add("expanded");
+    setTimeout(() => {
+      if (typeof resizeVideoMedia === "function") resizeVideoMedia();
+    }, 500);
+  }
+
+  isButtonsVisible = false;
+}
+
 /**
- * Check every 10 sec if need to hide buttons bar and status menu
+ * Empty loop since we replaced it with resetMobileIdleTimer
  */
 function checkButtonsBarAndMenu() {
-  if (lsSettings.keep_buttons_visible) {
-    toggleClassElements("navbar", "block");
-    toggleClassElements("videoPeerName", "flex");
-    elemDisplay(bottomButtons, true, "flex");
-    isButtonsVisible = true;
-  } else {
-    if (!isButtonsBarOver) {
-      toggleClassElements("navbar", "none");
-      toggleClassElements("videoPeerName", "none");
-      elemDisplay(bottomButtons, false);
-      isButtonsVisible = false;
-    }
-  }
-  setTimeout(() => {
-    checkButtonsBarAndMenu();
-  }, 10000);
+  // Logic replaced by resetMobileIdleTimer
 }
 
 /**
@@ -7185,14 +7246,14 @@ function shareRoomMeetingURL(checkScreen = false) {
         roomURL,
       },
     }),
-   showCancelButton: true,
+    showCancelButton: true,
     cancelButtonColor: "red",
     confirmButtonText: `Copy URL`,
     cancelButtonText: `Close`,
     cancelButtonText: `Close`,
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
- }).then((result) => {
+  }).then((result) => {
     if (result.isConfirmed) {
       copyRoomURL();
     }
@@ -7244,7 +7305,6 @@ function copyRoomURL() {
   document.body.removeChild(tmpInput);
   userLog("toast", "Meeting URL copied to clipboard 👍");
 }
-
 
 /**
  * Get Room URL
@@ -7311,8 +7371,6 @@ function handleAudio(e, init, force = null) {
   }
 
   setMyAudioStatus(myAudioStatus);
-
-
 }
 
 /**
@@ -7394,7 +7452,6 @@ async function handleVideo(e, init, force = null) {
   }
 
   setMyVideoStatus(videoStatus);
-
 }
 
 /**
@@ -7600,7 +7657,6 @@ async function startScreenSharing(constraints, init) {
     }
     initVideoContainerShow();
   }
-
 }
 
 /**
@@ -7663,7 +7719,6 @@ async function stopScreenSharing(init) {
         );
       }
     }
-
   }
   if (init) {
     if (initStream) await stopTracks(initStream);
@@ -7745,7 +7800,6 @@ function updateScreenSharingUI(isScreenStreaming, init) {
   isScreenStreaming
     ? setColor(init ? initScreenShareBtn : screenShareBtn, "orange")
     : setColor(init ? initScreenShareBtn : screenShareBtn, "white");
-
 }
 
 /**
@@ -7895,7 +7949,6 @@ function toggleFullScreen() {
   const fullScreenLabel = isDocumentOnFullScreen
     ? "Exit full screen"
     : "View full screen";
-
 }
 
 /**
@@ -8063,7 +8116,7 @@ async function refreshMyLocalStream(stream, localAudioTrackChange = false) {
       tracksToInclude.push(audioTrack);
       localAudioMediaStream = new MediaStream([audioTrack]);
       attachMediaStream(myAudio, localAudioMediaStream);
-    
+
       logStreamSettingsInfo(
         "refreshMyLocalStream-localAudioMediaStream",
         localAudioMediaStream,
@@ -8074,7 +8127,7 @@ async function refreshMyLocalStream(stream, localAudioTrackChange = false) {
     if (useAudio && audioTrack) {
       tracksToInclude.push(audioTrack);
       localAudioMediaStream = new MediaStream([audioTrack]);
-    
+
       logStreamSettingsInfo(
         "refreshMyLocalStream-localAudioMediaStream",
         localAudioMediaStream,
@@ -8498,7 +8551,6 @@ function handleMediaRecorderStart(event) {
   if (isMobileDevice) elemDisplay(swapCameraBtn, false);
   recStartTs = performance.now();
   playSound("recStart");
-
 }
 
 /**
@@ -8522,7 +8574,7 @@ function handleMediaRecorderStop(event) {
   emitPeersAction("recStop");
   emitPeerStatus("rec", false);
   isStreamRecording = false;
-  myVideoPeerName.innerText = myPeerName + " (me)";
+  setPeerNameHTML(myVideoPeerName, myPeerName, true);
   if (isRecScreenStream) {
     recScreenStream.getTracks().forEach((track) => {
       if (track.kind === "video") track.stop();
@@ -8537,7 +8589,6 @@ function handleMediaRecorderStop(event) {
   if (isMobileDevice) elemDisplay(swapCameraBtn, true, "block");
 
   playSound("recStop");
-
 }
 
 /**
@@ -8733,26 +8784,24 @@ function showChatRoomDraggable() {
     setSP("--msger-width", "99%");
     setSP("--msger-height", "99%");
   }
-  //chatLeftCenter();
-  chatCenter();
-
   isChatRoomVisible = true;
 
-  if (
-    !isMobileDevice &&
-    canBePinned() &&
-    pinChatByDefault &&
-    !isChatPinned &&
-    !isCaptionPinned
-  ) {
+  const msgerDraggableEl = getId("msgerDraggable");
+  if (msgerDraggableEl) elemDisplay(msgerDraggableEl, true, "flex");
+
+  if (!isMobileDevice && canBePinned() && !isCaptionPinned) {
+    // Desktop landscape: dock the chat as a sidebar (matches reference layout)
     chatPin();
+  } else {
+    // Mobile / narrow / portrait: full-screen centered modal
+    if (isChatPinned) chatUnpin();
+    chatCenter();
   }
 
   syncParticipantsPanelVisibility();
   syncChatToolbarButtons();
 
   setTippy(chatRoomBtn, "Close the chat (C)", bottomButtonsPlacement);
-
 }
 
 /**
@@ -8781,11 +8830,17 @@ function syncChatToolbarButtons() {
   }
 }
 
-function shouldDockParticipantsPanel() {  return; }
+function shouldDockParticipantsPanel() {
+  return;
+}
 
-function syncParticipantsListContainer() {  return; }
+function syncParticipantsListContainer() {
+  return;
+}
 
-function syncParticipantsPanelVisibility() {  return; }
+function syncParticipantsPanelVisibility() {
+  return;
+}
 
 /**
  * Escape Special Chars
@@ -8853,7 +8908,7 @@ function appendMessage(
   // getImg is a user-controlled URL; use a temporary id and setAttribute
   // after insertion to avoid double-decode XSS via insertAdjacentHTML.
   const msgAvatarTmpId = `msg-av-${chatMessagesId}`;
-let messageActionsHTML = ``;
+  let messageActionsHTML = ``;
 
   const msgHTML = renderRoomTemplate("tpl-msger-chat-message", {
     text: {
@@ -8875,6 +8930,11 @@ let messageActionsHTML = ``;
     },
   });
 
+  const emptyState = document.getElementById("msgerEmptyState");
+  if (emptyState) {
+    emptyState.remove();
+  }
+
   msgerChat.insertAdjacentHTML("beforeend", msgHTML);
   const msgAvatarEl = document.getElementById(msgAvatarTmpId);
   if (msgAvatarEl) {
@@ -8889,7 +8949,7 @@ let messageActionsHTML = ``;
     hljs.highlightAll();
   }
 
-  msgerChat.scrollTop += 500;
+  scrollToBottomInstant();
   filterMessagesByConversation();
   refreshMessageGrouping();
   if (!isMobileDevice) {
@@ -8899,8 +8959,6 @@ let messageActionsHTML = ``;
   }
   chatMessagesId++;
 }
-
-
 
 function refreshMessageGrouping() {
   const messages = Array.from(msgerChat.querySelectorAll(".msg")).filter(
@@ -8920,8 +8978,6 @@ function refreshMessageGrouping() {
     previousKey = currentKey;
   });
 }
-
-
 
 function getConversationMeta() {
   if (activeConversation.type === "private" && activeConversation.peerName) {
@@ -8980,7 +9036,6 @@ function setActiveConversation(type = "public", peerName = "", peerId = "") {
     peerId: peerId || "",
   };
 
-
   updateConversationUi();
   filterMessagesByConversation();
 }
@@ -9027,7 +9082,9 @@ function getConversationShareTarget(actionLabel = "this item") {
 /**
  * Toggle empty participants notice
  */
-function toggleMsgerParticipantsEmptyNotice() {  return; }
+function toggleMsgerParticipantsEmptyNotice() {
+  return;
+}
 
 /**
  * Escape a value for safe embedding inside a single-quoted JavaScript string
@@ -9121,9 +9178,9 @@ function streamMessage(element, message, speed = 100) {
   }
 }
 
-
-
-function closeAllMsgerParticipantDropdownMenus() {  return; }
+function closeAllMsgerParticipantDropdownMenus() {
+  return;
+}
 
 function positionMsgerParticipantDropdownMenu(toggleEl, menuEl) {
   if (!toggleEl || !menuEl) return;
@@ -9243,24 +9300,28 @@ function getMsgerParticipantDropdownDividerMarkup() {
   return `<li class="msger-dropdown-divider" aria-hidden="true"></li>`;
 }
 
-
 /**
  * Add participants in the chat room lists
  * @param {object} peers all peers info connected to the same room
  */
-function msgerAddPeers() {  return; }
+function msgerAddPeers() {
+  return;
+}
 
 /**
  * Search peer by name in chat room lists to send the private messages
  */
-function searchPeer() {  return; }
+function searchPeer() {
+  return;
+}
 
 /**
  * Remove participant from chat room lists
  * @param {string} peer_id socket.id
  */
-function msgerRemovePeer() {  return; }
-
+function msgerRemovePeer() {
+  return;
+}
 
 /**
  * Check Message
@@ -9543,7 +9604,6 @@ function handleDataChannelChat(dataMessage) {
 
   appendMessage(from, fromAvatar, "left", msg, privateMsg, msg_id, from);
 
-
   if (showChatOnMessage && !isChatRoomVisible) {
     showChatRoomDraggable();
   } else {
@@ -9575,7 +9635,6 @@ function hideAITypingIndicator(aiName) {
   const indicator = getId(`ai-typing-${aiName}`);
   if (indicator) indicator.remove();
 }
-
 
 /**
  * Download Captions in json format
@@ -9614,14 +9673,13 @@ function hideShowMySettings() {
     setTippy(mySettingsBtn, "Close the settings", bottomButtonsPlacement);
     isMySettingsVisible = true;
     videoMediaContainer.style.opacity = 0.3;
-  
+
     return;
   }
   elemDisplay(mySettings, false);
   setTippy(mySettingsBtn, "Open the settings", bottomButtonsPlacement);
   isMySettingsVisible = false;
   videoMediaContainer.style.opacity = 1;
-
 }
 
 /**
@@ -9671,10 +9729,11 @@ async function updateMyPeerName() {
   const myOldPeerName = myPeerName;
 
   myPeerName = myNewPeerName;
-  myVideoPeerName.innerText = myPeerName + " (me)";
+  setPeerNameHTML(myVideoPeerName, myPeerName, true);
 
   myScreenPeerName = getId("myScreenPeerName");
-  if (myScreenPeerName) myScreenPeerName.innerText = myPeerName + " (me)";
+  if (myScreenPeerName)
+    setPeerNameHTML(myScreenPeerName, myPeerName, true, "", true);
 
   sendToServer("peerName", {
     room_id: roomId,
@@ -9948,7 +10007,6 @@ function handleHideMe(isHideMeActive) {
     playSound("on");
   }
   resizeVideoMedia();
-
 }
 
 /**
@@ -9978,6 +10036,9 @@ function setMyHandStatus() {
  * @param {boolean} status of my audio
  */
 function setMyAudioStatus(status) {
+  setTimeout(() => {
+    refreshPeerNameTag(document.getElementById("myVideoPeerName"));
+  }, 100);
   console.log("My audio status", status);
   const audioClassName = status ? className.audioOn : className.audioOff;
   audioBtn.className = audioClassName;
@@ -9994,7 +10055,6 @@ function setMyAudioStatus(status) {
   if (audioBtn && audioBtn.setAttribute)
     audioBtn.setAttribute("aria-pressed", String(!!status));
   status ? playSound("on") : playSound("off");
-
 }
 
 /**
@@ -10002,6 +10062,9 @@ function setMyAudioStatus(status) {
  * @param {boolean} status of my video
  */
 function setMyVideoStatus(status) {
+  setTimeout(() => {
+    refreshPeerNameTag(document.getElementById("myVideoPeerName"));
+  }, 100);
   console.log("My video status", status);
 
   // On video OFF display my video avatar name
@@ -10054,8 +10117,6 @@ function setMyVideoStatus(status) {
     if (spinner) elemDisplay(spinner, false);
     playSound("off");
   }
-
-
 }
 
 /**
@@ -10110,6 +10171,9 @@ function setPeerHandStatus(peer_id, peer_name, status) {
  * @param {boolean} status of peer audio
  */
 function setPeerAudioStatus(peer_id, status) {
+  setTimeout(() => {
+    refreshPeerNameTag(document.getElementById(peer_id + "_name"));
+  }, 100);
   const peerAudioStatus = getId(peer_id + "_audioStatus");
   const peerAudioVolume = getId(peer_id + "_audioVolume");
 
@@ -10192,9 +10256,6 @@ function handlePeerVideoBtn(peer_id) {
   };
 }
 
-
-
-
 /**
  * Send video - audio URL to specific peer
  * @param {string} peer_id socket.id
@@ -10213,6 +10274,9 @@ function handlePeerVideoAudioUrl(peer_id, peerYoutubeBtnId) {
  * @param {boolean} status of peer video
  */
 function setPeerVideoStatus(peer_id, status) {
+  setTimeout(() => {
+    refreshPeerNameTag(document.getElementById(peer_id + "_name"));
+  }, 100);
   const peerVideoPlayer = getId(peer_id + "___video");
   const peerVideoAvatarImage = getId(peer_id + "_avatar");
   const peerVideoStatus = getId(peer_id + "_videoStatus");
@@ -10364,7 +10428,6 @@ function handleCmd(config) {
   const { action, data } = config;
 
   switch (action) {
-   
     default:
       break;
   }
@@ -10754,8 +10817,6 @@ function setMyScreenOff(peer_name) {
   }
 }
 
-
-
 /**
  * Mute or Hide specific peer
  * @param {string} peer_id socket.id
@@ -10901,7 +10962,7 @@ function handleRoomStatus(config) {
       elemDisplay(lockRoomBtn, false);
       elemDisplay(unlockRoomBtn, true);
       isRoomLocked = true;
-  
+
       break;
     case "unlock":
       userLog(
@@ -12360,7 +12421,6 @@ function handleDropdownHover() {
 
   // Handle Chat dropdown menu hover
 
-
   // Handle MsgerCP dropdown menu hover
   if (msgerCPDropDownMenuBtn && msgerCPDropDownContent) {
     let msgerCPTimeoutId;
@@ -12494,26 +12554,30 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-
 function renderRoomTemplate(templateId, data = {}) {
   const template = document.getElementById(templateId);
   if (!template) {
     console.error("Template not found: " + templateId);
     return "";
   }
-  
+
   // Clone the template content
   const clone = template.content.cloneNode(true);
-  
+
   // Process attrs
   if (data.attrs) {
     for (const [key, value] of Object.entries(data.attrs)) {
-      const elements = clone.querySelectorAll(`[data-template-attr-${key.toLowerCase()}]`);
-      elements.forEach(el => {
+      const elements = clone.querySelectorAll(
+        `[data-template-attr-${key.toLowerCase()}]`,
+      );
+      elements.forEach((el) => {
         // find all attributes that start with data-template-attr-
-        Array.from(el.attributes).forEach(attr => {
-          if (attr.name.startsWith('data-template-attr-') && attr.value === key) {
-            const targetAttr = attr.name.replace('data-template-attr-', '');
+        Array.from(el.attributes).forEach((attr) => {
+          if (
+            attr.name.startsWith("data-template-attr-") &&
+            attr.value === key
+          ) {
+            const targetAttr = attr.name.replace("data-template-attr-", "");
             if (value !== undefined) {
               el.setAttribute(targetAttr, value);
             }
@@ -12522,44 +12586,49 @@ function renderRoomTemplate(templateId, data = {}) {
         });
       });
       // also check direct matches just in case
-      const els = clone.querySelectorAll(`[data-template-attr-id="${key}"], [data-template-attr-class="${key}"], [data-template-attr-data-sender="${key}"], [data-template-attr-data-chat-type="${key}"], [data-template-attr-data-chat-peer="${key}"], [data-template-attr-data-msg-id="${key}"]`);
-      els.forEach(el => {
-         Array.from(el.attributes).forEach(attr => {
-            if (attr.name.startsWith('data-template-attr-') && attr.value === key) {
-                const targetAttr = attr.name.replace('data-template-attr-', '');
-                el.setAttribute(targetAttr, value);
-                el.removeAttribute(attr.name);
-            }
-         });
+      const els = clone.querySelectorAll(
+        `[data-template-attr-id="${key}"], [data-template-attr-class="${key}"], [data-template-attr-data-sender="${key}"], [data-template-attr-data-chat-type="${key}"], [data-template-attr-data-chat-peer="${key}"], [data-template-attr-data-msg-id="${key}"]`,
+      );
+      els.forEach((el) => {
+        Array.from(el.attributes).forEach((attr) => {
+          if (
+            attr.name.startsWith("data-template-attr-") &&
+            attr.value === key
+          ) {
+            const targetAttr = attr.name.replace("data-template-attr-", "");
+            el.setAttribute(targetAttr, value);
+            el.removeAttribute(attr.name);
+          }
+        });
       });
     }
   }
-  
+
   // Process text
   if (data.text) {
     for (const [key, value] of Object.entries(data.text)) {
       const elements = clone.querySelectorAll(`[data-template-text="${key}"]`);
-      elements.forEach(el => {
+      elements.forEach((el) => {
         el.textContent = value;
-        el.removeAttribute('data-template-text');
+        el.removeAttribute("data-template-text");
       });
     }
   }
-  
+
   // Process html
   if (data.html) {
     for (const [key, value] of Object.entries(data.html)) {
       const elements = clone.querySelectorAll(`[data-template-html="${key}"]`);
-      elements.forEach(el => {
+      elements.forEach((el) => {
         el.innerHTML = value;
-        el.removeAttribute('data-template-html');
+        el.removeAttribute("data-template-html");
       });
     }
   }
-  
+
   // Return outerHTML of the children
   let result = "";
-  clone.childNodes.forEach(node => {
+  clone.childNodes.forEach((node) => {
     if (node.nodeType === 1) {
       result += node.outerHTML;
     }
@@ -12570,14 +12639,20 @@ function renderRoomTemplate(templateId, data = {}) {
 function setColor(el, color) {
   if (el) el.style.color = color;
 }
-function chatCenter() { const msgerDraggable = getId("msgerDraggable"); if (msgerDraggable) { elemDisplay(msgerDraggable, true, "flex");
+function chatCenter() {
+  const msgerDraggable = getId("msgerDraggable");
+  if (msgerDraggable) {
+    elemDisplay(msgerDraggable, true, "flex");
     msgerDraggable.style.top = "50%";
     msgerDraggable.style.left = "50%";
     msgerDraggable.style.transform = "translate(-50%, -50%)";
   }
 }
 function canBePinned() {
-  return window.innerWidth > 820;
+  return (
+    window.innerWidth >= 1024 &&
+    window.matchMedia("(orientation: landscape)").matches
+  );
 }
 function chatPin() {
   const msgerDraggable = getId("msgerDraggable");
@@ -12607,10 +12682,10 @@ function hideChatRoomAndEmojiPicker() {
   }
 }
 
-
-const msgerPrivateChatsEmpty = getId("msgerPrivateChatsEmpty") || document.createElement("div");
-const msgerSidebarCloseBtn = getId("msgerSidebarCloseBtn") || document.createElement("button");
-
+const msgerPrivateChatsEmpty =
+  getId("msgerPrivateChatsEmpty") || document.createElement("div");
+const msgerSidebarCloseBtn =
+  getId("msgerSidebarCloseBtn") || document.createElement("button");
 
 function chatMinimize() {
   setSP("--msger-width", "min(1120px, 92vw)");
@@ -12619,11 +12694,11 @@ function chatMinimize() {
 }
 
 function createChatMessageId() {
-    return 'msg-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now();
+  return "msg-" + Math.random().toString(36).substr(2, 9) + "-" + Date.now();
 }
 
 function normalizeChatMessageId(id) {
-    return id ? id.toString() : '';
+  return id ? id.toString() : "";
 }
 
 /*--------------------------------------------------------------
@@ -12633,56 +12708,112 @@ let topHeaderBarTimer = 0;
 let topHeaderBarInterval = null;
 
 function initTopHeaderBar() {
-    const headerRoomId = getId('headerRoomId');
-    if(headerRoomId) headerRoomId.innerText = roomId;
+  const headerRoomId = getId("headerRoomId");
+  if (headerRoomId) headerRoomId.innerText = roomId;
+  const waitingRoomIdSpan = getId("waitingRoomIdSpan");
+  if (waitingRoomIdSpan) waitingRoomIdSpan.innerText = roomId;
 
-    const headerTimer = getId('headerTimer');
-    if (headerTimer && !topHeaderBarInterval) {
-       topHeaderBarInterval = setInterval(() => {
-    topHeaderBarTimer++;
-    // Math.floor(topHeaderBarTimer / 60) sẽ tự động tăng lên 60, 99, 100,... mà không bị reset
-    const mins = Math.floor(topHeaderBarTimer / 60).toString().padStart(2, '0');
-    const secs = (topHeaderBarTimer % 60).toString().padStart(2, '0');
-    headerTimer.innerText = `${mins}:${secs}`;
-}, 1000);
-    }
+  const headerTimer = getId("headerTimer");
+  if (headerTimer && !topHeaderBarInterval) {
+    topHeaderBarInterval = setInterval(() => {
+      topHeaderBarTimer++;
+      // Math.floor(topHeaderBarTimer / 60) sẽ tự động tăng lên 60, 99, 100,... mà không bị reset
+      const mins = Math.floor(topHeaderBarTimer / 60)
+        .toString()
+        .padStart(2, "0");
+      const secs = (topHeaderBarTimer % 60).toString().padStart(2, "0");
+      headerTimer.innerText = `${mins}:${secs}`;
+    }, 1000);
+  }
 
-    const headerCopyBtn = getId('headerCopyBtn');
-    const headerCopyIcon = getId('headerCopyIcon');
-    if(headerCopyBtn) {
-        headerCopyBtn.addEventListener('click', () => {
-            navigator.clipboard.writeText(roomId);
-            // Hiện icon check xanh lá khi copy thành công
-            headerCopyIcon.className = 'fa-solid fa-check';
-            headerCopyIcon.style.color = '#34d399';
-            setTimeout(() => {
-                // Trả về icon copy cũ sau 2 giây
-                headerCopyIcon.className = 'fa-regular fa-copy';
-                headerCopyIcon.style.color = '';
-            }, 2000);
-        });
-    }
+  const headerCopyBtn = getId("headerCopyBtn");
+  const headerCopyIcon = getId("headerCopyIcon");
+  if (headerCopyBtn) {
+    headerCopyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(roomId);
+      // Hiện icon check xanh lá khi copy thành công
+      headerCopyBtn.innerHTML =
+        '<i data-lucide="check" class="w-3 h-3 text-emerald-400"></i>';
+      if (window.lucide) window.lucide.createIcons({ root: headerCopyBtn });
 
-    updateTopHeaderPeerCount();
+      setTimeout(() => {
+        // Trả về icon copy cũ sau 2 giây
+        headerCopyBtn.innerHTML =
+          '<i id="headerCopyIcon" data-lucide="copy" class="w-3 h-3"></i>';
+        if (window.lucide) window.lucide.createIcons({ root: headerCopyBtn });
+      }, 3000);
+    });
+  }
+
+  const waitingCopyRoomLink = getId("waitingCopyRoomLink");
+  if (waitingCopyRoomLink) {
+    waitingCopyRoomLink.addEventListener("click", () => {
+      navigator.clipboard.writeText(roomId);
+
+      const text = getId("waitingCopyText");
+      if (text) text.innerText = "Đã sao chép mã phòng";
+      waitingCopyRoomLink.innerHTML =
+        '<i data-lucide="check" class="w-4 h-4 text-emerald-400" id="waitingCopyIcon"></i> <span id="waitingCopyText">Đã sao chép mã phòng</span>';
+      if (window.lucide)
+        window.lucide.createIcons({ root: waitingCopyRoomLink });
+
+      setTimeout(() => {
+        waitingCopyRoomLink.innerHTML =
+          '<i data-lucide="copy" class="w-4 h-4 text-blue-400" id="waitingCopyIcon"></i> <span id="waitingCopyText">Sao chép mã phòng</span>';
+        if (window.lucide)
+          window.lucide.createIcons({ root: waitingCopyRoomLink });
+      }, 3000);
+    });
+  }
+
+  updateTopHeaderPeerCount();
 }
 
 function updateTopHeaderPeerCount() {
-    const dot = getId('headerStatusDot');
-    const countText = getId('headerPeerCount');
-    if(!dot || !countText) return;
+  const dot = getId("headerStatusDot");
+  const countText = getId("headerPeerCount");
+  if (!dot || !countText) return;
 
-    // Tính tổng số lượng người (Bạn + những người cùng phòng)
-    const totalPeers = Object.keys(peerConnections).length + 1;
-    
-    if (totalPeers > 1) {
-        // Cập nhật trạng thái màu Xanh (Có người)
-        dot.className = 'status-dot success';
-        countText.className = 'peer-count-text success-text';
-        countText.innerText = `${totalPeers}/2`; // Sẽ linh hoạt hiện 2/2, 3/2 tuỳ lượng người
-    } else {
-        // Cập nhật trạng thái màu Vàng (Đang chờ)
-        dot.className = 'status-dot warning';
-        countText.className = 'peer-count-text warning-text';
-        countText.innerText = `1/2`;
+  // Tính tổng số lượng người (Bạn + những người cùng phòng)
+  const totalPeers = Object.keys(peerConnections).length + 1;
+
+  let waitingCard = getId("waitingRoomCard");
+
+  if (totalPeers > 1) {
+    // Cập nhật trạng thái màu Xanh (Có người)
+    dot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+    countText.className = "text-emerald-400";
+    countText.innerText = `${totalPeers}/2`; // Sẽ linh hoạt hiện 2/2, 3/2 tuỳ lượng người
+    if (waitingCard) {
+      waitingCard.style.display = "none";
+      waitingCard.className =
+        "bg-slate-900/60 border-2 border-dashed border-slate-800 rounded-2xl flex-col items-center justify-center p-6 text-center w-full h-full";
+      const pipBtn = document.getElementById("newPipBtn");
+      if (pipBtn) {
+        pipBtn.style.opacity = "1";
+        pipBtn.style.pointerEvents = "auto";
+        pipBtn.classList.remove("opacity-50", "cursor-not-allowed");
+      }
     }
+  } else {
+    // Cập nhật trạng thái màu Vàng (Đang chờ)
+    dot.className = "w-2 h-2 rounded-full bg-amber-500";
+    countText.className = "text-amber-400";
+    countText.innerText = `1/2`;
+    if (waitingCard) {
+      waitingCard.style.display = "flex";
+      waitingCard.className =
+        "Camera bg-slate-900/60 border-2 border-dashed border-slate-800 rounded-2xl flex flex-col items-center justify-center p-6 text-center w-full h-full";
+      const pipBtn = document.getElementById("newPipBtn");
+      if (pipBtn) {
+        pipBtn.style.opacity = "0.5";
+        pipBtn.style.pointerEvents = "none";
+        pipBtn.classList.add("opacity-50", "cursor-not-allowed");
+      }
+    }
+  }
+
+  if (typeof resizeVideoMedia === "function") {
+    resizeVideoMedia();
+  }
 }

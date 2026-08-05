@@ -1,4 +1,4 @@
-!(function () {
+(!(function () {
   "use strict";
   // Xử lý trạng thái khi trang tải xong
   document.documentElement.classList.remove("no-js");
@@ -66,4 +66,4 @@
       (window.addEventListener("load", i),
       window.addEventListener("scroll", s),
       window.addEventListener("resize", a));
-  })();
+  })());
