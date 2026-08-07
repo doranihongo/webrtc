@@ -357,12 +357,6 @@ const dir = {
 const views = {
   client: path.join(__dirname, "../../", "public/views/client.html"),
   landing: path.join(__dirname, "../../", "public/views/landing.html"),
-
-  customizeRoom: path.join(
-    __dirname,
-    "../../",
-    "public/views/customizeRoom.html",
-  ),
   stunTurn: path.join(__dirname, "../../", "public/views/testStunTurn.html"),
 };
 
@@ -370,7 +364,7 @@ const views = {
 const brandHtmlInjection = config.brand?.htmlInjection ?? true;
 
 // File to cache and inject custom HTML data like OG tags and any other elements.
-const filesPath = [views.landing, views.client, views.customizeRoom];
+const filesPath = [views.landing, views.client];
 const htmlInjector = new HtmlInjector(filesPath, config.brand || null);
 
 const channels = {}; // collect channels
@@ -601,11 +595,6 @@ app.get("/", OIDCAuth, (req, res) => {
   } else {
     return htmlInjector.injectHtml(views.landing, res);
   }
-});
-
-// Get Custom room
-app.get("/customizeRoom", OIDCAuth, (req, res) => {
-  htmlInjector.injectHtml(views.customizeRoom, res);
 });
 
 // Get stats endpoint
@@ -1301,7 +1290,6 @@ io.sockets.on("connect", async (socket) => {
       peer_screen_status,
       peer_hand_status,
       peer_rec_status,
-      peer_privacy_status,
       peer_info,
     } = config;
 
@@ -1446,7 +1434,6 @@ io.sockets.on("connect", async (socket) => {
       peer_screen_status: peer_screen_status,
       peer_hand_status: peer_hand_status,
       peer_rec_status: peer_rec_status,
-      peer_privacy_status: peer_privacy_status,
       os: osName ? `${osName} ${osVersion}` : "",
       browser: browserName ? `${browserName} ${browserVersion}` : "",
       extras: extras,
@@ -1778,9 +1765,6 @@ io.sockets.on("connect", async (socket) => {
             case "rec":
               peers[room_id][peer_id]["peer_rec_status"] = status;
               break;
-            case "privacy":
-              peers[room_id][peer_id]["peer_privacy_status"] = status;
-              break;
             default:
               break;
           }
@@ -1874,18 +1858,6 @@ io.sockets.on("connect", async (socket) => {
   });
 
   /**
-   * Start caption
-   */
-  socket.on("caption", async (cfg) => {
-    // Prevent XSS injection
-    const config = checkXSS(cfg);
-
-    if (!Validate.isValidData(config)) return;
-
-    await sendToRoom(cfg.room_id, sockets, "caption", config);
-  });
-
-  /**
    * Relay Kick out peer from room
    */
   socket.on("kickOut", async (cfg) => {
@@ -1922,98 +1894,6 @@ io.sockets.on("connect", async (socket) => {
         peer_name: peer_name,
       });
     }
-  });
-
-  /**
-   * Relay File info
-   */
-  socket.on("fileInfo", async (cfg) => {
-    // Prevent XSS injection
-    const config = checkXSS(cfg);
-
-    if (!Validate.isValidData(config)) return;
-
-    // log.debug('File info', config);
-    const { room_id, peer_id, peer_name, peer_avatar, broadcast, file } =
-      config;
-
-    // check if valid fileName
-    if (!isValidFileName(file.fileName)) {
-      log.debug("[" + socket.id + "] File name not valid", config);
-      return;
-    }
-
-    function bytesToSize(bytes) {
-      let sizes = ["Bytes", "KB", "MB", "GB", "TB"];
-      if (bytes == 0) return "0 Byte";
-      let i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
-      return Math.round(bytes / Math.pow(1024, i), 2) + " " + sizes[i];
-    }
-
-    log.debug(
-      "[" +
-        socket.id +
-        "] Peer [" +
-        peer_name +
-        "] send file to room_id [" +
-        room_id +
-        "]",
-      {
-        peerName: peer_name,
-        peerAvatar: peer_avatar,
-        fileName: file.fileName,
-        fileSize: bytesToSize(file.fileSize),
-        fileType: file.fileType,
-        broadcast: broadcast,
-      },
-    );
-
-    if (broadcast) {
-      await sendToRoom(room_id, socket.id, "fileInfo", config);
-    } else {
-      await sendToPeer(peer_id, sockets, "fileInfo", config);
-    }
-  });
-
-  /**
-   * Abort file sharing
-   */
-  socket.on("fileAbort", async (cfg) => {
-    // Prevent XSS injection
-    const config = checkXSS(cfg);
-
-    if (!Validate.isValidData(config)) return;
-
-    const { room_id, peer_name } = config;
-
-    log.debug(
-      "[" +
-        socket.id +
-        "] Peer [" +
-        peer_name +
-        "] send fileAbort to room_id [" +
-        room_id +
-        "]",
-    );
-    await sendToRoom(room_id, socket.id, "fileAbort");
-  });
-
-  socket.on("fileReceiveAbort", async (cfg) => {
-    const config = checkXSS(cfg);
-
-    if (!Validate.isValidData(config)) return;
-
-    const { room_id, peer_name } = config;
-    log.debug(
-      "[" +
-        socket.id +
-        "] Peer [" +
-        peer_name +
-        "] send fileReceiveAbort to room_id [" +
-        room_id +
-        "]",
-    );
-    await sendToRoom(room_id, socket.id, "fileReceiveAbort", config);
   });
 
   /**
@@ -2194,16 +2074,6 @@ io.sockets.on("connect", async (socket) => {
     }
   }
 }); // end [sockets.on-connect]
-
-/**
- * Check if valid filename
- * @param {string} fileName
- * @returns boolean
- */
-function isValidFileName(fileName) {
-  const invalidChars = /[\\\/\?\*\|:"<>]/;
-  return !invalidChars.test(fileName);
-}
 
 /**
  * Check if valid URL

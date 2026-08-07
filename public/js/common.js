@@ -1,22 +1,46 @@
 "use strict";
 
+// ---------------------------------------------------------
+// PWA: register the (no-op/no-cache) service worker so mobile browsers
+// treat this as an installable app for "Add to Home Screen", instead of
+// just bookmarking the page. Shared here since common.js loads on both
+// the landing page and the in-room page - only needs to happen once
+// regardless of which page the user installs from.
+// ---------------------------------------------------------
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+
 /**
- * Tạo mã phòng ngẫu nhiên 6 ký tự (bao gồm chữ cái và số)
+ * Tạo mã phòng ngẫu nhiên 10 ký tự: chỉ chữ IN HOA + số, luôn có ít nhất
+ * 1 chữ và 1 số (không phải ngẫu nhiên thuần có thể ra toàn chữ/toàn số)
  */
 function getRandomRoomCode() {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let result = "";
-  for (let i = 0; i < 10; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const digits = "0123456789";
+  const all = letters + digits;
+  const pick = (chars) => chars.charAt(Math.floor(Math.random() * chars.length));
+
+  const result = [pick(letters), pick(digits)];
+  for (let i = result.length; i < 10; i++) {
+    result.push(pick(all));
   }
-  return result;
+  // Fisher-Yates shuffle so the guaranteed letter/digit aren't always
+  // stuck in the first two positions
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result.join("");
 }
 
 /**
  * Hiệu ứng xáo trộn ký tự (Shuffle text) cho ô nhập tên phòng
  */
 function shuffleText(input, finalValue, duration = 600) {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   const steps = 10;
   const interval = duration / steps;
   let step = 0;

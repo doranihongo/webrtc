@@ -9,8 +9,19 @@
     <link
       id="appleTouchIcon"
       rel="apple-touch-icon"
-      href="../images/logo.svg"
+      href="../images/mirotalk-logo.png"
     />
+
+    <!-- PWA: lets mobile browsers "Add to Home Screen" as a standalone
+         app (own icon, no browser address bar) instead of a bare
+         bookmark. apple-touch-icon above must be a PNG, not the SVG it
+         was before - iOS doesn't reliably render SVG touch icons. -->
+    <link rel="manifest" href="../manifest.json" />
+    <meta name="theme-color" content="#3b8ac4" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DORA NIHONGO" />
 
     <!-- Meta Information -->
     <meta charset="utf-8" />
@@ -31,7 +42,7 @@
     <meta property="og:url" content="{{OG_URL}}" />
 
     <!-- xss -->
-    <script src="https://cdn.jsdelivr.net/npm/xss/dist/xss.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/xss/dist/xss.min.js"></script>
 
     <!-- https://cdnjs.com/libraries/font-awesome -->
     <link
@@ -61,15 +72,13 @@
     <div class="body-wrap">
       <main class="site-content">
         <section
-          class="cta section center-content-mobile reveal-from-bottom mb-32"
-          style="margin-top: 100px"
+          class="cta section center-content-mobile reveal-from-bottom"
         >
           <div class="container">
             <div class="cta-inner section-inner cta-split br-12">
               <div class="cta-slogan">
                 <h3 id="appJoinDescription" class="m-0">
-                  Pick a room name.<br />
-                  How about this one?
+                  NHẬP MÃ PHÒNG HỌC
                 </h3>
               </div>
               <div class="cta-action">
@@ -95,12 +104,12 @@
                       id="joinRoomButton"
                       class="button button-primary br-6"
                     >
-                      Join Room
+                      VÀO PHÒNG
                     </button>
                   </div>
                 </div>
                 <div id="lastRoomContainer" class="last-room">
-                  <span id="appJoinLastRoom">Your recent room:</span>
+                  <span id="appJoinLastRoom">Phòng học gần đây:</span>
                   <a id="lastRoom"></a>
                 </div>
               </div>

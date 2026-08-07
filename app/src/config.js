@@ -27,7 +27,10 @@ const packageJson = require("../../package.json");
 
 // Helper: parse env string to boolean
 function getEnvBoolean(key, force_true_if_undefined = false) {
-  if (key == undefined && force_true_if_undefined) return true;
+  // Treat "unset" and "present but blank" (e.g. `KEY=` in .env) the same -
+  // a .env copied from the template lists every key, so an intentionally
+  // blank value must still fall through to the default, not read as false.
+  if ((key == undefined || key === "") && force_true_if_undefined) return true;
   return key == "true" ? true : false;
 }
 
@@ -429,18 +432,11 @@ module.exports = {
       showHideMeBtn: true,
       showRecordStreamBtn: true,
       showFullScreenBtn: true,
-      showRoomEmojiPickerBtn: true,
-      showCaptionRoomBtn: true,
-      showFileShareBtn: false,
       showDocumentPipBtn: true,
       showAboutBtn: true, // Please keep me always true, Thank you!
     },
     chat: {
-      showTogglePinBtn: true,
       showMaxBtn: true,
-      showSaveMessageBtn: true,
-      showMarkDownBtn: true,
-      showFileShareBtn: false,
       showShareVideoAudioBtn: true,
       showParticipantsBtn: true,
     },
@@ -449,42 +445,28 @@ module.exports = {
       showMaxBtn: true,
     },
     settings: {
-      showActiveRoomsBtn: true,
       showMicOptionsBtn: true,
       showTabRoomPeerName: true,
       showTabRoomParticipants: true,
       showTabRoomSecurity: true,
       showTabEmailInvitation: true,
-      showCaptionEveryoneBtn: true,
-      showMuteEveryoneBtn: true,
-      showHideEveryoneBtn: true,
-      showEjectEveryoneBtn: true,
       showLockRoomBtn: true,
       showUnlockRoomBtn: true,
-      showShortcutsBtn: true,
       customNoiseSuppression: getEnvBoolean(
         process.env.CUSTOM_NOISE_SUPPRESSION_ENABLED,
         true,
       ),
     },
     remote: {
-      showAudioVolume: true,
       audioBtnClickAllowed: true,
       videoBtnClickAllowed: true,
       showVideoPipBtn: true,
       showKickOutBtn: true,
-      showFileShareBtn: false,
       showShareVideoAudioBtn: true,
       showGeoLocationBtn: true,
-      showPrivateMessageBtn: true,
-      showZoomInOutBtn: false,
-      showVideoFocusBtn: false,
     },
     local: {
       showVideoPipBtn: true,
-      showVideoCircleBtn: true,
-      showZoomInOutBtn: false,
-      showVideoFocusBtn: false,
     },
   },
   // ==========================================

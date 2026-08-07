@@ -1,3 +1,15 @@
+// SweetAlert2's own built-in default button labels ("OK"/"Cancel") are in
+// English and show up on every dialog that doesn't set its own text
+// explicitly - override them site-wide here so nothing falls back to
+// English by accident.
+if (typeof Swal !== "undefined" && typeof Swal.mixin === "function") {
+  Swal = Swal.mixin({
+    confirmButtonText: "Đồng ý",
+    cancelButtonText: "Hủy",
+    denyButtonText: "Không",
+  });
+}
+
 window.setAspectRatio = function () {};
 
 window.resizeVideoMedia = function () {
@@ -11,6 +23,20 @@ window.resizeVideoMedia = function () {
   }
 };
 window.isHideALLVideosActive = false;
+
+/**
+ * Truncate a display name to at most 12 characters (spaces included),
+ * appending "..." when cut. A name of exactly 12 chars or fewer (e.g.
+ * "DORA NIHONGO") is shown in full. Display-only - never use this on a
+ * name before storing/matching/sending it, only right before it's
+ * rendered into the DOM.
+ * @param {string} name
+ * @returns {string} truncated name for display
+ */
+function truncateDisplayName(name) {
+  if (!name || typeof name !== "string") return name;
+  return name.length > 12 ? name.slice(0, 12) + "..." : name;
+}
 
 function setPeerNameHTML(element, name, isMe, peerId = "", isScreen = false) {
   if (!element) return;
@@ -38,32 +64,38 @@ function refreshPeerNameTag(element) {
     if (isScreenStreaming || isScreenTag) isScreenShare = true;
   } else {
     if (isScreenTag) isScreenShare = true;
+    // className is a FontAwesome icon class ("fas fa-video-slash" /
+    // "fas fa-microphone-slash") - it never contains the word "Off",
+    // so that used to never match and these badges never showed.
     const vStatus = document.getElementById(peerId + "_videoStatus");
-    if (vStatus && vStatus.className.includes("Off")) isVideoOff = true;
+    if (vStatus && vStatus.className.includes("-slash")) isVideoOff = true;
     const aStatus = document.getElementById(peerId + "_audioStatus");
-    if (aStatus && aStatus.className.includes("Off")) isAudioMuted = true;
+    if (aStatus && aStatus.className.includes("-slash")) isAudioMuted = true;
   }
 
   let html =
-    '<div style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:rgba(59,130,246,0.2);color:#60a5fa;flex-shrink:0;"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>';
+    '<div style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:rgba(var(--ds-brand-600-rgb),0.2);color:var(--ds-brand-500);flex-shrink:0;"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>';
   html +=
-    '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px;">' +
-    name +
+    // max-width is just a CSS safety net now that the name itself is
+    // already hard-truncated to 12 chars + "..." in JS (truncateDisplayName)
+    // - wide enough to fit that in full at normal zoom/font-size.
+    '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">' +
+    truncateDisplayName(name) +
     "</span>";
 
   if (isMe) {
     html +=
-      '<span style="background:rgba(59,130,246,0.2);color:#60a5fa;font-size:10px;padding:2px 6px;border-radius:6px;font-family:ui-monospace, monospace;font-weight:500;flex-shrink:0;">(Bạn)</span>';
+      '<span style="background:rgba(var(--ds-brand-600-rgb),0.2);color:var(--ds-brand-500);font-size:10px;padding:2px 6px;border-radius:6px;font-family:ui-monospace, monospace;font-weight:500;flex-shrink:0;">(Bạn)</span>';
   }
 
   if (isScreenShare) {
     html +=
-      '<div style="display:flex;align-items:center;padding-left:4px;border-left:1px solid rgba(51,65,85,0.8);flex-shrink:0;"><svg class="w-3.5 h-3.5" style="width:14px;height:14px;color:#60a5fa;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></div>';
+      '<div style="display:flex;align-items:center;padding-left:4px;border-left:1px solid rgba(var(--ds-border-rgb),0.8);flex-shrink:0;"><svg class="w-3.5 h-3.5" style="width:14px;height:14px;color:var(--ds-brand-500);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></div>';
   }
 
   if (isAudioMuted) {
     html +=
-      '<div style="display:flex;align-items:center;padding-left:4px;border-left:1px solid rgba(51,65,85,0.8);flex-shrink:0;"><svg class="w-3.5 h-3.5" style="width:14px;height:14px;color:#fb7185;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg></div>';
+      '<div style="display:flex;align-items:center;padding-left:4px;border-left:1px solid rgba(36,64,107,0.8);flex-shrink:0;"><svg class="w-3.5 h-3.5" style="width:14px;height:14px;color:#fb7185;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg></div>';
   }
 
   element.innerHTML = html;
@@ -94,7 +126,6 @@ const myRoomUrl = window.location.origin + "/join/" + roomId; // share room url
 
 // Images
 const images = {
-  caption: "../images/caption.png",
   confirmation: "../images/image-placeholder.png",
   share: "../images/share.png",
   locked: "../images/locked.png",
@@ -127,30 +158,23 @@ const className = {
   screenOn: "fas fa-desktop",
   screenOff: "fas fa-stop-circle",
   handPulsate: "fas fa-hand-paper pulsate",
-  privacy: "far fa-circle",
   pinUnpin: "fas fa-map-pin",
   mirror: "fas fa-arrow-right-arrow-left",
-  zoomIn: "fas fa-magnifying-glass-plus",
-  zoomOut: "fas fa-magnifying-glass-minus",
   fullScreen: "fas fa-expand",
   fsOn: "fas fa-compress-alt",
   fsOff: "fas fa-expand-alt",
-  msgPrivate: "fas fa-paper-plane",
   geoLocation: "fas fa-location-dot",
-  shareFile: "fas fa-upload",
   shareVideoAudio: "fab fa-youtube",
   kickOut: "fas fa-sign-out-alt",
   chatOn: "fas fa-comment",
   chatOff: "fas fa-comment",
   ghost: "fas fa-ghost",
   undo: "fas fa-undo",
-  captionOn: "fas fa-closed-captioning",
   trash: "fas fa-trash",
   copy: "fas fa-copy",
   speech: "fas fa-volume-high",
   heart: "fas fa-heart",
   pip: "fas fa-images",
-  hideAll: "fas fa-eye",
   up: "fas fa-chevron-up",
   down: "fas fa-chevron-down",
 };
@@ -163,8 +187,6 @@ const icons = {
   sounds: '<i class="fas fa-music"></i>',
   share: '<i class="fas fa-share-alt"></i>',
   user: '<i class="fas fa-user"></i>',
-  fileSend: '<i class="fas fa-file-export"></i>',
-  fileReceive: '<i class="fas fa-file-import"></i>',
   codecs: '<i class="fa-solid fa-film"></i>',
   theme: '<i class="fas fa-fill-drip"></i>',
   close: '<i class="fas fa-times"></i>',
@@ -190,7 +212,17 @@ const isWebRTCSupported = checkWebRTCSupported();
 const userAgent = navigator.userAgent;
 const parser = new UAParser(userAgent);
 const parserResult = parser.getResult();
-const deviceType = parserResult.device.type || "desktop";
+// UAParser leaves device.type undefined for a lot of real phones/webviews
+// it doesn't recognize - blindly falling back to "desktop" then silently
+// disabled every isMobileDevice-gated feature (auto-hide controls, the
+// floating self-view thumbnail, etc.) on those phones. When UAParser
+// can't tell, fall back to a touch-primary heuristic instead of assuming
+// desktop; leave an explicit UAParser result (mobile/tablet/desktop) untouched.
+const isTouchPrimaryDevice =
+  typeof matchMedia === "function" &&
+  matchMedia("(hover: none) and (pointer: coarse)").matches;
+const deviceType =
+  parserResult.device.type || (isTouchPrimaryDevice ? "mobile" : "desktop");
 const isMobileDevice = deviceType === "mobile";
 const isMobileSafari =
   isMobileDevice && parserResult.browser.name.toLowerCase().includes("safari");
@@ -209,6 +241,20 @@ const thisInfo = getInfo();
 const lS = new LocalStorage();
 const localStorageSettings = lS.getObjectLocalStorage("P2P_SETTINGS");
 const lsSettings = { ...lS.P2P_SETTINGS, ...(localStorageSettings || {}) };
+// One-time migration: browsers that already persisted a full settings
+// object (from before the default flipped to "contain") would otherwise
+// keep re-loading the old "cover" (crop/zoom) value forever, since a saved
+// value always wins over a new code default. Force it to "contain" once,
+// then get out of the way so a deliberate later choice from the Settings
+// dropdown still sticks.
+if (
+  localStorageSettings &&
+  !localStorageSettings._videoObjFitMigrated &&
+  localStorageSettings.video_obj_fit !== 1
+) {
+  lsSettings.video_obj_fit = 1; // contain
+}
+lsSettings._videoObjFitMigrated = true;
 console.log("LOCAL_STORAGE_SETTINGS", lsSettings);
 
 // Check if embedded inside an iFrame
@@ -221,7 +267,7 @@ const showVideoPipBtn = document.pictureInPictureEnabled;
 const showDocumentPipBtn = "documentPictureInPicture" in window;
 
 // Loading div
-const loadingDiv = getId("loadingDiv");
+const loadingBackdrop = getId("loadingBackdrop");
 
 // Video/Audio media container
 const videoMediaContainer = getId("videoMediaContainer");
@@ -250,9 +296,9 @@ const usernameEmoji = getId("usernameEmoji");
 const shareRoomBtn = getId("shareRoomBtn");
 const recordStreamBtn = getId("recordStreamBtn");
 const fullScreenBtn = getId("fullScreenBtn");
+const fullScreenCornerBtn = getId("fullScreenCornerBtn");
 const chatRoomBtn = getId("chatRoomBtn");
 
-const fileShareBtn = getId("fileShareBtn");
 const documentPiPBtn = getId("documentPiPBtn");
 
 // Buttons bottom
@@ -305,21 +351,28 @@ const msgerVideoUrlBtn = getId("msgerVideoUrlBtn");
 const msgerScrollBottomBtn = getId("msgerScrollBottomBtn");
 let isAutoScrollingMsger = false;
 
+/**
+ * Show/hide the floating "jump to bottom" arrow based on scroll position -
+ * mirrors ChatPanel.tsx's checkScrollState().
+ */
+function updateMsgerScrollBtn() {
+  if (!msgerChat) return;
+  const { scrollTop, scrollHeight, clientHeight } = msgerChat;
+  const isScrollable = scrollHeight > clientHeight + 10;
+  if (!isScrollable) {
+    if (msgerScrollBottomBtn) msgerScrollBottomBtn.classList.add("hidden");
+    return;
+  }
+  const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+  if (msgerScrollBottomBtn) {
+    msgerScrollBottomBtn.classList.toggle("hidden", distanceFromBottom <= 60);
+  }
+}
+
 if (msgerChat) {
   msgerChat.addEventListener("scroll", () => {
     if (isAutoScrollingMsger) return;
-    const { scrollTop, scrollHeight, clientHeight } = msgerChat;
-    const isScrollable = scrollHeight > clientHeight + 10;
-    if (!isScrollable) {
-      if (msgerScrollBottomBtn) msgerScrollBottomBtn.classList.add("hidden");
-      return;
-    }
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    if (distanceFromBottom > 60) {
-      if (msgerScrollBottomBtn) msgerScrollBottomBtn.classList.remove("hidden");
-    } else {
-      if (msgerScrollBottomBtn) msgerScrollBottomBtn.classList.add("hidden");
-    }
+    updateMsgerScrollBtn();
   });
 }
 
@@ -373,13 +426,11 @@ const msgerCPDropDownContent =
   getId("msgerCPDropDownContent") || document.createElement("div");
 
 // My settings
+const mySettingsBackdrop = getId("mySettingsBackdrop");
 const mySettings = getId("mySettings");
 const mySettingsHeader = getId("mySettingsHeader");
-const mySessionTime = getId("mySessionTime"); // conference session time
-const tabVideoBtn = getId("tabVideoBtn");
-const tabAudioBtn = getId("tabAudioBtn");
-const tabVideoShareBtn = getId("tabVideoShareBtn");
-const tabRecordingBtn = getId("tabRecordingBtn");
+const mySessionTime = getId("mySessionTime"); // conference session time (no longer shown in settings UI, kept for internal timer bookkeeping)
+const tabDevicesBtn = getId("tabDevicesBtn");
 const tabProfileBtn = getId("tabProfileBtn");
 
 const tabNetworkBtn = getId("tabNetworkBtn");
@@ -388,12 +439,10 @@ const networkHost = getId("networkHost");
 const networkStun = getId("networkStun");
 const networkTurn = getId("networkTurn");
 const tabRoomBtn = getId("tabRoomBtn");
-const tabLanguagesBtn = getId("tabLanguagesBtn");
 const mySettingsCloseBtn = getId("mySettingsCloseBtn");
 const myPeerNameSet = getId("myPeerNameSet");
 const myPeerNameSetBtn = getId("myPeerNameSetBtn");
 const myProfileAvatarUploadBtn = getId("myProfileAvatarUploadBtn");
-const myProfileAvatarResetBtn = getId("myProfileAvatarResetBtn");
 const switchSounds = getId("switchSounds");
 const switchShare = getId("switchShare");
 const switchKeepButtonsVisible = getId("switchKeepButtonsVisible");
@@ -407,7 +456,6 @@ const switchPushToTalk = getId("switchPushToTalk");
 const audioInputSelect = getId("audioSource");
 const audioOutputSelect = getId("audioOutput");
 const audioOutputDiv = getId("audioOutputDiv");
-const speakerTestBtn = getId("speakerTestBtn");
 const videoSelect = getId("videoSource");
 const videoQualitySelect = getId("videoQuality");
 const videoFpsSelect = getId("videoFps");
@@ -445,23 +493,7 @@ const wbBackgroundColorEl = getId("wbBackgroundColorEl");
 
 const lockRoomBtn = getId("lockRoomBtn");
 const unlockRoomBtn = getId("unlockRoomBtn");
-
-// File send progress
-const sendFileDiv = getId("sendFileDiv");
-const sendFileDragHandle = getId("sendFileDragHandle");
-const sendFilePercentage = getId("sendFilePercentage");
-const sendFileInfo = getId("sendFileInfo");
-const sendProgress = getId("sendProgress");
-const sendAbortBtn = getId("sendAbortBtn");
-
-// File receive progress
-const receiveFileDiv = getId("receiveFileDiv");
-const receiveFileDragHandle = getId("receiveFileDragHandle");
-const receiveFilePercentage = getId("receiveFilePercentage");
-const receiveFileInfo = getId("receiveFileInfo");
-const receiveProgress = getId("receiveProgress");
-const receiveHideBtn = getId("receiveHideBtn");
-const receiveAbortBtn = getId("receiveAbortBtn");
+const roomLockStatusIcon = getId("roomLockStatusIcon");
 
 // Video/audio url player
 const videoUrlCont = getId("videoUrlCont");
@@ -490,23 +522,30 @@ const isRulesActive = true; // Presenter can do anything, guest is slightly mode
 const forceCamMaxResolutionAndFps = false; // This force the webCam to max resolution as default, up to 8k and 60fps (very high bandwidth are required) if false, you can set it from settings
 const useAvatarSvg = true; // if false the cam-Off avatar = images.avatar
 
-/**
- * Determines the video zoom mode.
- * If set to true, the video zooms at the center of the frame.
- * If set to false, the video zooms at the cursor position.
- */
-const ZOOM_CENTER_MODE = false;
-const ZOOM_IN_OUT_ENABLED = true; // Video Zoom in/out default (true)
 // Room
 let thisMaxRoomParticipants = 2;
 
 // misc
-let swBg = "rgba(0, 0, 0, 0.7)"; // swAlert background color
+let swBg = "rgba(11, 26, 46, 0.85)"; // swAlert background color
 let isDocumentOnFullScreen = false;
 let isToggleExtraBtnClicked = false;
-let hasTemporaryAvatar = !!(
-  lsSettings.peer_avatar && isValidAvatarURL(lsSettings.peer_avatar)
-);
+// DiceBear styles used for the "Đổi ảnh đại diện" dialog's random avatar
+// grid - never a style that renders visible text/letters on the image.
+// Declared this early (before myPeerAvatar/getPeerAvatar() run below)
+// since it's a `const` - referencing it before this line would throw a
+// TDZ error.
+const DICEBEAR_AVATAR_STYLES = [
+  "bottts-neutral",
+  "adventurer-neutral",
+  "thumbs",
+  "identicon",
+  "shapes",
+];
+
+// The per-join auto-assigned default avatar only ever uses styles #2 and
+// #3 above (never #1 "bottts-neutral", the robot head) - a different,
+// narrower look from the dialog's fuller variety.
+const JOIN_DEFAULT_AVATAR_STYLES = DICEBEAR_AVATAR_STYLES.slice(1, 3);
 
 // peer
 let myPeerId; // This socket.id
@@ -570,7 +609,6 @@ let myScreen;
 let myAudio;
 let myVideoWrap;
 let myVideoAvatarImage;
-let myPrivacyBtn;
 let myVideoPinBtn;
 let myScreenPinBtn;
 let myVolumeTimer = null;
@@ -580,7 +618,6 @@ let myScreenPeerName;
 let myHandStatusIcon;
 let myVideoStatusIcon;
 let myAudioStatusIcon;
-let isVideoPrivacyActive = false; // Video circle for privacy
 let isVideoPinned = false;
 let isVideoFullScreenSupported = true;
 let isVideoOnFullScreen = false;
@@ -600,15 +637,12 @@ let transcriptSendToAll = true;
 let isChatPinned = false;
 let isCaptionPinned = false;
 let isChatRoomVisible = false;
+let chatUnreadCount = 0;
 let isParticipantsVisible = false;
 let isChatOpenedByParticipantsBtn = false;
 let isOpeningParticipants = false;
-let isCaptionBoxVisible = false;
-
-let isChatMarkdownOn = false;
 let isChatPasteTxt = false;
 let pinChatByDefault = false;
-let transcripts = []; // collect all the transcripts to save it later if you need
 let chatMessages = []; // collect chat messages to save it later if want
 
 let activeConversation = {
@@ -632,7 +666,6 @@ let isKeepButtonsVisible = false;
 
 let isPushToTalkActive = false;
 let isSpaceDown = false;
-let isShortcutsEnabled = false;
 let themeCardDebounce = null;
 
 // recording
@@ -704,7 +737,6 @@ function getHtmlElementsById() {
   myAudio = getId("myAudio");
   myVideoWrap = getId("myVideoWrap");
   myVideoAvatarImage = getId("myVideoAvatarImage");
-  myPrivacyBtn = getId("myPrivacyBtn");
   myVideoPinBtn = getId("myVideoPinBtn");
   myScreenPinBtn = getId("myScreenPinBtn");
   // My username, hand/video/audio status
@@ -723,67 +755,47 @@ function setButtonsToolTip() {
   // Not need for mobile
   if (isMobileDevice) return;
   // Init buttons
-  setTippy(initScreenShareBtn, "Toggle screen sharing", "top");
-  setTippy(initVideoMirrorBtn, "Toggle video mirror", "top");
-  setTippy(initUsernameEmojiButton, "Toggle username emoji", "top");
-  setTippy(initExitBtn, "Leave meeting", "top");
+  setTippy(initScreenShareBtn, "Bật tắt chia sẻ màn hình", "top");
+  setTippy(initVideoMirrorBtn, "Lật ngược video", "top");
+  setTippy(initUsernameEmojiButton, "Bật tắt emoji tên", "top");
+  setTippy(initExitBtn, "Rời cuộc họp", "top");
 
   // Main buttons
   refreshMainButtonsToolTipPlacement();
   // Chat room buttons
-  setTippy(msgerClose, "Close", "bottom");
+  setTippy(msgerClose, "Đóng", "bottom");
 
-  setTippy(msgerCPBtn, "Participants", "bottom");
-  setTippy(msgerSendBtn, "Send", "top");
+  setTippy(msgerCPBtn, "Người tham gia", "bottom");
+  setTippy(msgerSendBtn, "Gửi", "top");
   // Chat participants buttons
-  setTippy(msgerCPCloseBtn, "Close", "bottom");
+  setTippy(msgerCPCloseBtn, "Đóng", "bottom");
   // Caption buttons
   // Settings
-  setTippy(mySettingsCloseBtn, "Close", "bottom");
-  setTippy(myPeerNameSetBtn, "Change name", "top");
-  setTippy(myRoomId, "Room name (click to copy/share)", "right");
-  setTippy(mySessionTime, "Session time", "right");
+  setTippy(mySettingsCloseBtn, "Đóng", "bottom");
+  setTippy(myPeerNameSetBtn, "Đổi tên", "top");
+  setTippy(myRoomId, "Tên phòng", "right");
+  setTippy(mySessionTime, "Thời gian phiên", "right");
   setTippy(
     switchNoiseSuppression,
-    "If Active, the audio will be processed to reduce background noise, making the voice clearer",
+    "Nếu bật, âm thanh sẽ được xử lý để giảm tiếng ồn nền, giúp giọng nói rõ hơn",
     "right",
   );
-  setTippy(
-    switchPushToTalk,
-    "If Active, When SpaceBar keydown the microphone will be activated, on keyup will be deactivated, like a walkie-talkie",
-    "right",
-  );
-  setTippy(switchSounds, "Toggle room notify sounds", "right");
-  setTippy(switchShare, "Show 'Share Room' popup on join.", "right");
-  setTippy(switchKeepButtonsVisible, "Keep buttons always visible", "right");
-  setTippy(switchPinChatByDefault, "Open chat pinned by default", "right");
+  setTippy(switchSounds, "Bật tắt âm báo phòng", "right");
+  setTippy(switchShare, "Hiện popup 'Chia sẻ phòng' khi vào phòng.", "right");
+  setTippy(switchKeepButtonsVisible, "Luôn hiện nút điều khiển", "right");
+  setTippy(switchPinChatByDefault, "Mặc định ghim khung chat khi mở", "right");
   setTippy(
     switchKeepAwake,
-    "Prevent the device from sleeping (if supported)",
+    "Ngăn thiết bị tự khóa màn hình (nếu được hỗ trợ)",
     "right",
   );
-  setTippy(recImage, "Toggle recording", "right");
-  setTippy(networkIP, "IP address associated with the ICE candidate", "right");
-  setTippy(
-    networkHost,
-    "This type of ICE candidate represents a candidate that corresponds to an interface on the local device. Host candidates are typically generated based on the local IP addresses of the device and can be used for direct peer-to-peer communication within the same network",
-    "right",
-  );
-  setTippy(
-    networkStun,
-    "Server reflexive candidates are obtained by the ICE agent when it sends a request to a STUN (Session Traversal Utilities for NAT) server. These candidates reflect the public IP address and port of the client as observed by the STUN server. They are useful for traversing NATs (Network Address Translators) and establishing connectivity between peers across different networks",
-    "right",
-  );
-  setTippy(
-    networkTurn,
-    "Relay candidates are obtained when communication between peers cannot be established directly due to symmetric NATs or firewall restrictions. In such cases, communication is relayed through a TURN (Traversal Using Relays around NAT) server. TURN servers act as intermediaries, relaying data between peers, allowing them to communicate even when direct connections are not possible. This is typically the fallback mechanism for establishing connectivity when direct peer-to-peer communication fails",
-    "right",
-  );
-  setTippy(videoUrlCloseBtn, "Close the video player", "bottom");
-  setTippy(videoAudioCloseBtn, "Close the video player", "bottom");
+  setTippy(recImage, "Bật tắt ghi hình", "right");
+  setTippy(networkIP, "Địa chỉ IP liên kết với ICE candidate", "right");
+  setTippy(videoUrlCloseBtn, "Đóng trình phát video", "bottom");
+  setTippy(videoAudioCloseBtn, "Đóng trình phát video", "bottom");
   setTippy(
     msgerVideoUrlBtn,
-    "Share a video or audio to all participants",
+    "Chia sẻ video hoặc audio tới tất cả người tham gia",
     "top",
   );
 }
@@ -804,20 +816,20 @@ function refreshMainButtonsToolTipPlacement() {
 
   setTippy(
     audioBtn,
-    useAudio ? "Stop the audio (A)" : "My audio is disabled",
+    useAudio ? "Tắt âm thanh (A)" : "Âm thanh của tôi đang tắt",
     bottomButtonsPlacement,
   );
   setTippy(
     videoBtn,
-    useVideo ? "Stop the video (V)" : "My video is disabled",
+    useVideo ? "Tắt video (V)" : "Video của tôi đang tắt",
     bottomButtonsPlacement,
   );
-  setTippy(screenShareBtn, "Start screen sharing (S)", bottomButtonsPlacement);
-  setTippy(myHandBtn, "Raise your hand (H)", bottomButtonsPlacement);
-  setTippy(chatRoomBtn, "Open the chat (C)", bottomButtonsPlacement);
+  setTippy(screenShareBtn, "Bắt đầu chia sẻ màn hình (S)", bottomButtonsPlacement);
+  setTippy(myHandBtn, "Giơ tay (H)", bottomButtonsPlacement);
+  setTippy(chatRoomBtn, "Mở khung chat (C)", bottomButtonsPlacement);
 
-  setTippy(mySettingsBtn, "Open the settings (O)", bottomButtonsPlacement);
-  setTippy(leaveRoomBtn, "Leave this room", bottomButtonsPlacement);
+  setTippy(mySettingsBtn, "Mở cài đặt (O)", bottomButtonsPlacement);
+  setTippy(leaveRoomBtn, "Rời khỏi phòng này", bottomButtonsPlacement);
 }
 
 /**
@@ -827,22 +839,14 @@ function refreshMainButtonsToolTipPlacement() {
  * @param {string} placement position
  */
 function setTippy(element, content, placement) {
-  if (isMobileDevice) return;
-  if (element) {
-    if (element._tippy) {
-      element._tippy.destroy();
-    }
-    try {
-      tippy(element, {
-        content: content,
-        placement: placement,
-      });
-    } catch (err) {
-      console.error("setTippy error", err.message);
-    }
-  } else {
-    console.warn("setTippy element not found with content", content);
-  }
+  // Tooltips disabled app-wide per user request, EXCEPT for a small
+  // curated set of elements (main control bar, the two fullscreen
+  // buttons, the chat share-video button) wired independently in
+  // client.html's inline script. Kept as a true no-op stub here (rather
+  // than deleting every one of the ~100+ call sites across the codebase)
+  // - it must NOT destroy an existing tippy instance, since this runs
+  // for every button on every (re)connect and would otherwise race with
+  // and kill the tooltips set up by that separate code path.
 }
 
 /**
@@ -948,7 +952,7 @@ function getRoomId() {
 
   // if not specified room id or 'random', create one random
   if (roomId == "" || roomId === "random") {
-    roomId = makeId(20);
+    roomId = generateRoomCode(10);
     // Preserve existing query params (audio, video, name, duration, notify, etc.) and set `room` as query param
     const url = new URL(window.location.href);
 
@@ -985,23 +989,7 @@ function getRoomDuration() {
     const timeLimit = timeToMilliseconds(roomDuration);
     setTimeout(() => {
       playSound("eject");
-      Swal.fire({
-        background: swBg,
-        position: "center",
-        title: "Time Limit Reached",
-        text: "The room has reached its time limit and will close shortly",
-        icon: "warning",
-        timer: 6000, // 6 seconds
-        timerProgressBar: true,
-        showConfirmButton: false,
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        },
-        willClose: () => {
-          exitRoom();
-        },
-      });
+      exitRoom();
     }, timeLimit);
 
     console.log("Direct join", {
@@ -1040,6 +1028,32 @@ function isValidDuration(duration) {
     return false;
   }
   return true;
+}
+
+/**
+ * Generate a random room code: uppercase letters + digits only (no
+ * lowercase), guaranteed to contain at least one letter and one digit.
+ * @param {integer} length
+ * @returns {string} random room code
+ */
+function generateRoomCode(length = 10) {
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const digits = "0123456789";
+  const all = letters + digits;
+  const pick = (chars) => chars.charAt(Math.floor(Math.random() * chars.length));
+
+  // Guarantee at least one letter and one digit, then fill the rest
+  // randomly from the combined set and shuffle so they're not always
+  // pinned to the first two positions.
+  const chars = [pick(letters), pick(digits)];
+  for (let i = chars.length; i < length; i++) {
+    chars.push(pick(all));
+  }
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join("");
 }
 
 /**
@@ -1135,7 +1149,7 @@ function getPeerName() {
   const name = getQueryParam("name");
   if (isHtml(name)) {
     console.log("Direct join", { name: "Invalid name" });
-    return "Invalid name";
+    return "Tên không hợp lệ";
   }
 
   if (name === "random") {
@@ -1184,6 +1198,26 @@ function generateRandomName() {
 }
 
 /**
+ * Build one random DiceBear avatar URL from a style pool
+ * @param {string[]} stylePool which style list to pick from
+ * @param {string|null} excludeUrl if set, guarantees the result never
+ *   equals this exact URL (retries a few times) - used so the per-join
+ *   default avatar is never the same as the previous session's
+ * @returns {string} avatar image URL
+ */
+function pickRandomAvatarUrl(stylePool = DICEBEAR_AVATAR_STYLES, excludeUrl = null) {
+  let url;
+  let attempts = 0;
+  do {
+    const seed = Math.random().toString(36).substring(2, 10);
+    const style = stylePool[Math.floor(Math.random() * stylePool.length)];
+    url = `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}`;
+    attempts++;
+  } while (excludeUrl && url === excludeUrl && attempts < 10);
+  return url;
+}
+
+/**
  * Check if peer avatar is set
  * @returns {string} Peer Avatar
  */
@@ -1196,12 +1230,21 @@ function getPeerAvatar() {
   console.log("Direct join", { avatar: avatar });
 
   if (avatarDisabled || isBase64Avatar || !isValidAvatarURL(avatar)) {
+    if (avatarDisabled) return false;
+    // Always assign a fresh random default avatar on every join/reload -
+    // even an avatar hand-picked via the "Đổi ảnh đại diện" dialog only
+    // applies to the current session and is not restored on the next
+    // visit. Never the same as the immediately previous session's.
     const saved = lsSettings.peer_avatar;
-    if (saved && isValidAvatarURL(saved)) {
-      console.log("Restored avatar from localStorage", { avatar: saved });
-      return saved;
-    }
-    return false;
+    const randomAvatar = pickRandomAvatarUrl(
+      JOIN_DEFAULT_AVATAR_STYLES,
+      saved || null,
+    );
+    lsSettings.peer_avatar = randomAvatar;
+    lsSettings.peer_avatar_auto = true;
+    lS.setSettings(lsSettings);
+    console.log("Assigned random default avatar", { avatar: randomAvatar });
+    return randomAvatar;
   }
   return avatar;
 }
@@ -1271,7 +1314,24 @@ document.addEventListener("DOMContentLoaded", function () {
   initCursorLightEffect();
   initClientPeer();
   initDocumentListeners();
+  initSwipeBackGuard();
 });
+
+/**
+ * Trap the browser back-navigation entry on mobile so an accidental
+ * left-edge swipe (iOS Safari's "go back" gesture, also present on some
+ * Android browsers) can't bounce someone out of the meeting back to the
+ * loading screen. Paired with the CSS overscroll-behavior-x/touch-action
+ * rules on html/body for browsers that honor the gesture at the CSS
+ * level instead. Desktop is untouched - this gesture doesn't exist there.
+ */
+function initSwipeBackGuard() {
+  if (!isMobileDevice) return;
+  history.pushState(null, "", location.href);
+  window.addEventListener("popstate", () => {
+    history.pushState(null, "", location.href);
+  });
+}
 
 /**
  * Document listeners
@@ -1306,7 +1366,8 @@ function initCursorLightEffect() {
  */
 async function initClientPeer() {
   if (!isWebRTCSupported) {
-    return userLog("error", "This browser seems not supported WebRTC!");
+    console.error("Trình duyệt này có vẻ không hỗ trợ WebRTC!");
+    return;
   }
 
   // Check if video full screen is supported by the browser
@@ -1410,8 +1471,22 @@ async function handleConnect() {
     await joinToChannel();
   } else {
     await initEnumerateDevices();
-    await setupLocalVideoMedia();
-    await setupLocalAudioMedia();
+    // setupLocalVideoMedia()/setupLocalAudioMedia() throw (after already
+    // showing the "Truy cập bị từ chối" popup via handleMediaError) when
+    // permission is denied - catch each independently so a denial on one
+    // device doesn't abort the rest of setup below (button wiring etc.),
+    // which is what let the mic/cam toggle buttons end up with no click
+    // listener at all when permission was denied.
+    try {
+      await setupLocalVideoMedia();
+    } catch (err) {
+      console.error("[handleConnect] setupLocalVideoMedia failed", err);
+    }
+    try {
+      await setupLocalAudioMedia();
+    } catch (err) {
+      console.error("[handleConnect] setupLocalAudioMedia failed", err);
+    }
     // Create camera tile (even if no camera, to show avatar)
     if (!useVideo || (!useVideo && !useAudio)) {
       await loadLocalMedia(new MediaStream(), "video");
@@ -1493,9 +1568,9 @@ function handleUnauthorized() {
     allowEscapeKey: false,
     background: swBg,
     imageUrl: images.forbidden,
-    title: "Ops, Unauthorized",
-    text: "The host has user authentication enabled",
-    confirmButtonText: `Login`,
+    title: "Rất tiếc, không có quyền truy cập",
+    text: "Chủ phòng đã bật xác thực người dùng",
+    confirmButtonText: `Đăng nhập`,
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
   }).then(() => {
@@ -1517,14 +1592,14 @@ function roomIsBusy() {
     background: swBg,
     imageUrl: images.forbidden,
     position: "center",
-    title: "Room is busy",
+    title: "Phòng đang đầy",
     html: renderRoomTemplate("tpl-room-busy-message", {
       text: {
         maxUsers: String(thisMaxRoomParticipants),
       },
     }),
     showDenyButton: false,
-    confirmButtonText: `OK`,
+    confirmButtonText: `Đồng ý`,
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
   }).then((result) => {
@@ -1612,10 +1687,9 @@ function handleButtonsRule() {
   // Caption buttons
   displayElements([]);
 
-  // Hide settings tabs when corresponding main buttons are disabled
+  // Hide settings device rows when corresponding main buttons are disabled
   if (!buttons.main.showVideoBtn) {
     displayElements([
-      { element: tabVideoBtn, display: false },
       { element: videoDropdown, display: false },
       { element: getId("videoSourceDiv"), display: false },
       { element: getId("videoFitDiv"), display: false },
@@ -1624,7 +1698,8 @@ function handleButtonsRule() {
   }
   if (!buttons.main.showAudioBtn) {
     displayElements([
-      { element: tabAudioBtn, display: false },
+      { element: getId("audioSourceDiv"), display: false },
+      { element: audioOutputDiv, display: false },
       { element: audioDropdown, display: false },
     ]);
   }
@@ -1643,12 +1718,19 @@ function handleButtonsRule() {
       element: tabRoomParticipants,
       display: buttons.settings.showTabRoomParticipants,
     },
-    { element: tabRoomSecurity, display: buttons.settings.showTabRoomSecurity },
+    {
+      element: tabRoomSecurity,
+      display: buttons.settings.showTabRoomSecurity,
+      mode: "table-row",
+    },
     {
       element: noiseSuppressionBtn,
       display: buttons.settings.customNoiseSuppression && isRNNoiseSupported,
+      mode: "table-row",
     },
   ]);
+
+  updateRoomLockStatusIcon();
 }
 
 /**
@@ -1720,8 +1802,6 @@ async function whoAreYou() {
   document.body.style.background = "var(--body-bg)";
 
   if (myPeerName) {
-    elemDisplay(loadingDiv, false);
-
     myPeerName = filterXSS(myPeerName);
 
     console.log(`11.1 Check if ${myPeerName} exist in the room`, roomId);
@@ -1731,7 +1811,11 @@ async function whoAreYou() {
     }
 
     checkPeerAudioVideo();
-    whoAreYouJoin();
+    // Wait for the join itself to finish before revealing the room -
+    // hiding the loading backdrop first (as this used to) exposed the
+    // raw, still-empty room UI for however long that took.
+    await whoAreYouJoin();
+    fadeOutLoadingBackdrop();
     playSound("addPeer");
     return;
   }
@@ -1766,9 +1850,6 @@ async function whoAreYou() {
       { element: getId("initVideoMirrorBtn"), display: false },
       { element: getId("initVideoSelect"), display: false },
     ]);
-    if (!buttons.main.showVideoBtn) {
-      elemDisplay(getId("tabVideoBtn"), false);
-    }
     // Disable camera settings, keep screen available
     displayElements([
       { element: getId("videoDropdown"), display: false },
@@ -1782,7 +1863,8 @@ async function whoAreYou() {
       { element: getId("initAudioBtn"), display: false },
       { element: getId("initMicrophoneSelect"), display: false },
       { element: getId("initSpeakerSelect"), display: false },
-      { element: getId("tabAudioBtn"), display: false },
+      { element: getId("audioSourceDiv"), display: false },
+      { element: audioOutputDiv, display: false },
       { element: getId("audioDropdown"), display: false },
     ]);
   }
@@ -1798,31 +1880,75 @@ async function whoAreYou() {
     allowOutsideClick: false,
     allowEscapeKey: false,
     background: swBg,
-    title: "DORA NIHONGO",
     position: "center",
     input: "text",
-    inputPlaceholder: "Enter your email or name",
+    inputPlaceholder: "Nhập tên của bạn",
     inputAttributes: { maxlength: 254, id: "usernameInput" },
     inputValue: window.localStorage.peer_name
       ? window.localStorage.peer_name
       : "",
     html: initUser, // inject html
-    confirmButtonText: `Join meeting`,
-    customClass: { popup: "init-modal-size" },
+    confirmButtonText: `Vào cuộc họp`,
+    showCancelButton: true,
+    cancelButtonText: `Thoát`,
+    customClass: { popup: "init-modal-size", container: "init-swal-backdrop" },
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
-    willOpen: () => {
-      elemDisplay(loadingDiv, false);
+    // Fade the loading backdrop out right as the dialog starts its own
+    // fadeInDown entrance, so the two crossfade smoothly into each other
+    // instead of the backdrop cutting away instantly (which either
+    // exposed a blank gap or flashed the raw room UI behind it).
+    didOpen: () => {
+      fadeOutLoadingBackdrop();
+
+      // "Thoát" doesn't actually navigate away until Swal's own dismiss
+      // promise resolves - which only happens after its fadeOutUp exit
+      // animation finishes playing (~1s). Two things needed fixing here,
+      // not just one: (1) navigate immediately on click instead of
+      // waiting for that animation/promise - the .then() below still
+      // calls initExitMeeting() too, but the page will already be
+      // navigating away by then, so it's a harmless no-op; and (2) even
+      // an "immediate" navigation isn't instant pixel-to-pixel - the
+      // browser keeps rendering the current page for a brief moment
+      // while it loads the next one, which without any cover exposes the
+      // (fully joined) room behind the closing dialog for that instant.
+      // Snap the opaque loading backdrop up with no transition (so it
+      // wins that brief window outright) right as navigation starts.
+      const cancelBtn = Swal.getCancelButton();
+      if (cancelBtn) {
+        cancelBtn.addEventListener(
+          "click",
+          () => {
+            if (loadingBackdrop) {
+              loadingBackdrop.style.transition = "none";
+              elemDisplay(loadingBackdrop, true, "flex");
+              // Force the browser to apply transition:none above before
+              // the opacity change below, otherwise it can still animate
+              // the two together and the "instant" cover isn't instant.
+              void loadingBackdrop.offsetWidth;
+              loadingBackdrop.style.opacity = "1";
+              // Just a plain solid cover here, not the actual loading
+              // screen - hide its spinner/"Đang tải" text so it doesn't
+              // read as a loading state, only as the page going blank
+              // for an instant on its way out.
+              const loadingDiv = getId("loadingDiv");
+              if (loadingDiv) loadingDiv.style.display = "none";
+            }
+            initExitMeeting();
+          },
+          { once: true },
+        );
+      }
     },
     inputValidator: async (value) => {
-      if (!value) return "Please enter your email or name";
+      if (!value) return "Vui lòng nhập tên của bạn";
 
       // Long email or name
       const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
       if ((isEmail && value.length > 254) || (!isEmail && value.length > 32)) {
         return isEmail
-          ? "Email must be max 254 char"
-          : "Name must be max 32 char";
+          ? "Email tối đa 254 ký tự"
+          : "Tên tối đa 32 ký tự";
       }
 
       // prevent xss execution itself
@@ -1831,12 +1957,12 @@ async function whoAreYou() {
       // prevent XSS injection to remote peer
       if (isHtml(myPeerName)) {
         myPeerName = "";
-        return "Invalid name!";
+        return "Tên không hợp lệ!";
       }
 
       // check if peer name is already in use in the room
       if (await checkUserName()) {
-        return "Username is already in use!";
+        return "Tên người dùng đã được sử dụng!";
       } else {
         // Hide username emoji
         if (!usernameEmoji.classList.contains("hidden")) {
@@ -1846,7 +1972,11 @@ async function whoAreYou() {
         whoAreYouJoin();
       }
     },
-  }).then(() => {
+  }).then((result) => {
+    if (result.dismiss === Swal.DismissReason.cancel) {
+      initExitMeeting();
+      return;
+    }
     playSound("addPeer");
   });
 
@@ -1883,8 +2013,8 @@ async function whoAreYou() {
     setMyAudioStatus(useAudio);
   }
 
-  setTippy(initAudioBtn, "Stop the audio", "top");
-  setTippy(initVideoBtn, "Stop the video", "top");
+  setTippy(initAudioBtn, "Tắt âm thanh", "top");
+  setTippy(initVideoBtn, "Tắt video", "top");
 }
 
 /**
@@ -1931,23 +2061,7 @@ async function checkUserName(peer_name = null) {
 function userNameAlreadyInRoom() {
   signalingSocket.disconnect();
   playSound("alert");
-  Swal.fire({
-    allowOutsideClick: false,
-    allowEscapeKey: false,
-    background: swBg,
-    imageUrl: images.forbidden,
-    position: "center",
-    title: "Username",
-    html: renderRoomTemplate("tpl-username-in-use-message"),
-    showDenyButton: false,
-    confirmButtonText: `OK`,
-    showClass: { popup: "animate__animated animate__fadeInDown" },
-    hideClass: { popup: "animate__animated animate__fadeOutUp" },
-  }).then((result) => {
-    if (result.isConfirmed) {
-      openURL("/");
-    }
-  });
+  openURL("/");
 }
 
 /**
@@ -2188,7 +2302,6 @@ async function changeInitCamera(deviceId) {
    */
   function reloadBrowser(err) {
     console.error("[Error] changeInitCamera", err);
-    userLog("error", "Error while swapping init camera" + err);
     initVideoSelect.selectedIndex = 0;
     videoSelect.selectedIndex = 0;
     refreshLsDevices();
@@ -2272,7 +2385,6 @@ async function changeLocalCamera(deviceId) {
    */
   function printError(err) {
     console.error("[Error] changeLocalCamera", err);
-    userLog("error", "Error while swapping local camera " + err);
   }
 }
 
@@ -2322,7 +2434,6 @@ async function changeLocalMicrophone(deviceId) {
     })
     .catch((err) => {
       console.error("[Error] changeLocalMicrophone", err);
-      userLog("error", "Error while swapping local microphone" + err);
     });
 }
 
@@ -2449,10 +2560,6 @@ async function enableNoiseSuppression() {
       );
       stopNoiseSuppressionPipeline();
       await refreshMyStreamToPeers(localAudioMediaStream, true);
-      toastMessage(
-        "warning",
-        "Noise suppression is not supported on this device. Using default WebRTC noise suppression instead.",
-      );
       return false;
     }
 
@@ -2517,6 +2624,7 @@ async function whoAreYouJoin() {
   setPeerNameHTML(myVideoPeerName, myPeerName, true);
   setPeerAvatarImgName("myVideoAvatarImage", myPeerName, myPeerAvatar);
   setPeerAvatarImgName("myProfileAvatar", myPeerName, myPeerAvatar);
+  updateSoloCompactAvatar();
   setPeerChatAvatarImgName("right", myPeerName, myPeerAvatar);
   joinToChannel();
   handleHideMe(isHideMeActive);
@@ -2551,7 +2659,6 @@ async function joinToChannel() {
     peer_screen_status: myScreenStatus,
     peer_hand_status: myHandStatus,
     peer_rec_status: isStreamRecording,
-    peer_privacy_status: isVideoPrivacyActive,
     userAgent: userAgent,
   });
   handleBodyOnMouseMove(); // show/hide bottomButtons ...
@@ -2588,6 +2695,13 @@ async function handleAddPeer(config) {
   // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection
   const peerConnection = new RTCPeerConnection({ iceServers: iceServers });
   peerConnections[peer_id] = peerConnection;
+
+  // Reference resets/shows controls the moment a remote peer becomes
+  // present, then restarts the 5s inactivity countdown from that point.
+  if (isMobileDevice) {
+    showButtonsBarAndMenu();
+    resetMobileIdleTimer();
+  }
 
   allPeers = peers;
   // Ensure extras object exists for every peer to avoid undefined checks later
@@ -2644,7 +2758,6 @@ async function handleAddPeer(config) {
     await loadRemoteMediaStream(new MediaStream(), peers, peer_id, "video");
   }
 
-  await wbUpdate();
   playSound("addPeer");
   updateTopHeaderPeerCount();
 }
@@ -2966,7 +3079,6 @@ async function handleRtcOffer(peer_id) {
           })
           .catch((err) => {
             console.error("[Error] offer setLocalDescription", err);
-            userLog("error", "Offer setLocalDescription failed " + err);
           });
       })
       .catch((err) => {
@@ -3035,7 +3147,6 @@ function handleSessionDescription(config) {
               })
               .catch((err) => {
                 console.error("[Error] answer setLocalDescription", err);
-                userLog("error", "Answer setLocalDescription failed " + err);
               });
           })
           .catch((err) => {
@@ -3227,9 +3338,15 @@ function handleRemovePeer(config) {
         }
       }
     }
-    peerVideoMediaElements[peerVideoId].parentNode.removeChild(
-      peerVideoMediaElements[peerVideoId],
-    );
+    // parentNode can already be null if this tile was detached elsewhere
+    // (e.g. handleScreenStop()) without the tracking map being updated -
+    // guard it so a stale entry can't throw and abort the rest of this
+    // peer's cleanup below (that used to leave a dead/black tile behind).
+    if (peerVideoMediaElements[peerVideoId].parentNode) {
+      peerVideoMediaElements[peerVideoId].parentNode.removeChild(
+        peerVideoMediaElements[peerVideoId],
+      );
+    }
     adaptAspectRatio();
   }
 
@@ -3244,13 +3361,18 @@ function handleRemovePeer(config) {
         }
       }
     }
-    peerScreenMediaElements[peerScreenId].parentNode.removeChild(
-      peerScreenMediaElements[peerScreenId],
-    );
+    if (peerScreenMediaElements[peerScreenId].parentNode) {
+      peerScreenMediaElements[peerScreenId].parentNode.removeChild(
+        peerScreenMediaElements[peerScreenId],
+      );
+    }
     adaptAspectRatio();
   }
 
-  if (peerAudioId in peerAudioMediaElements) {
+  if (
+    peerAudioId in peerAudioMediaElements &&
+    peerAudioMediaElements[peerAudioId].parentNode
+  ) {
     peerAudioMediaElements[peerAudioId].parentNode.removeChild(
       peerAudioMediaElements[peerAudioId],
     );
@@ -3287,6 +3409,13 @@ function handleRemovePeer(config) {
   console.log("ALL PEERS", allPeers);
   console.log("ALL PEERS", allPeers);
   updateTopHeaderPeerCount();
+
+  // Reference keeps controls always visible while alone (no remote peer) -
+  // once the last remote peer leaves, cancel the countdown and re-show.
+  if (isMobileDevice && Object.keys(peerConnections).length === 0) {
+    if (mobileIdleTimer) clearTimeout(mobileIdleTimer);
+    showButtonsBarAndMenu();
+  }
 }
 
 /**
@@ -3567,7 +3696,7 @@ function detectBluetoothHeadset(init = false) {
     /(bluetooth|headset|hands[- ]?free|hsp|hfp|sco|airpods)/i;
   if (micName && lowQualityBT.test(micName)) {
     alert(
-      "⚠️ You're using a Bluetooth headset with limited audio quality. For best results, use your device's built-in microphone or a wired headset.",
+      "⚠️ Bạn đang dùng tai nghe Bluetooth có chất lượng âm thanh hạn chế. Để có kết quả tốt nhất, hãy dùng micro tích hợp trên thiết bị hoặc tai nghe có dây.",
     );
   }
 }
@@ -3711,22 +3840,22 @@ function handleMediaError(mediaType, err) {
   switch (err.name) {
     case "NotFoundError":
     case "DevicesNotFoundError":
-      errMessage = "Required track is missing";
+      errMessage = "Không tìm thấy thiết bị cần thiết";
       break;
     case "NotReadableError":
     case "TrackStartError":
-      errMessage = "Already in use";
+      errMessage = "Thiết bị đang được sử dụng bởi ứng dụng khác";
       break;
     case "OverconstrainedError":
     case "ConstraintNotSatisfiedError":
-      errMessage = "Constraints cannot be satisfied by available devices";
+      errMessage = "Không có thiết bị nào đáp ứng được yêu cầu";
       break;
     case "NotAllowedError":
     case "PermissionDeniedError":
-      errMessage = "Permission denied in browser";
+      errMessage = "Trình duyệt đã từ chối cấp quyền truy cập";
       break;
     case "TypeError":
-      errMessage = "Empty constraints object";
+      errMessage = "Đối tượng constraints trống";
       break;
     default:
       break;
@@ -3735,14 +3864,14 @@ function handleMediaError(mediaType, err) {
   // Print message to inform user
   const $html = `
         <ul style="text-align: left">
-            <li>Media type: ${mediaType}</li>
-            <li>Error name: ${err.name}</li>
-            <li>Error message: <p style="color: red">${errMessage}</p></li>
-            <li>Common: <a href="https://blog.addpipe.com/common-getusermedia-errors" target="_blank">getUserMedia errors</a></li>
+            <li>Loại thiết bị: ${mediaType}</li>
+            <li>Tên lỗi: ${err.name}</li>
+            <li>Thông báo lỗi: <p style="color: red">${errMessage}</p></li>
+            <li>Thường gặp: <a href="https://blog.addpipe.com/common-getusermedia-errors" target="_blank">Lỗi getUserMedia</a></li>
         </ul>
     `;
 
-  msgHTML(null, images.forbidden, "Access denied", $html, "center", "/");
+  msgHTML(null, images.forbidden, "Truy cập bị từ chối", $html, "center", "/");
 
   /*
         it immediately stops the execution of the current function and jumps to the nearest enclosing try...catch block or, 
@@ -3774,15 +3903,11 @@ async function loadLocalMedia(stream, kind) {
       const myCurrentSessionTime = document.createElement("span");
       const myVideoPeerName = document.createElement("p");
       const myHandStatusIcon = document.createElement("button");
-      const myPrivacyBtn = document.createElement("button");
       const myVideoStatusIcon = document.createElement("button");
       const myAudioStatusIcon = document.createElement("button");
       const myVideoFullScreenBtn = document.createElement("button");
-      const myVideoFocusBtn = document.createElement("button");
       const myVideoPinBtn = document.createElement("button");
       const myVideoMirrorBtn = document.createElement("button");
-      const myVideoZoomInBtn = document.createElement("button");
-      const myVideoZoomOutBtn = document.createElement("button");
       const myVideoPiPBtn = document.createElement("button");
       const myDropdownDiv = document.createElement("div");
       const myDropdownBtn = document.createElement("button");
@@ -3802,10 +3927,6 @@ async function loadLocalMedia(stream, kind) {
       myHandStatusIcon.className = className.handPulsate;
       myHandStatusIcon.style.setProperty("color", "#FFD700");
 
-      // my privacy button
-      myPrivacyBtn.setAttribute("id", "myPrivacyBtn");
-      myPrivacyBtn.className = className.privacy;
-
       // my video status element
       myVideoStatusIcon.setAttribute("id", "myVideoStatusIcon");
       myVideoStatusIcon.className = className.videoOn;
@@ -3822,16 +3943,6 @@ async function loadLocalMedia(stream, kind) {
       myVideoFullScreenBtn.setAttribute("id", "myVideoFullScreenBtn");
       myVideoFullScreenBtn.className = className.fullScreen;
 
-      // my video zoomIn/Out
-      myVideoZoomInBtn.setAttribute("id", "myVideoZoomInBtn");
-      myVideoZoomInBtn.className = className.zoomIn;
-      myVideoZoomOutBtn.setAttribute("id", "myVideoZoomOutBtn");
-      myVideoZoomOutBtn.className = className.zoomOut;
-
-      // my video hide all button
-      myVideoFocusBtn.setAttribute("id", "myVideoFocusMode");
-      myVideoFocusBtn.className = className.hideAll;
-
       // my video Picture in Picture
       myVideoPiPBtn.setAttribute("id", "myVideoPiPBtn");
       myVideoPiPBtn.className = className.pip;
@@ -3846,17 +3957,13 @@ async function loadLocalMedia(stream, kind) {
 
       // no mobile devices
       if (!isMobileDevice) {
-        setTippy(myHandStatusIcon, "My hand is raised", "bottom");
-        setTippy(myPrivacyBtn, "Toggle video privacy", "bottom");
-        setTippy(myVideoStatusIcon, "My video is on", "bottom");
-        setTippy(myAudioStatusIcon, "My audio is on", "bottom");
-        setTippy(myVideoFullScreenBtn, "Full screen mode", "bottom");
-        setTippy(myVideoFocusBtn, "Toggle Focus mode", "bottom");
-        setTippy(myVideoPiPBtn, "Toggle picture in picture", "bottom");
-        setTippy(myVideoZoomInBtn, "Zoom in video", "bottom");
-        setTippy(myVideoZoomOutBtn, "Zoom out video", "bottom");
-        setTippy(myVideoPinBtn, "Toggle Pin video", "bottom");
-        setTippy(myVideoMirrorBtn, "Toggle video mirror", "bottom");
+        setTippy(myHandStatusIcon, "Tay tôi đang giơ", "bottom");
+        setTippy(myVideoStatusIcon, "Video của tôi đang bật", "bottom");
+        setTippy(myAudioStatusIcon, "Âm thanh của tôi đang bật", "bottom");
+        setTippy(myVideoFullScreenBtn, "Chế độ toàn màn hình", "bottom");
+        setTippy(myVideoPiPBtn, "Bật tắt hình trong hình", "bottom");
+        setTippy(myVideoPinBtn, "Bật tắt ghim video", "bottom");
+        setTippy(myVideoMirrorBtn, "Lật ngược video", "bottom");
       }
 
       // my video avatar image
@@ -3869,14 +3976,8 @@ async function loadLocalMedia(stream, kind) {
       myVideoNavBar.appendChild(myCurrentSessionTime);
       !isMobileDevice && myVideoNavBar.appendChild(myVideoPinBtn);
 
-      buttons.local.showVideoFocusBtn &&
-        myVideoNavBar.appendChild(myVideoFocusBtn);
-
       if (showVideoPipBtn && buttons.local.showVideoPipBtn)
         myVideoNavBar.appendChild(myVideoPiPBtn);
-
-      buttons.local.showVideoCircleBtn &&
-        myVideoNavBar.appendChild(myPrivacyBtn);
 
       // Local dropdown menu
       myDropdownDiv.className = "navbar-dropdown";
@@ -3885,24 +3986,16 @@ async function loadLocalMedia(stream, kind) {
       myDropdownContent.className = "navbar-dropdown-content";
 
       myDropdownContent.appendChild(
-        createDropdownItem(myVideoMirrorBtn, "Mirror", myDropdownContent),
+        createDropdownItem(myVideoMirrorBtn, "Lật ngược", myDropdownContent),
       );
       isVideoFullScreenSupported &&
         myDropdownContent.appendChild(
           createDropdownItem(
             myVideoFullScreenBtn,
-            "Full Screen",
+            "Toàn màn hình",
             myDropdownContent,
           ),
         );
-      if (buttons.local.showZoomInOutBtn) {
-        myDropdownContent.appendChild(
-          createDropdownItem(myVideoZoomInBtn, "Zoom In", myDropdownContent),
-        );
-        myDropdownContent.appendChild(
-          createDropdownItem(myVideoZoomOutBtn, "Zoom Out", myDropdownContent),
-        );
-      }
 
       myDropdownDiv.appendChild(myDropdownBtn);
       document.body.appendChild(myDropdownContent);
@@ -3954,12 +4047,6 @@ async function loadLocalMedia(stream, kind) {
       isVideoFullScreenSupported &&
         handleVideoPlayerFs(myLocalMedia.id, myVideoFullScreenBtn.id);
 
-      buttons.local.showVideoCircleBtn &&
-        handleVideoPrivacyBtn(myLocalMedia.id, myPrivacyBtn.id);
-
-      buttons.local.showVideoFocusBtn &&
-        handleVideoFocusMode(myVideoFocusBtn, myVideoWrap, myLocalMedia);
-
       handleVideoPinUnpin(
         myLocalMedia.id,
         myVideoPinBtn.id,
@@ -3969,15 +4056,6 @@ async function loadLocalMedia(stream, kind) {
 
       if (showVideoPipBtn && buttons.local.showVideoPipBtn)
         handlePictureInPicture(myVideoPiPBtn.id, myLocalMedia.id, myPeerId);
-
-      ZOOM_IN_OUT_ENABLED &&
-        handleVideoZoomInOut(
-          myVideoStatusIcon.id,
-          myVideoWrap.id,
-          myVideoZoomInBtn.id,
-          myVideoZoomOutBtn.id,
-          myLocalMedia.id,
-        );
 
       refreshMyVideoStatus(stream);
 
@@ -3990,7 +4068,7 @@ async function loadLocalMedia(stream, kind) {
           { element: videoBtn, status: false, mediaType: "video" },
         ]);
         if (!isMobileDevice) {
-          setTippy(myVideoStatusIcon, "My video is disabled", "bottom");
+          setTippy(myVideoStatusIcon, "Video của tôi đang tắt", "bottom");
         }
       }
 
@@ -4000,7 +4078,7 @@ async function loadLocalMedia(stream, kind) {
           { element: audioBtn, status: false, mediaType: "audio" },
         ]);
         if (!isMobileDevice) {
-          setTippy(myAudioStatusIcon, "My audio is disabled", "bottom");
+          setTippy(myAudioStatusIcon, "Âm thanh của tôi đang tắt", "bottom");
         }
       }
       break;
@@ -4016,10 +4094,7 @@ async function loadLocalMedia(stream, kind) {
       const myScreenNavBar = document.createElement("div");
       const myScreenPeerName = document.createElement("p");
       const myScreenFullScreenBtn = document.createElement("button");
-      const myScreenFocusBtn = document.createElement("button");
       const myScreenPinBtn = document.createElement("button");
-      const myScreenZoomInBtn = document.createElement("button");
-      const myScreenZoomOutBtn = document.createElement("button");
       const myScreenPiPBtn = document.createElement("button");
       const myScreenAvatarImage = document.createElement("img");
 
@@ -4034,16 +4109,6 @@ async function loadLocalMedia(stream, kind) {
       myScreenFullScreenBtn.setAttribute("id", "myScreenFullScreenBtn");
       myScreenFullScreenBtn.className = className.fullScreen;
 
-      // my screen zoomIn/Out
-      myScreenZoomInBtn.setAttribute("id", "myScreenZoomInBtn");
-      myScreenZoomInBtn.className = className.zoomIn;
-      myScreenZoomOutBtn.setAttribute("id", "myScreenZoomOutBtn");
-      myScreenZoomOutBtn.className = className.zoomOut;
-
-      // my screen focus mode
-      myScreenFocusBtn.setAttribute("id", "myScreenFocusMode");
-      myScreenFocusBtn.className = className.hideAll;
-
       // my screen Picture in Picture
       myScreenPiPBtn.setAttribute("id", "myScreenPiPBtn");
       myScreenPiPBtn.className = className.pip;
@@ -4054,12 +4119,9 @@ async function loadLocalMedia(stream, kind) {
 
       // no mobile devices
       if (!isMobileDevice) {
-        setTippy(myScreenFullScreenBtn, "Full screen mode", "bottom");
-        setTippy(myScreenZoomInBtn, "Zoom in screen", "bottom");
-        setTippy(myScreenZoomOutBtn, "Zoom out screen", "bottom");
-        setTippy(myScreenPiPBtn, "Toggle picture in picture", "bottom");
-        setTippy(myScreenFocusBtn, "Toggle Focus mode", "bottom");
-        setTippy(myScreenPinBtn, "Toggle Pin screen", "bottom");
+        setTippy(myScreenFullScreenBtn, "Chế độ toàn màn hình", "bottom");
+        setTippy(myScreenPiPBtn, "Bật tắt hình trong hình", "bottom");
+        setTippy(myScreenPinBtn, "Bật tắt ghim màn hình", "bottom");
       }
 
       // my screen avatar image
@@ -4072,15 +4134,7 @@ async function loadLocalMedia(stream, kind) {
 
       // attach to screen nav bar
 
-      buttons.local.showVideoFocusBtn &&
-        myScreenNavBar.appendChild(myScreenFocusBtn);
-
       myScreenNavBar.appendChild(myScreenPiPBtn);
-
-      if (buttons.local.showZoomInOutBtn) {
-        myScreenNavBar.appendChild(myScreenZoomInBtn);
-        myScreenNavBar.appendChild(myScreenZoomOutBtn);
-      }
 
       isVideoFullScreenSupported &&
         myScreenNavBar.appendChild(myScreenFullScreenBtn);
@@ -4105,7 +4159,18 @@ async function loadLocalMedia(stream, kind) {
 
       createVideoLoadingSpinner(myScreenWrap, myScreenMedia);
 
-      videoMediaContainer.appendChild(myScreenWrap);
+      // Insert right before the waiting card (not appendChild, which
+      // put it last) so my tile keeps the same "first/local slot"
+      // position my camera tile occupies - matches the reference,
+      // where the local video/screen swap happens in the same slot
+      // instead of the screen tile jumping to the far side of the
+      // waiting card.
+      const waitingCardForScreen = getId("waitingRoomCard");
+      if (waitingCardForScreen) {
+        videoMediaContainer.insertBefore(myScreenWrap, waitingCardForScreen);
+      } else {
+        videoMediaContainer.appendChild(myScreenWrap);
+      }
       // Show my screen tile immediately when created
       elemDisplay(myScreenWrap, true, "inline-block");
 
@@ -4117,9 +4182,6 @@ async function loadLocalMedia(stream, kind) {
       isVideoFullScreenSupported &&
         handleVideoPlayerFs(myScreenMedia.id, myScreenFullScreenBtn.id);
 
-      buttons.local.showVideoFocusBtn &&
-        handleVideoFocusMode(myScreenFocusBtn, myScreenWrap, myScreenMedia);
-
       handleVideoPinUnpin(
         myScreenMedia.id,
         myScreenPinBtn.id,
@@ -4128,19 +4190,21 @@ async function loadLocalMedia(stream, kind) {
         true,
       );
 
-      myScreenPinBtn.click();
+      // Auto-pin is a group-call feature (splits the stage 25/75 to
+      // spotlight one tile among several). Alone (0 peers) or in a
+      // 1-on-1 call (1 peer) there is at most one other tile anyway,
+      // and the reference UI never shows a self screen-share preview
+      // at all - skip it so the solo/waiting-room layout (camera tile
+      // hidden, screen tile filling the stage normally) stays intact.
+      // Was `!== 1`, which only skipped the 1-peer case and still
+      // pinned (breaking out into the absolute-positioned
+      // #videoPinMediaContainer) when sharing alone with 0 peers.
+      if (Object.keys(peerConnections).length > 1) {
+        myScreenPinBtn.click();
+      }
 
       if (showVideoPipBtn && buttons.local.showVideoPipBtn)
         handlePictureInPicture(myScreenPiPBtn.id, myScreenMedia.id, myPeerId);
-
-      ZOOM_IN_OUT_ENABLED &&
-        handleVideoZoomInOut(
-          "",
-          myScreenWrap.id,
-          myScreenZoomInBtn.id,
-          myScreenZoomOutBtn.id,
-          myScreenMedia.id,
-        );
       break;
     case "audio":
       //alert('local audio');
@@ -4175,23 +4239,10 @@ function checkShareScreen() {
     buttons.main.showScreenBtn
   ) {
     playSound("newMessage");
-    // screenShareBtn.click(); // Chrome - Opera - Edge - Brave
     // handle error: getDisplayMedia requires transient activation from a user gesture on Safari - FireFox
-    Swal.fire({
-      background: swBg,
-      position: "center",
-      icon: "question",
-      text: "Do you want to share your screen?",
-      showDenyButton: true,
-      confirmButtonText: `Yes`,
-      denyButtonText: `No`,
-      showClass: { popup: "animate__animated animate__fadeInDown" },
-      hideClass: { popup: "animate__animated animate__fadeOutUp" },
-    }).then((result) => {
-      if (result.isConfirmed) {
-        screenShareBtn.click();
-      }
-    });
+    // No confirm dialog here anymore - screenShareBtn's own click handler
+    // already shows the "Chia sẻ màn hình?" PP confirm before sharing.
+    screenShareBtn.click();
   }
 }
 
@@ -4223,7 +4274,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
   const peer_screen_status = peers[peer_id]["peer_screen_status"];
   const peer_hand_status = peers[peer_id]["peer_hand_status"];
   const peer_rec_status = peers[peer_id]["peer_rec_status"];
-  const peer_privacy_status = peers[peer_id]["peer_privacy_status"];
 
   if (stream)
     console.log(
@@ -4247,19 +4297,14 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       const remoteVideoStatusIcon = document.createElement("button");
       const remoteAudioStatusIcon = document.createElement("button");
       const remoteVideoAudioUrlBtn = document.createElement("button");
-      const remotePrivateMsgBtn = document.createElement("button");
 
       const remotePeerKickOut = document.createElement("button");
       const remoteVideoFullScreenBtn = document.createElement("button");
       const remoteVideoPinBtn = document.createElement("button");
-      const remoteVideoFocusBtn = document.createElement("button");
       const remoteVideoMirrorBtn = document.createElement("button");
-      const remoteVideoZoomInBtn = document.createElement("button");
-      const remoteVideoZoomOutBtn = document.createElement("button");
       const remoteVideoPiPBtn = document.createElement("button");
       const remoteVideoAvatarImage = document.createElement("img");
 
-      const remoteAudioVolume = document.createElement("input");
       const remoteDropdownDiv = document.createElement("div");
       const remoteDropdownBtn = document.createElement("button");
       const remoteDropdownContent = document.createElement("div");
@@ -4285,13 +4330,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       remoteAudioStatusIcon.className = className.audioOn;
       remoteAudioStatusIcon.style.cursor = "default";
 
-      // remote audio volume element
-      remoteAudioVolume.setAttribute("id", peer_id + "_audioVolume");
-      remoteAudioVolume.type = "range";
-      remoteAudioVolume.min = 0;
-      remoteAudioVolume.max = 100;
-      remoteAudioVolume.value = 100;
-
       // remote share file
 
       // remote peer YouTube video
@@ -4303,12 +4341,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       // remote peer kick out
       remotePeerKickOut.setAttribute("id", peer_id + "_kickOut");
       remotePeerKickOut.className = className.kickOut;
-
-      // remote video zoomIn/Out
-      remoteVideoZoomInBtn.setAttribute("id", peer_id + "videoZoomIn");
-      remoteVideoZoomInBtn.className = className.zoomIn;
-      remoteVideoZoomOutBtn.setAttribute("id", peer_id + "videoZoomOut");
-      remoteVideoZoomOutBtn.className = className.zoomOut;
 
       // remote video Picture in Picture
       remoteVideoPiPBtn.setAttribute("id", peer_id + "videoPIP");
@@ -4322,24 +4354,18 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       remoteVideoPinBtn.setAttribute("id", peer_id + "_pinUnpin");
       remoteVideoPinBtn.className = className.pinUnpin;
 
-      // remote video hide all button
-      remoteVideoFocusBtn.setAttribute("id", peer_id + "_focusMode");
-      remoteVideoFocusBtn.className = className.hideAll;
-
       // remote video toggle mirror
       remoteVideoMirrorBtn.setAttribute("id", peer_id + "_toggleMirror");
       remoteVideoMirrorBtn.className = className.mirror;
 
       // tooltips for navbar buttons only (not dropdown items)
       if (!isMobileDevice) {
-        setTippy(remotePeerName, "Participant name", "bottom");
-        setTippy(remoteHandStatusIcon, "Participant hand is raised", "bottom");
-        setTippy(remoteVideoStatusIcon, "Participant video is on", "bottom");
-        setTippy(remoteAudioStatusIcon, "Participant audio is on", "bottom");
-        setTippy(remoteAudioVolume, "🔊 Volume", "top");
-        setTippy(remoteVideoPiPBtn, "Toggle picture in picture", "bottom");
-        setTippy(remoteVideoPinBtn, "Toggle Pin video", "bottom");
-        setTippy(remoteVideoFocusBtn, "Toggle Focus mode", "bottom");
+        setTippy(remotePeerName, "Tên người tham gia", "bottom");
+        setTippy(remoteHandStatusIcon, "Người tham gia đang giơ tay", "bottom");
+        setTippy(remoteVideoStatusIcon, "Video người tham gia đang bật", "bottom");
+        setTippy(remoteAudioStatusIcon, "Âm thanh người tham gia đang bật", "bottom");
+        setTippy(remoteVideoPiPBtn, "Bật tắt hình trong hình", "bottom");
+        setTippy(remoteVideoPinBtn, "Bật tắt ghim video", "bottom");
       }
 
       // my video avatar image
@@ -4359,7 +4385,7 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       remoteDropdownContent.appendChild(
         createDropdownItem(
           remoteVideoMirrorBtn,
-          "Mirror",
+          "Lật ngược",
           remoteDropdownContent,
         ),
       );
@@ -4367,32 +4393,15 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
         remoteDropdownContent.appendChild(
           createDropdownItem(
             remoteVideoFullScreenBtn,
-            "Full Screen",
+            "Toàn màn hình",
             remoteDropdownContent,
           ),
         );
-      if (buttons.remote.showZoomInOutBtn) {
-        remoteDropdownContent.appendChild(
-          createDropdownItem(
-            remoteVideoZoomInBtn,
-            "Zoom In",
-            remoteDropdownContent,
-          ),
-        );
-        remoteDropdownContent.appendChild(
-          createDropdownItem(
-            remoteVideoZoomOutBtn,
-            "Zoom Out",
-            remoteDropdownContent,
-          ),
-        );
-      }
-
       buttons.remote.showShareVideoAudioBtn &&
         remoteDropdownContent.appendChild(
           createDropdownItem(
             remoteVideoAudioUrlBtn,
-            "Send Video/Audio",
+            "Gửi Video/Audio",
             remoteDropdownContent,
           ),
         );
@@ -4400,7 +4409,7 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
         remoteDropdownContent.appendChild(
           createDropdownItem(
             remotePeerKickOut,
-            "Kick Out",
+            "Mời ra khỏi phòng",
             remoteDropdownContent,
             "red",
           ),
@@ -4421,8 +4430,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       // attach to remote video nav bar
 
       !isMobileDevice && remoteVideoNavBar.appendChild(remoteVideoPinBtn);
-      buttons.remote.showVideoFocusBtn &&
-        remoteVideoNavBar.appendChild(remoteVideoFocusBtn);
 
       if (showVideoPipBtn && buttons.remote.showVideoPipBtn)
         remoteVideoNavBar.appendChild(remoteVideoPiPBtn);
@@ -4430,10 +4437,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       remoteVideoNavBar.appendChild(remoteVideoStatusIcon);
       remoteVideoNavBar.appendChild(remoteAudioStatusIcon);
 
-      // Disabled audio volume control on Mobile devices
-      if (!isMobileDevice && peer_audio && buttons.remote.showAudioVolume) {
-        remoteVideoNavBar.appendChild(remoteAudioVolume);
-      }
       remoteVideoNavBar.appendChild(remoteHandStatusIcon);
 
       remoteVideoNavBar.appendChild(remoteDropdownDiv);
@@ -4468,6 +4471,7 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       attachMediaStream(remoteMedia, stream);
       // Explicitly play – required on mobile Safari where autoplay alone is not enough
       remoteMedia.play().catch(() => {});
+      if (typeof isInPagePip !== "undefined" && isInPagePip) syncPipVideoSource();
 
       // resize video elements
       adaptAspectRatio();
@@ -4482,26 +4486,12 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
         peer_id,
       );
 
-      // handle video focus mode
-      handleVideoFocusMode(remoteVideoFocusBtn, remoteVideoWrap, remoteMedia);
-
       // handle video toggle mirror
       handleVideoToggleMirror(remoteMedia.id, remoteVideoMirrorBtn.id);
 
       // handle vide picture in picture
       if (showVideoPipBtn && buttons.remote.showVideoPipBtn)
         handlePictureInPicture(remoteVideoPiPBtn.id, remoteMedia.id, peer_id);
-
-      // handle video zoomIn/Out
-      ZOOM_IN_OUT_ENABLED &&
-        handleVideoZoomInOut(
-          "",
-          remoteVideoWrap.id,
-          remoteVideoZoomInBtn.id,
-          remoteVideoZoomOutBtn.id,
-          remoteMedia.id,
-          peer_id,
-        );
 
       // handle video full screen mode
       isVideoFullScreenSupported &&
@@ -4515,10 +4505,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
 
       // handle kick out button event
       buttons.remote.showKickOutBtn && handlePeerKickOutBtn(peer_id);
-
-      // set video privacy true
-      peer_privacy_status &&
-        setVideoPrivacyStatus(remoteMedia.id, peer_privacy_status);
 
       // refresh remote peers avatar name
       setPeerAvatarImgName(remoteVideoAvatarImage.id, peer_name, peer_avatar);
@@ -4589,9 +4575,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       const remoteScreenPeerName = document.createElement("p");
       const remoteScreenFullScreenBtn = document.createElement("button");
       const remoteScreenPinBtn = document.createElement("button");
-      const remoteScreenFocusBtn = document.createElement("button");
-      const remoteScreenZoomInBtn = document.createElement("button");
-      const remoteScreenZoomOutBtn = document.createElement("button");
       const remoteScreenPiPBtn = document.createElement("button");
       const remoteScreenVideoAudioUrlBtn = document.createElement("button");
 
@@ -4600,9 +4583,10 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       // IDs and classes
       remoteScreenPeerName.setAttribute("id", peer_id + "_screen_name");
       remoteScreenPeerName.className = "videoPeerName notranslate fadein";
-      remoteScreenPeerName.appendChild(
-        document.createTextNode(peer_name + " (screen)"),
-      );
+      // Plain name + a screen-share icon badge (not literal "(screen)"
+      // text) - matches the reference's isScreenSharing badge in the
+      // name pill, and mirrors the local screen tile's own name tag.
+      setPeerNameHTML(remoteScreenPeerName, peer_name, false, peer_id, true);
 
       remoteScreenVideoAudioUrlBtn.setAttribute(
         "id",
@@ -4616,30 +4600,19 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       );
       remoteScreenFullScreenBtn.className = className.fullScreen;
 
-      remoteScreenZoomInBtn.setAttribute("id", peer_id + "screenZoomIn");
-      remoteScreenZoomInBtn.className = className.zoomIn;
-      remoteScreenZoomOutBtn.setAttribute("id", peer_id + "screenZoomOut");
-      remoteScreenZoomOutBtn.className = className.zoomOut;
-
       remoteScreenPiPBtn.setAttribute("id", peer_id + "screenPIP");
       remoteScreenPiPBtn.className = className.pip;
-
-      remoteScreenFocusBtn.setAttribute("id", peer_id + "_screen_focusMode");
-      remoteScreenFocusBtn.className = className.hideAll;
 
       remoteScreenPinBtn.setAttribute("id", peer_id + "_screen_pinUnpin");
       remoteScreenPinBtn.className = className.pinUnpin;
 
       if (!isMobileDevice) {
-        setTippy(remoteScreenPeerName, "Participant screen", "bottom");
-        setTippy(remoteScreenVideoAudioUrlBtn, "Send Video or Audio", "bottom");
+        setTippy(remoteScreenPeerName, "Màn hình người tham gia", "bottom");
+        setTippy(remoteScreenVideoAudioUrlBtn, "Gửi Video hoặc Audio", "bottom");
 
-        setTippy(remoteScreenFullScreenBtn, "Full screen mode", "bottom");
-        setTippy(remoteScreenZoomInBtn, "Zoom in screen", "bottom");
-        setTippy(remoteScreenZoomOutBtn, "Zoom out screen", "bottom");
-        setTippy(remoteScreenPiPBtn, "Toggle picture in picture", "bottom");
-        setTippy(remoteScreenFocusBtn, "Toggle Focus mode", "bottom");
-        setTippy(remoteScreenPinBtn, "Toggle Pin screen", "bottom");
+        setTippy(remoteScreenFullScreenBtn, "Chế độ toàn màn hình", "bottom");
+        setTippy(remoteScreenPiPBtn, "Bật tắt hình trong hình", "bottom");
+        setTippy(remoteScreenPinBtn, "Bật tắt ghim màn hình", "bottom");
       }
 
       remoteScreenAvatarImage.setAttribute("id", peer_id + "_screen_avatar");
@@ -4648,14 +4621,8 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       remoteScreenNavBar.className = "navbar fadein";
 
       !isMobileDevice && remoteScreenNavBar.appendChild(remoteScreenPinBtn);
-      buttons.remote.showVideoFocusBtn &&
-        remoteScreenNavBar.appendChild(remoteScreenFocusBtn);
 
       remoteScreenNavBar.appendChild(remoteScreenPiPBtn);
-      if (buttons.remote.showZoomInOutBtn) {
-        remoteScreenNavBar.appendChild(remoteScreenZoomInBtn);
-        remoteScreenNavBar.appendChild(remoteScreenZoomOutBtn);
-      }
       isVideoFullScreenSupported &&
         remoteScreenNavBar.appendChild(remoteScreenFullScreenBtn);
 
@@ -4688,7 +4655,11 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       attachMediaStream(remoteScreenMedia, stream);
       // Explicitly play – required on mobile Safari where autoplay alone is not enough
       remoteScreenMedia.play().catch(() => {});
+      if (typeof isInPagePip !== "undefined" && isInPagePip) syncPipVideoSource();
       adaptAspectRatio();
+      // The tile just got created - make sure it doesn't sit stacked
+      // next to the camera tile in solo mode (single-video-per-peer UI)
+      updateSoloScreenTileVisibility();
 
       // handle remote send file
       // handle remote video - audio URL
@@ -4706,29 +4677,18 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
         true,
       );
 
-      // handle video focus mode
-      handleVideoFocusMode(
-        remoteScreenFocusBtn,
-        remoteScreenWrap,
-        remoteScreenMedia,
-      );
-
-      // pin video on screen share
-      remoteScreenPinBtn.click();
+      // Auto-pin is a group-call feature (splits the stage 25/75 to
+      // spotlight one tile among several). In a 1-on-1 call skip it so
+      // the screen tile just fills the stage normally, matching the
+      // reference's single swapped video (camera tile hidden via
+      // updateSoloScreenTileVisibility above).
+      if (Object.keys(peerConnections).length !== 1) {
+        remoteScreenPinBtn.click();
+      }
 
       if (showVideoPipBtn && buttons.remote.showVideoPipBtn)
         handlePictureInPicture(
           remoteScreenPiPBtn.id,
-          remoteScreenMedia.id,
-          peer_id,
-        );
-
-      ZOOM_IN_OUT_ENABLED &&
-        handleVideoZoomInOut(
-          "",
-          remoteScreenWrap.id,
-          remoteScreenZoomInBtn.id,
-          remoteScreenZoomOutBtn.id,
           remoteScreenMedia.id,
           peer_id,
         );
@@ -4746,8 +4706,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       // handle remote audio elements
       const remoteAudioWrap = document.createElement("div");
       const remoteAudioMedia = document.createElement("audio");
-      const remoteAudioVolumeId = peer_id + "_audioVolume";
-      const remoteAudioVolumeEl = getId(remoteAudioVolumeId);
       remoteAudioMedia.id = peer_id + "___audio";
       remoteAudioMedia.volume = 1.0;
       remoteAudioMedia.autoplay = true;
@@ -4772,16 +4730,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
         );
         handleAudioFallback(remoteAudioMedia, peer_name);
       });
-
-      // Only wire volume control if the element exists
-      if (remoteAudioVolumeEl && !isMobileDevice) {
-        try {
-          handleAudioVolume(remoteAudioVolumeId, remoteAudioMedia.id);
-          elemDisplay(remoteAudioVolumeEl, peer_audio_status);
-        } catch (e) {
-          console.warn("[AUDIO] handleAudioVolume failed for " + peer_name, e);
-        }
-      }
 
       // Change audio output if supported and audioOutputSelect is present
       if (sinkId && audioOutputSelect && audioOutputSelect.value) {
@@ -5009,18 +4957,28 @@ function isValidEmail(email) {
  */
 function genAvatarSvg(peerName, avatarImgSize) {
   const initial = peerName ? peerName.charAt(0).toUpperCase() : "?";
+  // Mobile tiles render this whole SVG much smaller, so the original
+  // circle/text spacing (tuned for desktop) reads as the avatar
+  // "touching" the name below it. Shrink + shift the circle up and add
+  // clearance before the name text, mobile only - desktop keeps the
+  // original cy=160/r=50/175/245/275 layout untouched.
+  const circleCy = isMobileDevice ? 138 : 160;
+  const circleR = isMobileDevice ? 40 : 50;
+  const initialY = isMobileDevice ? 152 : 175;
+  const nameY = isMobileDevice ? 252 : 245;
+  const captionY = isMobileDevice ? 282 : 275;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
-    <rect width="100%" height="100%" fill="#0f172a" />
+    <rect width="100%" height="100%" fill="#0b1a2e" />
     <defs>
       <linearGradient id="grad" x1="0%" y1="100%" x2="100%" y2="0%">
-        <stop offset="0%" stop-color="#1e293b" />
-        <stop offset="100%" stop-color="#334155" />
+        <stop offset="0%" stop-color="#16324f" />
+        <stop offset="100%" stop-color="#24406b" />
       </linearGradient>
     </defs>
-    <circle cx="200" cy="160" r="50" fill="url(#grad)" stroke="#475569" stroke-width="4" />
-    <text x="200" y="175" font-family="system-ui, -apple-system, sans-serif" font-size="40" font-weight="bold" fill="#e2e8f0" text-anchor="middle">${initial}</text>
-    <text x="200" y="245" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="500" fill="#cbd5e1" text-anchor="middle">${peerName}</text>
-    <text x="200" y="275" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#64748b" text-anchor="middle">Camera đang tắt</text>
+    <circle cx="200" cy="${circleCy}" r="${circleR}" fill="url(#grad)" stroke="#3c6693" stroke-width="4" />
+    <text x="200" y="${initialY}" font-family="system-ui, -apple-system, sans-serif" font-size="40" font-weight="bold" fill="#dceaf3" text-anchor="middle">${initial}</text>
+    <text x="200" y="${nameY}" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="500" fill="#c7dbec" text-anchor="middle">${truncateDisplayName(peerName)}</text>
+    <text x="200" y="${captionY}" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#6f94b8" text-anchor="middle">Camera đang tắt</text>
   </svg>`;
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
@@ -5039,6 +4997,10 @@ function setPeerAvatarImgName(videoAvatarImageId, peerName, peerAvatar) {
   // If a valid avatar image URL is provided
   if (peerAvatar && isValidAvatarURL(peerAvatar)) {
     videoAvatarImageElement.setAttribute("src", peerAvatar);
+    // Generated SVG avatars already draw their own circular badge -
+    // an arbitrary external image doesn't, so frame it in a circle
+    // (see .videoAvatarImage.is-external-avatar in videoGrid.css).
+    videoAvatarImageElement.classList.add("is-external-avatar");
   }
   // If not, use SVG based on the email validity
   else if (useAvatarSvg) {
@@ -5047,10 +5009,33 @@ function setPeerAvatarImgName(videoAvatarImageId, peerName, peerAvatar) {
       ? genGravatar(peerName)
       : genAvatarSvg(peerName, avatarImgSize);
     videoAvatarImageElement.setAttribute("src", avatarImgSvg);
+    videoAvatarImageElement.classList.remove("is-external-avatar");
   }
   // Default fallback avatar
   else {
     videoAvatarImageElement.setAttribute("src", images.avatar);
+    videoAvatarImageElement.classList.remove("is-external-avatar");
+  }
+}
+
+/**
+ * Sync the floating solo self-view's compact camera-off badge with my
+ * actual chosen avatar photo (circular). Falls back to the generic user
+ * icon when no real avatar is set - the generated name/initial SVG is
+ * designed for the big tile treatment and looks wrong cropped this small.
+ */
+function updateSoloCompactAvatar() {
+  const img = getId("mySoloAvatarImg");
+  const icon = getId("mySoloAvatarIcon");
+  if (!img || !icon) return;
+
+  if (myPeerAvatar && isValidAvatarURL(myPeerAvatar)) {
+    img.src = myPeerAvatar;
+    img.style.display = "block";
+    icon.style.display = "none";
+  } else {
+    img.style.display = "none";
+    icon.style.display = "";
   }
 }
 
@@ -5168,31 +5153,15 @@ function handleVideoPlayerFs(videoId, videoFullScreenBtnId, peer_id = null) {
 
   // on button click go on FS mobile/desktop
   videoFullScreenBtn.addEventListener("click", (e) => {
-    if (videoPlayer.classList.contains("videoCircle")) {
-      return userLog(
-        "toast",
-        "Full Screen not allowed if video on privacy mode",
-      );
-    }
     gotoFS();
     setTimeout(sync, 0);
   });
 
-  // on video click go on FS
+  // A plain click on any video (mine or the other person's, mobile or
+  // desktop) must never zoom it full-screen - only the dedicated
+  // fullscreen button enters FS. Clicking still exits if already FS.
   videoPlayer.addEventListener("click", (e) => {
-    if (videoPlayer.classList.contains("videoCircle")) {
-      return userLog(
-        "toast",
-        "Full Screen not allowed if video on privacy mode",
-      );
-    }
-    // not mobile on click go on FS or exit from FS
-    if (!isMobileDevice) {
-      gotoFS();
-    } else {
-      // mobile on click exit from FS, for enter use videoFullScreenBtn
-      if (isVideoOnFullScreen) handleFSVideo();
-    }
+    if (isVideoOnFullScreen) handleFSVideo();
   });
 
   function gotoFS() {
@@ -5234,7 +5203,7 @@ function handleVideoPlayerFs(videoId, videoFullScreenBtnId, peer_id = null) {
   }
 
   function showMsg() {
-    userLog("toast", "Full screen mode work when video is on");
+    // No-op: fullscreen silently does nothing while video is off.
   }
 
   function handleFSVideo() {
@@ -5252,104 +5221,6 @@ function handleVideoPlayerFs(videoId, videoFullScreenBtnId, peer_id = null) {
       // Exit the current fullscreen first, then enter fullscreen for this target
       Promise.resolve(exitFs()).finally(() => requestFs(fsTarget));
     }
-  }
-}
-
-/**
- * Handle file drag and drop on video element
- * @param {string} elemId element id
- * @param {string} peer_id peer id
- * @param {boolean} itsMe true/false
- */
-function handleFileDragAndDrop(elemId, peer_id, itsMe = false) {
-  const videoPeer = getId(elemId);
-
-  videoPeer.addEventListener("dragover", function (e) {
-    e.preventDefault();
-    e.stopPropagation();
-    e.target.parentElement.style.outline = "3px dashed var(--dd-color)";
-    document.querySelector(".Camera").style.outline = "none";
-  });
-
-  videoPeer.addEventListener("dragleave", function (e) {
-    e.preventDefault();
-    e.stopPropagation();
-    e.target.parentElement.style.outline = "none";
-  });
-
-  videoPeer.addEventListener("drop", function (e) {
-    e.preventDefault();
-    e.stopPropagation();
-    e.target.parentElement.style.outline = "none";
-    if (itsMe) {
-      return userLog("warning", "You cannot send files to yourself.");
-    }
-    if (sendInProgress) {
-      return userLog(
-        "warning",
-        "Please wait for the previous file to be sent.",
-      );
-    }
-    if (e.dataTransfer.items && e.dataTransfer.items.length > 1) {
-      return userLog("warning", "Please drag and drop a single file.");
-    }
-    // Use DataTransferItemList interface to access the file(s)
-    if (e.dataTransfer.items) {
-      // If dropped items aren't files, reject them
-      const item = e.dataTransfer.items[0].webkitGetAsEntry();
-      console.log("Drag and drop", item);
-      if (item.isDirectory) {
-        return userLog(
-          "warning",
-          "Please drag and drop a single file not a folder.",
-          "top-end",
-        );
-      }
-      const file = e.dataTransfer.items[0].getAsFile();
-      sendFileInformations(file, peer_id);
-    } else {
-      // Use DataTransfer interface to access the file(s)
-      sendFileInformations(e.dataTransfer.files[0], peer_id);
-    }
-  });
-}
-
-/**
- * Handle video privacy button click event
- * @param {string} videoId
- * @param {boolean} privacyBtnId
- */
-function handleVideoPrivacyBtn(videoId, privacyBtnId) {
-  const video = getId(videoId);
-  const privacyBtn = getId(privacyBtnId);
-  if (useVideo && video && privacyBtn) {
-    privacyBtn.addEventListener("click", () => {
-      playSound("click");
-      isVideoPrivacyActive = !isVideoPrivacyActive;
-      setVideoPrivacyStatus(videoId, isVideoPrivacyActive);
-      emitPeerStatus("privacy", isVideoPrivacyActive);
-    });
-  } else {
-    if (privacyBtn) elemDisplay(privacyBtn, false);
-  }
-}
-
-/**
- * Set video privacy status
- * @param {string} peerVideoId
- * @param {boolean} peerPrivacyActive
- */
-function setVideoPrivacyStatus(peerVideoId, peerPrivacyActive) {
-  const video = getId(peerVideoId);
-  if (!video) return;
-  if (peerPrivacyActive) {
-    video.classList.remove("videoDefault");
-    video.classList.add("videoCircle");
-    video.style.objectFit = "cover";
-  } else {
-    video.classList.remove("videoCircle");
-    video.classList.add("videoDefault");
-    video.style.objectFit = "var(--video-object-fit)";
   }
 }
 
@@ -5385,12 +5256,7 @@ function handleVideoPinUnpin(elemId, pnId, camId, peerId, isScreen = false) {
       } else {
         if (pinnedVideoPlayerId != videoPlayer.id) {
           isVideoPinned = true;
-          if (isScreenEnabled) return;
-          return userLog(
-            "toast",
-            "Another video seems pinned, unpin it before to pin this one",
-            5000,
-          );
+          return;
         }
         if (!isScreenStreaming)
           videoPlayer.style.objectFit = "var(--video-object-fit)";
@@ -5445,173 +5311,6 @@ function toggleVideoPin(position) {
 }
 
 /**
- * Handle video focus mode (hide all except selected one)
- * @param {object} remoteVideoFocusBtn button
- * @param {object} remoteVideoWrap videoWrapper
- * @param {object} remoteMedia videoMedia
- */
-function handleVideoFocusMode(
-  remoteVideoFocusBtn,
-  remoteVideoWrap,
-  remoteMedia,
-) {
-  if (remoteVideoFocusBtn) {
-    remoteVideoFocusBtn.addEventListener("click", (e) => {
-      if (isHideMeActive) {
-        return userLog(
-          "toast",
-          "To use this feature, please toggle Hide self view before",
-          "top-end",
-          6000,
-        );
-      }
-      isHideALLVideosActive = !isHideALLVideosActive;
-      e.target.style.color = isHideALLVideosActive ? "lime" : "white";
-      if (isHideALLVideosActive) {
-        remoteVideoWrap.style.width = "100%";
-        remoteVideoWrap.style.height = "100%";
-        remoteMedia.setAttribute("focus-mode", "true");
-      } else {
-        resizeVideoMedia();
-        remoteMedia.removeAttribute("focus-mode");
-      }
-      const children = videoMediaContainer.children;
-      for (let child of children) {
-        if (child.id != remoteVideoWrap.id) {
-          child.style.display = isHideALLVideosActive ? "none" : "block";
-        }
-      }
-    });
-  }
-}
-
-/**
- * Zoom in/out video element center or by cursor position
- * @param {string} zoomInBtnId
- * @param {string} zoomOutBtnId
- * @param {string} mediaId
- * @param {string} peerId
- */
-function handleVideoZoomInOut(
-  statusId,
-  videoWrapId,
-  zoomInBtnId,
-  zoomOutBtnId,
-  mediaId,
-  peerId = null,
-) {
-  const id = statusId;
-  const videoWrap = getId(videoWrapId);
-  const zoomIn = getId(zoomInBtnId);
-  const zoomOut = getId(zoomOutBtnId);
-  const video = getId(mediaId);
-
-  /**
-   * 1.1: This value is used when the `zoomDirection` is 'zoom-in'.
-   * It means that when the user scrolls the mouse wheel up (indicating a zoom-in action), the scale factor is set to 1.1.
-   * This means that the content will be scaled up to 110% of its original size with each scroll event, effectively making it larger.
-   */
-  const ZOOM_IN_FACTOR = 1.1;
-  /**
-   * 0.9: This value is used when the zoomDirection is 'zoom-out'.
-   * It means that when the user scrolls the mouse wheel down (indicating a zoom-out action), the scale factor is set to 0.9.
-   * This means that the content will be scaled down to 90% of its original size with each scroll event, effectively making it smaller.
-   */
-  const ZOOM_OUT_FACTOR = 0.9;
-  const MAX_ZOOM = 15;
-  const MIN_ZOOM = 1;
-
-  let zoom = 1;
-
-  function setTransform() {
-    if (isVideoOf(id) || isVideoPrivacyMode(video)) return;
-    zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
-    video.style.scale = zoom;
-  }
-
-  function resetZoom(video) {
-    zoom = 1;
-    video.style.transform = "";
-    video.style.transformOrigin = "center";
-  }
-
-  if (!isMobileDevice) {
-    // Zoom center
-    if (ZOOM_CENTER_MODE) {
-      video.addEventListener("wheel", (e) => {
-        e.preventDefault();
-        let delta = e.wheelDelta ? e.wheelDelta : -e.deltaY;
-        delta > 0 ? (zoom *= 1.2) : (zoom /= 1.2);
-        setTransform();
-      });
-    } else {
-      // Zoom on cursor position
-      video.addEventListener("wheel", (e) => {
-        e.preventDefault();
-        if (isVideoOf(id) || isVideoPrivacyMode(video)) return;
-
-        const rect = videoWrap.getBoundingClientRect();
-        const cursorX = e.clientX - rect.left;
-        const cursorY = e.clientY - rect.top;
-
-        const zoomDirection = e.deltaY > 0 ? "zoom-out" : "zoom-in";
-        const scaleFactor =
-          zoomDirection === "zoom-out" ? ZOOM_OUT_FACTOR : ZOOM_IN_FACTOR;
-
-        zoom *= scaleFactor;
-        zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
-
-        video.style.transformOrigin = `${cursorX}px ${cursorY}px`;
-        video.style.transform = `scale(${zoom})`;
-        video.style.cursor = zoom === 1 ? "pointer" : zoomDirection;
-      });
-
-      videoWrap.addEventListener("mouseleave", () => {
-        video.style.cursor = "pointer";
-        if (video.id === myVideo.id && !isScreenStreaming) {
-          resetZoom(video);
-        }
-      });
-
-      video.addEventListener("mouseleave", () => {
-        video.style.cursor = "pointer";
-      });
-    }
-  }
-
-  if (buttons.local.showZoomInOutBtn) {
-    zoomIn.addEventListener("click", () => {
-      if (isVideoOf(id))
-        return userLog("toast", "Zoom in work when video is on");
-      if (isVideoPrivacyMode(video))
-        return userLog("toast", "Zoom in not allowed if video on privacy mode");
-      zoom = zoom + 0.1;
-      setTransform();
-    });
-
-    zoomOut.addEventListener("click", () => {
-      if (isVideoOf(id))
-        return userLog("toast", "Zoom out work when video is on");
-      if (isVideoPrivacyMode(video))
-        return userLog(
-          "toast",
-          "Zoom out not allowed if video on privacy mode",
-        );
-      zoom = zoom - 0.1;
-      setTransform();
-    });
-  }
-
-  function isVideoOf(id) {
-    const videoStatusBtn = getId(id);
-    return videoStatusBtn && videoStatusBtn.className === className.videoOff;
-  }
-  function isVideoPrivacyMode() {
-    return video && video.classList.contains("videoCircle");
-  }
-}
-
-/**
  * Handle Video Picture in Picture mode
  *
  * @param {string} btnId
@@ -5632,12 +5331,7 @@ function handlePictureInPicture(btnId, videoId, peerId) {
         (remoteVideoStatus &&
           remoteVideoStatus.className === className.videoOff)
       ) {
-        return msgPopup(
-          "warning",
-          "Prohibit Picture-in-Picture (PIP) on disabled video",
-          "top-end",
-          6000,
-        );
+        return;
       }
       video.requestPictureInPicture().catch((error) => {
         console.error("Failed to enter Picture-in-Picture mode:", error);
@@ -5718,11 +5412,11 @@ function videoMediaContainerUnpin() {
 function startSessionTime() {
   let callStartTime = Date.now();
   let callElapsedSecondsTime = 0;
-  elemDisplay(mySessionTime, true);
+  if (mySessionTime) elemDisplay(mySessionTime, true);
   setInterval(function printTime() {
     callElapsedSecondsTime++;
     let callElapsedTime = Date.now() - callStartTime;
-    mySessionTime.innerText = getTimeToString(callElapsedTime);
+    if (mySessionTime) mySessionTime.innerText = getTimeToString(callElapsedTime);
     const myCurrentSessionTime = getId("myCurrentSessionTime");
     if (myCurrentSessionTime) {
       myCurrentSessionTime.innerText = secondsToHms(callElapsedSecondsTime);
@@ -5808,12 +5502,7 @@ function setShareRoomBtn() {
 function setHideMeButton() {
   hideMeBtn.addEventListener("click", (e) => {
     if (isHideALLVideosActive) {
-      return userLog(
-        "toast",
-        "To use this feature, please toggle video focus mode",
-        "top-end",
-        6000,
-      );
+      return;
     }
     isHideMeActive = !isHideMeActive;
     handleHideMe(isHideMeActive);
@@ -5887,7 +5576,29 @@ function setScreenShareBtn() {
       await toggleScreenSharing(true);
     });
     screenShareBtn.addEventListener("click", async (e) => {
-      await toggleScreenSharing();
+      if (!isScreenStreaming) {
+        showPP({
+          icon: "screen-share",
+          title: "Chia sẻ màn hình?",
+          desc: "Bạn có chắc muốn chia sẻ màn hình của mình với mọi người trong phòng không?",
+          confirmText: "Chia sẻ",
+          cancelText: "Hủy",
+          onConfirm: async () => {
+            await toggleScreenSharing();
+          },
+        });
+      } else {
+        showPP({
+          icon: "circle-help",
+          title: "Dừng chia sẻ màn hình?",
+          desc: "Bạn có chắc muốn dừng chia sẻ màn hình không?",
+          confirmText: "Dừng",
+          cancelText: "Hủy",
+          onConfirm: async () => {
+            await toggleScreenSharing();
+          },
+        });
+      }
     });
   } else {
     displayElements([
@@ -5930,13 +5641,26 @@ function setFullScreenBtn() {
       if (!fullscreenElement) {
         fullScreenIcon.className = className.fsOff;
         isDocumentOnFullScreen = false;
+        if (fullScreenCornerBtn) {
+          const cornerIcon = fullScreenCornerBtn.querySelector("i");
+          if (cornerIcon) cornerIcon.className = className.fsOff;
+        }
       }
     });
     fullScreenBtn.addEventListener("click", (e) => {
       toggleFullScreen();
     });
+    // Desktop-only floating twin of fullScreenBtn, fixed at the
+    // bottom-right corner of the page instead of tucked in the "..." menu.
+    if (fullScreenCornerBtn && !isMobileDevice) {
+      elemDisplay(fullScreenCornerBtn, true, "flex");
+      fullScreenCornerBtn.addEventListener("click", (e) => {
+        toggleFullScreen();
+      });
+    }
   } else {
     elemDisplay(fullScreenBtn, false);
+    elemDisplay(fullScreenCornerBtn, false);
   }
 }
 function setChatRoomBtn() {
@@ -5982,8 +5706,10 @@ function setChatRoomBtn() {
     });
   }
 
-  // Nhấn Enter để gửi
-  msgerInput.addEventListener("keyup", (e) => {
+  // Nhấn Enter để gửi - must be keydown (not keyup): a textarea inserts
+  // the newline as part of Enter's default action before keyup ever
+  // fires, so preventDefault() there is too late to stop it.
+  msgerInput.addEventListener("keydown", (e) => {
     if (e.keyCode === 13 && (isMobileDevice || !e.shiftKey)) {
       e.preventDefault();
       msgerSendBtn.click();
@@ -5999,12 +5725,18 @@ function setChatRoomBtn() {
   };
 
   // Bấm nút gửi tin nhắn
+  if (isMobileDevice) {
+    // Tapping a button normally steals focus from the textarea first
+    // (on the preceding mousedown/touch), which closes the mobile
+    // keyboard. Blocking mousedown's default action keeps focus on
+    // msgerInput so the keyboard stays open across sends.
+    msgerSendBtn.addEventListener("mousedown", (e) => e.preventDefault());
+  }
   msgerSendBtn.addEventListener("click", async (e) => {
     e.preventDefault();
     await sendChatMessage();
+    if (isMobileDevice) msgerInput.focus();
   });
-
-  if (isMobileDevice) msgerInput.style.fontSize = "xx-small";
 }
 
 async function sendChatMessage() {
@@ -6204,7 +5936,7 @@ async function documentPictureInPictureOpen() {
 
     if (!cloneVideoElements()) {
       documentPictureInPictureClose();
-      return userLog("toast", "No video allowed for Document PIP");
+      return;
     }
 
     const videoObserver = new MutationObserver(() => {
@@ -6255,46 +5987,35 @@ function setMySettingsBtn() {
   mySettingsCloseBtn.addEventListener("click", (e) => {
     hideShowMySettings();
   });
-  speakerTestBtn.addEventListener("click", (e) => {
-    playSpeaker(audioOutputSelect?.value, "speaker");
-  });
   myPeerNameSetBtn.addEventListener("click", (e) => {
     updateMyPeerName();
+  });
+  myPeerNameSet.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      updateMyPeerName();
+    }
   });
   myProfileAvatarUploadBtn.addEventListener("click", async () => {
     await updateMyPeerAvatarByUrl();
   });
-  myProfileAvatarResetBtn.addEventListener("click", () => {
-    resetMyPeerAvatarInMemory();
-  });
-  updateMyAvatarResetButtonVisibility();
   // Sounds
   switchSounds.addEventListener("change", (e) => {
     notifyBySound = e.currentTarget.checked;
     lsSettings.sounds = notifyBySound;
     lS.setSettings(lsSettings);
-    userLog(
-      "toast",
-      `${icons.sounds} Notify & sounds ` + (notifyBySound ? "ON" : "OFF"),
-    );
     playSound("switch");
   });
   switchShare.addEventListener("change", (e) => {
     notify = e.currentTarget.checked;
     lsSettings.share_on_join = notify;
     lS.setSettings(lsSettings);
-    userLog(
-      "toast",
-      `${icons.share} Share room on join ` + (notify ? "ON" : "OFF"),
-    );
     playSound("switch");
   });
   switchKeepButtonsVisible.addEventListener("change", (e) => {
     isButtonsBarOver = isKeepButtonsVisible = e.currentTarget.checked;
     lsSettings.keep_buttons_visible = isButtonsBarOver;
     lS.setSettings(lsSettings);
-    const status = isButtonsBarOver ? "enabled" : "disabled";
-    userLog("toast", `Buttons always visible ${status}`);
     playSound("switch");
   });
 
@@ -6305,40 +6026,29 @@ function setMySettingsBtn() {
       pinChatByDefault = e.currentTarget.checked;
       lsSettings.pin_chat_by_default = pinChatByDefault;
       lS.setSettings(lsSettings);
-      userLog(
-        "toast",
-        `Chat opens pinned by default ${pinChatByDefault ? "ON" : "OFF"}`,
-      );
       playSound("switch");
     });
   }
 
-  // WakeLock for mobile/tablet
+  // WakeLock for mobile/tablet - "Không tắt màn hình" is now on by
+  // default and the toggle row is hidden entirely (nothing left for the
+  // user to choose there). Desktop was already hidden/no-op here.
   if (!isDesktopDevice && isWakeLockSupported()) {
+    switchKeepAwake.checked = true;
+    applyKeepAwake(true);
     switchKeepAwake.addEventListener("change", (e) => {
       applyKeepAwake(e.currentTarget.checked);
       playSound("switch");
     });
-  } else {
-    elemDisplay(keepAwakeButton, false);
   }
+  elemDisplay(keepAwakeButton, false);
 
-  if (isMobileDevice) {
-    elemDisplay(pushToTalkDiv, false);
-  } else {
-    // Push to talk
-    switchPushToTalk.addEventListener("change", (e) => {
-      isPushToTalkActive = e.currentTarget.checked;
-      userLog(
-        "toast",
-        `👆 Push to talk ` + (isPushToTalkActive ? "ON" : "OFF"),
-      );
-      playSound("switch");
-    });
-  }
+  // No IP address row in the "Mạng" tab on mobile - not something
+  // people need to see there on a phone.
+  if (isMobileDevice) elemDisplay(getId("networkIpRow"), false);
 
-  // make chat room draggable for desktop
-  if (!isMobileDevice) dragElement(mySettings, mySettingsHeader);
+  // Push-to-talk setting row was removed - isPushToTalkActive stays false,
+  // so the spacebar shortcut in setAudioBtn() just never activates.
 
   // Recording pause/resume
   pauseRecBtn.addEventListener("click", (e) => {
@@ -6444,7 +6154,7 @@ function updateSettingsExtraGroups() {
  */
 function setLeaveRoomBtn() {
   leaveRoomBtn.addEventListener("click", (e) => {
-    if (e && e.shiftKey) return leaveRoom();
+    if (e && e.shiftKey) return leaveRoom(true); // Shift-click: skip confirm
     if (!isPresenter) return leaveRoom();
     toggleExitMenu();
   });
@@ -6489,11 +6199,17 @@ function handleBodyOnMouseMove() {
 
   const newControlBar = document.getElementById("newControlBar");
   if (newControlBar) {
-    newControlBar.addEventListener("mouseover", () => {
+    // Real mouse hover only - "mouseover"/"mouseout" fire unreliably on
+    // touch (a tap can synthesize "mouseover" with no matching "mouseout"),
+    // which used to latch isButtonsBarOver=true forever after any tap on
+    // the control bar and permanently break mobile auto-hide.
+    newControlBar.addEventListener("pointerenter", (e) => {
+      if (e.pointerType !== "mouse") return;
       isButtonsBarOver = true;
       resetMobileIdleTimer();
     });
-    newControlBar.addEventListener("mouseout", () => {
+    newControlBar.addEventListener("pointerleave", (e) => {
+      if (e.pointerType !== "mouse") return;
       isButtonsBarOver = false;
       resetMobileIdleTimer();
     });
@@ -6508,7 +6224,12 @@ function resetMobileIdleTimer() {
   if (!isMobileDevice) return; // Only apply auto-hide on mobile
   if (mobileIdleTimer) clearTimeout(mobileIdleTimer);
   mobileIdleTimer = setTimeout(() => {
+    // Reference only starts the inactivity-hide countdown once a remote
+    // peer is actually in the call (`isInCall && remotePeer`); while still
+    // alone waiting for someone to join, controls always stay visible.
+    const hasRemotePeer = Object.keys(peerConnections).length > 0;
     if (
+      hasRemotePeer &&
       !isButtonsBarOver &&
       isMobileDevice &&
       !isChatRoomVisible &&
@@ -6522,36 +6243,91 @@ function resetMobileIdleTimer() {
 /**
  * Setup local audio - video devices - theme ...
  */
+/**
+ * Drive a device-selector widget (truncated label + prev/next buttons)
+ * on top of a hidden native <select>, keeping both in sync.
+ * @param {HTMLSelectElement} selectEl - the hidden native select (video/audio source/output)
+ * @param {HTMLElement} wrapEl - the .device-selector wrapper element
+ */
+function setupDeviceSelectorUI(selectEl, wrapEl) {
+  if (!selectEl || !wrapEl) return;
+
+  const labelEl = wrapEl.querySelector(".device-selector-label");
+  const prevBtn = wrapEl.querySelector('[data-dir="prev"]');
+  const nextBtn = wrapEl.querySelector('[data-dir="next"]');
+  if (!labelEl || !prevBtn || !nextBtn) return;
+
+  const sync = () => {
+    const options = selectEl.options;
+    const count = options.length;
+    const disabled = selectEl.disabled || count === 0;
+    const idx = selectEl.selectedIndex;
+    const current = idx >= 0 && idx < count ? options[idx] : null;
+
+    labelEl.textContent = current ? current.textContent : "Không có thiết bị";
+
+    // Hide (not just dim) prev/next at the edges: no left arrow at the
+    // first device, no right arrow at the last, neither when there's
+    // only one device to pick from.
+    const hidePrev = disabled || idx <= 0;
+    const hideNext = disabled || idx < 0 || idx >= count - 1;
+    prevBtn.disabled = hidePrev;
+    nextBtn.disabled = hideNext;
+    prevBtn.style.display = hidePrev ? "none" : "";
+    nextBtn.style.display = hideNext ? "none" : "";
+    wrapEl.classList.toggle("disabled", disabled);
+  };
+
+  const selectPrev = () => {
+    if (selectEl.disabled) return;
+    if (selectEl.selectedIndex > 0) {
+      selectEl.selectedIndex -= 1;
+      selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  };
+  const selectNext = () => {
+    if (selectEl.disabled) return;
+    if (selectEl.selectedIndex < selectEl.options.length - 1) {
+      selectEl.selectedIndex += 1;
+      selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  };
+
+  prevBtn.addEventListener("click", selectPrev);
+  nextBtn.addEventListener("click", selectNext);
+
+  // Keep the widget in sync whenever the underlying select changes,
+  // including programmatic repopulation elsewhere in the app that
+  // may not always fire a native "change" event.
+  selectEl.addEventListener("change", sync);
+  new MutationObserver(sync).observe(selectEl, {
+    childList: true,
+    attributes: true,
+    attributeFilter: ["disabled"],
+  });
+  setInterval(sync, 1000);
+
+  sync();
+}
+
 function setupMySettings() {
+  // device selector widgets (mic/camera/speaker prev/next pickers)
+  setupDeviceSelectorUI(videoSelect, getId("videoSourceDeviceSelector"));
+  setupDeviceSelectorUI(audioInputSelect, getId("audioSourceDeviceSelector"));
+  setupDeviceSelectorUI(audioOutputSelect, getId("audioOutputDeviceSelector"));
+
   // tab buttons
   tabRoomBtn.addEventListener("click", (e) => {
     openTab(e, "tabRoom");
   });
-  tabVideoBtn.addEventListener("click", (e) => {
-    openTab(e, "tabVideo");
-  });
-  tabAudioBtn.addEventListener("click", (e) => {
-    openTab(e, "tabAudio");
-  });
-  tabVideoShareBtn.addEventListener("click", (e) => {
-    openTab(e, "tabMedia");
-  });
-  tabRecordingBtn.addEventListener("click", (e) => {
-    openTab(e, "tabRecording");
-  });
   tabProfileBtn.addEventListener("click", (e) => {
     openTab(e, "tabProfile");
   });
-
+  tabDevicesBtn.addEventListener("click", (e) => {
+    openTab(e, "tabDevices");
+  });
   tabNetworkBtn.addEventListener("click", (e) => {
     openTab(e, "tabNetwork");
-  });
-  tabLanguagesBtn.addEventListener("click", (e) => {
-    openTab(e, "tabLanguages");
-  });
-  // copy room URL
-  myRoomId.addEventListener("click", () => {
-    isMobileDevice ? shareRoomUrl() : copyRoomURL();
   });
 
   // tab media
@@ -6586,13 +6362,13 @@ function setupMySettings() {
         lS.setSettings(lsSettings);
         switchNoiseSuppression.checked = false;
       } else {
-        toastMessage("success", "Noise suppression enabled");
+        playSound("switch");
       }
     } else {
       lsSettings.mic_noise_suppression = false;
       lS.setSettings(lsSettings);
       await disableNoiseSuppression(true);
-      toastMessage("info", "Noise suppression disabled");
+      playSound("switch");
     }
     switchNoiseSuppression.blur();
   };
@@ -6679,7 +6455,6 @@ function loadSettingsFromLocalStorage() {
   notifyBySound = lsSettings.sounds;
   isKeepButtonsVisible = lsSettings.keep_buttons_visible;
 
-  isShortcutsEnabled = lsSettings.keyboard_shortcuts;
   switchSounds.checked = notifyBySound;
   switchShare.checked = notify;
   switchKeepButtonsVisible.checked = isKeepButtonsVisible;
@@ -6897,10 +6672,6 @@ async function setLocalMaxFps(maxFrameRate, type = "camera") {
       type === "camera"
         ? (videoFpsSelect.selectedIndex = videoFpsSelectedIndex)
         : (screenFpsSelect.selectedIndex = screenFpsSelectedIndex);
-      userLog(
-        "toast",
-        "Your device doesn't support the selected fps, please select the another one.",
-      );
     });
 }
 
@@ -6930,10 +6701,6 @@ async function setLocalVideoQuality() {
     .catch((err) => {
       videoQualitySelect.selectedIndex = videoQualitySelectedIndex;
       console.error("setLocalVideoQuality", err);
-      userLog(
-        "toast",
-        "Your device doesn't support the selected video quality, please select the another one.",
-      );
     });
 }
 
@@ -7167,6 +6934,8 @@ function showButtonsBarAndMenu() {
     }, 500);
   }
 
+  document.body.classList.remove("controls-idle");
+
   isButtonsVisible = true;
 }
 
@@ -7193,6 +6962,9 @@ function hideButtonsBarAndMenu() {
     }, 500);
   }
 
+  // Dim (not hide) the peer's name tag along with the controls.
+  document.body.classList.add("controls-idle");
+
   isButtonsVisible = false;
 }
 
@@ -7214,7 +6986,6 @@ async function shareRoomUrl() {
       // not add title and description to load metadata from url
       const roomURL = getRoomURL();
       await navigator.share({ url: roomURL });
-      userLog("toast", "Room Shared successfully!");
     } catch (err) {
       /*
             This feature is available only in secure contexts (HTTPS),
@@ -7240,7 +7011,7 @@ function shareRoomMeetingURL(checkScreen = false) {
   Swal.fire({
     background: swBg,
     position: "center",
-    title: "Share the room",
+    title: "Chia sẻ phòng",
     html: renderRoomTemplate("tpl-share-room-modal", {
       text: {
         roomURL,
@@ -7248,9 +7019,9 @@ function shareRoomMeetingURL(checkScreen = false) {
     }),
     showCancelButton: true,
     cancelButtonColor: "red",
-    confirmButtonText: `Copy URL`,
-    cancelButtonText: `Close`,
-    cancelButtonText: `Close`,
+    confirmButtonText: `Sao chép URL`,
+    cancelButtonText: `Đóng`,
+    cancelButtonText: `Đóng`,
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
   }).then((result) => {
@@ -7292,18 +7063,41 @@ function makeRoomPopupQR() {
 
 /**
  * Copy Room URL to clipboard
+ * navigator.clipboard.writeText() can silently reject (permissions,
+ * focus, insecure context, etc.) - it was previously fired without
+ * await/catch, so the success toast/log fired unconditionally even when
+ * nothing was actually copied. Await it and fall back to the legacy
+ * execCommand('copy') on the selected tmpInput (already set up below)
+ * before reporting failure.
  */
-function copyRoomURL() {
+async function copyRoomURL() {
   const roomURL = getRoomURL();
   const tmpInput = document.createElement("input");
   document.body.appendChild(tmpInput);
   tmpInput.value = roomURL;
   tmpInput.select();
   tmpInput.setSelectionRange(0, 99999); // For mobile devices
-  navigator.clipboard.writeText(tmpInput.value);
-  console.log("Copied to clipboard Join Link ", roomURL);
+
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(roomURL);
+    copied = true;
+  } catch (err) {
+    console.warn("navigator.clipboard.writeText failed, falling back", err);
+    try {
+      copied = document.execCommand("copy");
+    } catch (fallbackErr) {
+      console.error("execCommand('copy') fallback failed", fallbackErr);
+    }
+  }
+
   document.body.removeChild(tmpInput);
-  userLog("toast", "Meeting URL copied to clipboard 👍");
+
+  if (copied) {
+    console.log("Copied to clipboard Join Link ", roomURL);
+  } else {
+    console.error("Copy to clipboard failed for", roomURL);
+  }
 }
 
 /**
@@ -7323,21 +7117,49 @@ function getRoomURL() {
  * @param {boolean} init on join room
  * @param {null|boolean} force audio off (default null can be true/false)
  */
-function handleAudio(e, init, force = null) {
-  if (!useAudio) return;
+async function handleAudio(e, init, force = null) {
   // https://developer.mozilla.org/en-US/docs/Web/API/MediaStream/getAudioTracks
 
   const audioStatus = force !== null ? force : !myAudioStatus;
+  let audioTrack = getAudioTrack(localAudioMediaStream);
+
+  // Trying to turn the mic ON but there's no usable track - almost always
+  // means the browser never got mic permission. Checked before the
+  // !useAudio guard below so this still fires from the in-room control
+  // bar even when useAudio is false (permission was denied) - the
+  // pre-join screen's own mic button is hidden in that case (also via
+  // useAudio), so this path only ever runs from the in-room button there.
+  if (audioStatus && !audioTrack) {
+    // Permission may have been granted since the last attempt (e.g. the
+    // user allowed it via the browser's own address-bar/site-settings
+    // prompt after seeing the warning below once already) - try again
+    // before assuming it's still blocked.
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(
+        getAudioConstraints(),
+      );
+      await loadLocalMedia(stream, "audio");
+      localAudioMediaStream = stream;
+      useAudio = true;
+      audioTrack = getAudioTrack(localAudioMediaStream);
+    } catch (err) {
+      console.warn("[handleAudio] No audio track found", err);
+      showPP({
+        icon: "triangle-alert",
+        variant: "warn",
+        title: "Chưa được cấp quyền truy cập micro",
+        desc: "Trình duyệt chưa cho phép ứng dụng dùng micro (hoặc không tìm thấy thiết bị). Vui lòng cấp quyền micro trong cài đặt trình duyệt rồi thử lại.",
+        confirmText: "Đã hiểu",
+        hideCancel: true,
+      });
+      return;
+    }
+  }
+
+  if (!useAudio) return;
 
   myAudioStatus = audioStatus;
-
-  // Safely enable/disable audio track
-  const audioTrack = getAudioTrack(localAudioMediaStream);
-  if (audioTrack) {
-    audioTrack.enabled = audioStatus;
-  } else {
-    console.warn("[handleAudio] No audio track found");
-  }
+  if (audioTrack) audioTrack.enabled = audioStatus;
 
   // Update button classes
   if (force != null) {
@@ -7360,7 +7182,7 @@ function handleAudio(e, init, force = null) {
     ]);
     setTippy(
       initAudioBtn,
-      audioStatus ? "Stop the audio" : "Start the audio",
+      audioStatus ? "Tắt âm thanh" : "Bật âm thanh",
       "right",
     );
     initMicrophoneSelect.disabled = !audioStatus;
@@ -7391,17 +7213,52 @@ async function stopAudioTracks(stream) {
  * @param {null|boolean} force video off (default null can be true/false)
  */
 async function handleVideo(e, init, force = null) {
-  if (!useVideo) return;
   // https://developer.mozilla.org/en-US/docs/Web/API/MediaStream/getVideoTracks
 
   const videoStatus = force !== null ? force : !myVideoStatus;
 
-  myVideoStatus = videoStatus;
+  // Turning the camera OFF fully stops the track (camera LED off), so
+  // turning it back ON always needs a fresh getUserMedia call below - it
+  // can't just be re-enabled like a muted mic. Do that first, before
+  // touching any UI state, so a still-blocked permission doesn't
+  // optimistically flip the button to "on" while nothing is actually
+  // enabled. changeInitCamera/changeLocalCamera always attempt a fresh
+  // request, so this also naturally retries if the browser denied access
+  // earlier (e.g. on first page load) but was granted since.
+  if (videoStatus) {
+    // changeInitCamera/changeLocalCamera below request a SPECIFIC
+    // device (videoSelect.value / initVideoSelect.value). If the
+    // browser had denied access when the page first loaded, that
+    // dropdown was never populated with real devices (enumerateDevices
+    // only returns usable deviceIds once permission is granted), so
+    // .value is still "" - passing that as an exact deviceId fails with
+    // OverconstrainedError no matter how many times it's retried, even
+    // after permission is granted mid-session. Re-run the enumeration
+    // first so there's an actual device to ask for.
+    if (!isEnumerateVideoDevices) {
+      await initEnumerateVideoDevices();
+    }
+    init
+      ? await changeInitCamera(initVideoSelect.value)
+      : await changeLocalCamera(videoSelect.value);
+    if (!getVideoTrack(localVideoMediaStream)) {
+      console.warn("[handleVideo] No video track found");
+      showPP({
+        icon: "triangle-alert",
+        variant: "warn",
+        title: "Chưa được cấp quyền truy cập camera",
+        desc: "Trình duyệt chưa cho phép ứng dụng dùng camera (hoặc không tìm thấy thiết bị). Vui lòng cấp quyền camera trong cài đặt trình duyệt rồi thử lại.",
+        confirmText: "Đã hiểu",
+        hideCancel: true,
+      });
+      return;
+    }
+    useVideo = true;
+  }
 
   const videoTrack = getVideoTrack(localVideoMediaStream);
-  if (videoTrack) {
-    videoTrack.enabled = videoStatus;
-  }
+  myVideoStatus = videoStatus;
+  if (videoTrack) videoTrack.enabled = videoStatus;
 
   // Update button classes
   if (force != null) {
@@ -7424,13 +7281,10 @@ async function handleVideo(e, init, force = null) {
     ]);
     setTippy(
       initVideoBtn,
-      videoStatus ? "Stop the video" : "Start the video",
+      videoStatus ? "Tắt video" : "Bật video",
       "top",
     );
-    displayElements([
-      { element: initVideo, display: videoStatus, mode: "block" },
-      { element: initVideoMirrorBtn, display: videoStatus },
-    ]);
+    displayElements([{ element: initVideo, display: videoStatus, mode: "block" }]);
     initVideoSelect.disabled = !videoStatus;
     lS.setInitConfig(lS.MEDIA_TYPE.video, videoStatus);
     initVideoContainerShow(videoStatus);
@@ -7438,17 +7292,11 @@ async function handleVideo(e, init, force = null) {
     applyKeepAwake(myVideoStatus);
   }
 
-  if (!videoStatus) {
-    if (!isScreenStreaming) {
-      // Stop the video track based on the condition
-      init
-        ? await stopVideoTracks(initStream) // Stop init video track (camera LED off)
-        : await stopVideoTracks(localVideoMediaStream); // Stop local video track (camera LED off)
-    }
-  } else {
+  if (!videoStatus && !isScreenStreaming) {
+    // Stop the video track based on the condition
     init
-      ? await changeInitCamera(initVideoSelect.value) // Resume the video track for the init camera (camera LED on)
-      : await changeLocalCamera(videoSelect.value); // Resume the video track for the local camera (camera LED on)
+      ? await stopVideoTracks(initStream) // Stop init video track (camera LED off)
+      : await stopVideoTracks(localVideoMediaStream); // Stop local video track (camera LED off)
   }
 
   setMyVideoStatus(videoStatus);
@@ -7507,7 +7355,6 @@ async function swapCamera() {
     }
   } catch (err) {
     console.log("[Error] to swapping camera", err);
-    userLog("error", "Error to swapping the camera " + err);
     // https://blog.addpipe.com/common-getusermedia-errors/
   } finally {
     if (spinner) elemDisplay(spinner, false);
@@ -7556,8 +7403,6 @@ async function toggleScreenSharing(init = false) {
   try {
     screenMaxFrameRate = parseInt(screenFpsSelect.value, 10);
     const constraints = getScreenShareConstraints();
-    isVideoPrivacyActive = false;
-    if (!init) emitPeerStatus("privacy", isVideoPrivacyActive);
 
     !isScreenStreaming
       ? await startScreenSharing(constraints, init)
@@ -7635,6 +7480,15 @@ async function startScreenSharing(constraints, init) {
     emitPeersAction("screenStart", extras);
     await loadScreenMedia();
     await refreshMyStreamToPeers(undefined, true);
+    // Suggest opening PiP right after a successful share - mirrors
+    // App.tsx: `if (!isInPagePip && remotePeer) setShowPipSuggestion(true);`
+    if (
+      typeof isInPagePip !== "undefined" &&
+      !isInPagePip &&
+      Object.keys(peerConnections).length >= 1
+    ) {
+      showPipSuggestionModal();
+    }
   }
   screenVideoTrack.onended = () => {
     if (isScreenStreaming) toggleScreenSharing(init);
@@ -7664,6 +7518,7 @@ async function startScreenSharing(constraints, init) {
  * @param {boolean} init - Indicates if it's the initial screen share
  */
 async function stopScreenSharing(init) {
+  if (!init) hidePipSuggestionModal();
   const myScreenWrap = getId("myScreenWrap");
   const myScreenPinBtn = getId("myScreenPinBtn");
   if (
@@ -7791,15 +7646,27 @@ async function mixScreenAndMicAudio(screenAudioTrack, micAudioTrack) {
  * @param {boolean} init - Indicates if it's the initial screen share
  */
 function updateScreenSharingUI(isScreenStreaming, init) {
+  // Only for an actual toggle, not the initial pre-join screen-share setup
+  // (mirrors the addPeer/removePeer sounds, which also skip that case).
+  if (!init) playSound(isScreenStreaming ? "on" : "off");
   setScreenSharingStatus(isScreenStreaming);
   if (!init && myVideoAvatarImage && !useVideo) {
     elemDisplay(myVideo, false);
     elemDisplay(myVideoAvatarImage, true, "block");
   }
 
+  // The floating self-view thumbnail has no equivalent while I'm
+  // screen sharing (the reference never previews your own share)
+  if (!init) syncSoloVisibilityForLocalScreenShare(isScreenStreaming);
+
   isScreenStreaming
     ? setColor(init ? initScreenShareBtn : screenShareBtn, "orange")
     : setColor(init ? initScreenShareBtn : screenShareBtn, "white");
+
+  if (typeof isInPagePip !== "undefined" && isInPagePip) {
+    updatePipLocalControlButtons();
+    updatePipStagePlaceholderText();
+  }
 }
 
 /**
@@ -7827,10 +7694,6 @@ function getLocalScreenExtras() {
 async function handleToggleScreenException(reason, init) {
   try {
     console.warn("handleToggleScreenException", reason);
-
-    // Update video privacy status
-    isVideoPrivacyActive = false;
-    emitPeerStatus("privacy", isVideoPrivacyActive);
 
     // Inform peers about screen sharing stop
     emitPeersAction("screenStop");
@@ -7888,11 +7751,16 @@ function setScreenSharingStatus(status) {
   ]);
   setTippy(
     screenShareBtn,
-    status ? "Stop screen sharing (S)" : "Start screen sharing (S)",
+    status ? "Dừng chia sẻ màn hình (S)" : "Bắt đầu chia sẻ màn hình (S)",
     placement,
   );
   if (screenShareBtn && screenShareBtn.setAttribute)
     screenShareBtn.setAttribute("aria-pressed", String(!!status));
+
+  // Keep the screen-share badge next to my name in sync — without this,
+  // stopping the share leaves the badge stuck on from the last refresh.
+  refreshPeerNameTag(document.getElementById("myVideoPeerName"));
+  refreshPeerNameTag(document.getElementById("myScreenPeerName"));
 }
 
 /**
@@ -7923,8 +7791,8 @@ async function setMyVideoStatusTrue() {
   ]);
 
   // Update tooltips
-  setTippy(videoBtn, "Stop the video", placement);
-  setTippy(initVideoBtn, "Stop the video", "top");
+  setTippy(videoBtn, "Tắt video", placement);
+  setTippy(initVideoBtn, "Tắt video", "top");
 
   emitPeerStatus("video", myVideoStatus);
 }
@@ -7935,20 +7803,20 @@ async function setMyVideoStatusTrue() {
  */
 function toggleFullScreen() {
   const fullScreenIcon = fullScreenBtn.querySelector("i");
+  const cornerIcon = fullScreenCornerBtn?.querySelector("i");
   if (!document.fullscreenElement) {
     document.documentElement.requestFullscreen();
     fullScreenIcon.className = className.fsOn;
+    if (cornerIcon) cornerIcon.className = className.fsOn;
     isDocumentOnFullScreen = true;
   } else {
     if (document.exitFullscreen) {
       document.exitFullscreen();
       fullScreenIcon.className = className.fsOff;
+      if (cornerIcon) cornerIcon.className = className.fsOff;
       isDocumentOnFullScreen = false;
     }
   }
-  const fullScreenLabel = isDocumentOnFullScreen
-    ? "Exit full screen"
-    : "View full screen";
 }
 
 /**
@@ -8200,7 +8068,6 @@ function checkRecording() {
  */
 function handleRecordingError(error, popupLog = true) {
   console.error("Recording error", error);
-  if (popupLog) userLog("error", error);
 }
 
 /**
@@ -8322,15 +8189,15 @@ function recordingOptions(options, audioMixerTracks) {
     background: swBg,
     position: "top",
     imageUrl: images.recording,
-    title: "Recording options",
-    text: "Select the recording type you want to start. Audio will be recorded from all participants.",
+    title: "Tùy chọn ghi hình",
+    text: "Chọn loại ghi hình bạn muốn bắt đầu. Âm thanh sẽ được ghi từ tất cả người tham gia.",
     showDenyButton: true,
     showCancelButton: true,
     cancelButtonColor: "red",
     denyButtonColor: "green",
     confirmButtonText: `Camera`,
-    denyButtonText: `Screen/Window`,
-    cancelButtonText: `Cancel`,
+    denyButtonText: `Màn hình/Cửa sổ`,
+    cancelButtonText: `Hủy`,
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
   }).then((result) => {
@@ -8482,7 +8349,11 @@ function getAudioStreamFromAudioElements() {
  * @param {string} action recording action
  */
 function notifyRecording(fromId, from, fromAvatar, action) {
-  const msg = "🔴 " + action + " conference recording";
+  // "action" itself ("Start"/"Stop"/"Started") stays as-is - it's only
+  // ever compared against "Stop" below, never shown directly; only the
+  // display label needs translating.
+  const actionLabel = action === "Stop" ? "Dừng" : "Bắt đầu";
+  const msg = "🔴 " + actionLabel + " ghi hình cuộc họp";
   const chatMessage = {
     from: from,
     fromAvatar: fromAvatar,
@@ -8495,7 +8366,7 @@ function notifyRecording(fromId, from, fromAvatar, action) {
   if (!showChatOnMessage) {
     const recAgree =
       action != "Stop"
-        ? "Your presence implies you agree to being recorded"
+        ? "Sự có mặt của bạn đồng nghĩa với việc bạn đồng ý được ghi hình"
         : "";
     toastMessage(
       null,
@@ -8512,12 +8383,11 @@ function notifyRecording(fromId, from, fromAvatar, action) {
 }
 
 /**
- * Toggle Video and Audio tabs
- * @param {boolean} disabled - If true, disable the tabs; otherwise, enable them
+ * Toggle the Devices (video/audio) settings tab
+ * @param {boolean} disabled - If true, disable the tab; otherwise, enable it
  */
 function toggleVideoAudioTabs(disabled = false) {
-  tabVideoBtn.disabled = disabled;
-  tabAudioBtn.disabled = disabled;
+  tabDevicesBtn.disabled = disabled;
 }
 
 /**
@@ -8668,24 +8538,24 @@ async function downloadRecordedStream() {
     // Check if we have recorded data
     if (!recordedBlobs || recordedBlobs.length === 0) {
       console.error("No recorded data available");
-      userLog("error", "Recording failed: No data was recorded", 6000);
+      userLog("error", "Ghi hình thất bại: không có dữ liệu được ghi", 6000);
       return;
     }
 
     const type = recordedBlobs[0].type.includes("mp4") ? "mp4" : "webm";
     const rawBlob = new Blob(recordedBlobs, { type: "video/" + type });
     const recFileName = getDataTimeString() + "-REC." + type;
-    const currentDevice = isMobileDevice ? "MOBILE" : "PC";
+    const currentDevice = isMobileDevice ? "ĐIỆN THOẠI" : "MÁY TÍNH";
     const blobFileSize = bytesToSize(rawBlob.size);
 
     const recordingInfo = `
         <br/>
         <br/>
             <ul>
-                <li>Time: ${recordingTime.innerText}</li>
+                <li>Thời gian: ${recordingTime.innerText}</li>
                 <li>File: ${recFileName}</li>
-                <li>Codecs: ${recCodecs}</li>
-                <li>Size: ${blobFileSize}</li>
+                <li>Codec: ${recCodecs}</li>
+                <li>Dung lượng: ${blobFileSize}</li>
             </ul>
         <br/>
         `;
@@ -8702,11 +8572,11 @@ async function downloadRecordedStream() {
     msgHTML(
       null,
       null,
-      "Recording",
+      "Ghi hình",
       `<div style="text-align: left;">
-                🔴 &nbsp; Recording Info:
+                🔴 &nbsp; Thông tin bản ghi:
                 ${recordingInfo}
-                Please wait to be processed, then will be downloaded to your ${currentDevice} device.
+                Vui lòng đợi xử lý, sau đó sẽ được tải xuống thiết bị ${currentDevice} của bạn.
             </div>`,
       "top",
     );
@@ -8734,7 +8604,7 @@ async function downloadRecordedStream() {
       saveBlobToFile(finalBlob, recFileName);
     })();
   } catch (err) {
-    userLog("error", "Recording save failed: " + err);
+    userLog("error", "Lưu bản ghi thất bại: " + err);
   }
 }
 
@@ -8752,21 +8622,19 @@ function createChatDataChannel(peer_id) {
 }
 
 /**
- * Set the chat room & caption on full screen mode for mobile
+ * Update the unread-message badge on the bottom control bar's chat
+ * button (99+ cap), mirroring ControlBar.tsx's unreadCount pill.
  */
-function setChatRoomAndCaptionForMobile() {
-  if (isMobileDevice) {
-    // chat full screen
-    setSP("--msger-height", "99%");
-    setSP("--msger-width", "99%");
-    // caption full screen
-  } else {
-    // make chat room draggable for desktop
-    dragElement(msgerDraggable, msgerHeader);
-    // make chat room participants draggable for desktop
-    dragElement(msgerDraggable, msgerCPHeader);
-    // make caption draggable for desktop
+function updateChatUnreadBadge() {
+  const badge = getId("newChatBadge");
+  if (!badge) return;
+  if (chatUnreadCount <= 0 || isChatRoomVisible) {
+    badge.classList.add("hidden");
+    badge.textContent = "0";
+    return;
   }
+  badge.textContent = chatUnreadCount > 99 ? "99+" : String(chatUnreadCount);
+  badge.classList.remove("hidden");
 }
 
 /**
@@ -8774,6 +8642,15 @@ function setChatRoomAndCaptionForMobile() {
  */
 function showChatRoomDraggable() {
   playSound("newMessage");
+
+  // Snapshot the unread count BEFORE clearing it - reference
+  // (ChatPanel.tsx) uses it to compute which message to land on:
+  // `Math.max(0, messages.length - unreadCount)`.
+  const unreadCountAtOpen = chatUnreadCount;
+
+  // Mark all messages as read when the panel opens
+  chatUnreadCount = 0;
+  updateChatUnreadBadge();
 
   if (isMobileDevice) {
     elemDisplay(bottomButtons, false);
@@ -8796,12 +8673,43 @@ function showChatRoomDraggable() {
     // Mobile / narrow / portrait: full-screen centered modal
     if (isChatPinned) chatUnpin();
     chatCenter();
+    applyChatViewportStyle();
   }
 
   syncParticipantsPanelVisibility();
   syncChatToolbarButtons();
 
-  setTippy(chatRoomBtn, "Close the chat (C)", bottomButtonsPlacement);
+  setTippy(chatRoomBtn, "Đóng khung chat (C)", bottomButtonsPlacement);
+
+  // Reference (ChatPanel.tsx): on open, jump straight to the first unread
+  // message (top of it) if there were unread messages queued, otherwise
+  // land on the bottom - never just leave the scroll wherever it was.
+  requestAnimationFrame(() => {
+    if (!msgerChat) return;
+    const visibleMsgs = Array.from(msgerChat.querySelectorAll(".msg")).filter(
+      (m) => m.style.display !== "none",
+    );
+    if (unreadCountAtOpen > 0 && visibleMsgs.length > 0) {
+      const targetIdx = Math.max(0, visibleMsgs.length - unreadCountAtOpen);
+      const targetEl = visibleMsgs[targetIdx];
+      if (targetEl) {
+        isAutoScrollingMsger = true;
+        targetEl.scrollIntoView({ behavior: "auto", block: "start" });
+        setTimeout(() => {
+          isAutoScrollingMsger = false;
+          updateMsgerScrollBtn();
+        }, 50);
+        return;
+      }
+    }
+    scrollToBottomInstant();
+  });
+
+  // Desktop: land the cursor straight in the message box so typing can
+  // start right away (skip on mobile - it would pop the on-screen keyboard).
+  if (!isMobileDevice && msgerInput) {
+    setTimeout(() => msgerInput.focus(), 0);
+  }
 }
 
 /**
@@ -8912,7 +8820,7 @@ function appendMessage(
 
   const msgHTML = renderRoomTemplate("tpl-msger-chat-message", {
     text: {
-      senderName: getFrom,
+      senderName: truncateDisplayName(getFrom),
       messageTime: time,
     },
     html: {
@@ -8927,6 +8835,7 @@ function appendMessage(
       messageAvatarTmpId: msgAvatarTmpId,
       messageBubbleClass: msgBubble,
       messageTextId: `message-${chatMessagesId}`,
+      messageTimeAttr: time,
     },
   });
 
@@ -8949,13 +8858,32 @@ function appendMessage(
     hljs.highlightAll();
   }
 
-  scrollToBottomInstant();
+  // Reference (ChatPanel.tsx) only force-scrolls to the bottom on a new
+  // message when it's the panel owner's own message or the view is already
+  // near the bottom (<140px) - otherwise it leaves the scroll position
+  // alone and just re-evaluates the "jump to bottom" arrow. While the
+  // panel is closed, don't touch scroll position at all - the open
+  // handler (showChatRoomDraggable) decides where to land.
+  if (isChatRoomVisible) {
+    const isScrollable = msgerChat.scrollHeight > msgerChat.clientHeight + 15;
+    if (!isScrollable) {
+      if (msgerScrollBottomBtn) msgerScrollBottomBtn.classList.add("hidden");
+    } else {
+      const distanceFromBottom =
+        msgerChat.scrollHeight - msgerChat.scrollTop - msgerChat.clientHeight;
+      if (getSide === "right" || distanceFromBottom < 140) {
+        scrollToBottomInstant();
+      } else {
+        updateMsgerScrollBtn();
+      }
+    }
+  }
   filterMessagesByConversation();
   refreshMessageGrouping();
   if (!isMobileDevice) {
-    setTippy(getId("msg-delete-" + chatMessagesId), "Delete", "top");
-    setTippy(getId("msg-copy-" + chatMessagesId), "Copy", "top");
-    setTippy(getId("msg-reaction-" + chatMessagesId), "React", "top");
+    setTippy(getId("msg-delete-" + chatMessagesId), "Xóa", "top");
+    setTippy(getId("msg-copy-" + chatMessagesId), "Sao chép", "top");
+    setTippy(getId("msg-reaction-" + chatMessagesId), "Thả cảm xúc", "top");
   }
   chatMessagesId++;
 }
@@ -8966,7 +8894,7 @@ function refreshMessageGrouping() {
   );
   let previousKey = "";
 
-  messages.forEach((message) => {
+  messages.forEach((message, index) => {
     const sender = message.dataset.sender || "";
     const chatType = message.dataset.chatType || "public";
     const chatPeer = message.dataset.chatPeer || "";
@@ -8976,16 +8904,27 @@ function refreshMessageGrouping() {
 
     message.classList.toggle("msg-grouped", isGrouped);
     previousKey = currentKey;
+
+    // Only show the timestamp on the last message of a same-minute
+    // run (mirrors ChatPanel.tsx's isLastInGroup check).
+    const footer = message.querySelector(".msg-footer");
+    if (footer) {
+      const nextMessage = messages[index + 1];
+      const isLastInGroup =
+        !nextMessage || nextMessage.dataset.time !== message.dataset.time;
+      footer.style.display = isLastInGroup ? "" : "none";
+    }
   });
 }
 
 function getConversationMeta() {
   if (activeConversation.type === "private" && activeConversation.peerName) {
+    const displayName = truncateDisplayName(activeConversation.peerName);
     return {
       label: "Private chat",
-      title: activeConversation.peerName,
-      meta: `Direct messages with ${activeConversation.peerName}.`,
-      placeholder: `Message ${activeConversation.peerName}...`,
+      title: displayName,
+      meta: `Direct messages with ${displayName}.`,
+      placeholder: `Nhắn tin cho ${displayName}...`,
     };
   }
 
@@ -8993,7 +8932,7 @@ function getConversationMeta() {
     label: "Current view",
     title: "All messages",
     meta: "Public messages appear here.",
-    placeholder: "Write a message...",
+    placeholder: "Nhập tin nhắn...",
   };
 }
 
@@ -9065,7 +9004,7 @@ function getConversationShareTarget(actionLabel = "this item") {
   }
 
   if (!activeConversation.peerId) {
-    userLog("info", `Switch to a participant chat to share ${actionLabel}`);
+    userLog("info", `Chuyển sang khung chat riêng để chia sẻ ${actionLabel}`);
     return null;
   }
 
@@ -9337,7 +9276,6 @@ function checkMsg(txt) {
     //if (isVideoTypeSupported(text)) return getIframe(text);
     return getLink(text);
   }
-  if (isChatMarkdownOn) return marked.parse(text);
   if (isChatPasteTxt && getLineBreaks(text) > 1) {
     isChatPasteTxt = false;
     return getPre(text);
@@ -9507,7 +9445,6 @@ function getIframe(text) {
   const div = document.createElement("div");
   const is_youtube = getVideoType(url) == "na" ? true : false;
   const video_audio_url = is_youtube ? getYoutubeEmbed(url) : url;
-  iframe.setAttribute("title", "Chat-IFrame");
   iframe.setAttribute("src", video_audio_url);
   iframe.setAttribute("width", "auto");
   iframe.setAttribute("frameborder", "0");
@@ -9554,8 +9491,10 @@ function checkLineBreaks() {
  * @returns {string} date format h:m:s
  */
 function getFormatDate(date) {
-  const time = date.toTimeString().split(" ")[0];
-  return `${time}`;
+  // HH:MM only (no seconds) - matches the reference chat timestamp format
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
 }
 
 /**
@@ -9604,11 +9543,15 @@ function handleDataChannelChat(dataMessage) {
 
   appendMessage(from, fromAvatar, "left", msg, privateMsg, msg_id, from);
 
-  if (showChatOnMessage && !isChatRoomVisible) {
-    showChatRoomDraggable();
-  } else {
-    playSound("newMessage");
+  // The reference NEVER auto-opens the chat panel on an incoming message -
+  // it only bumps the unread-count badge (a saved `show_chat_on_msg: true`
+  // from an older localStorage could otherwise still force this open, so
+  // this no longer depends on that setting at all).
+  if (!isChatRoomVisible) {
+    chatUnreadCount++;
+    updateChatUnreadBadge();
   }
+  playSound("newMessage");
 }
 
 /**
@@ -9637,49 +9580,24 @@ function hideAITypingIndicator(aiName) {
 }
 
 /**
- * Download Captions in json format
- * https://developer.mozilla.org/it/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify
- */
-function downloadCaptions() {
-  let a = document.createElement("a");
-  a.href =
-    "data:text/json;charset=utf-8," +
-    encodeURIComponent(JSON.stringify(transcripts, null, 1));
-  a.download = getDataTimeString() + roomId + "-CAPTIONS.txt";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  playSound("download");
-}
-
-/**
  * Hide - show my settings
  */
 function hideShowMySettings() {
   if (!isMySettingsVisible) {
     playSound("newMessage");
-    // adapt it for mobile
-    if (isMobileDevice) {
-      mySettings.style.setProperty("width", "100%");
-      mySettings.style.setProperty("height", "100%");
-      setSP("--mySettings-select-w", "99%");
-    }
+    if (isMobileDevice) setSP("--mySettings-select-w", "99%");
     // my current peer name
     myPeerNameSet.placeholder = myPeerName;
-    // center screen on show
-    mySettings.style.top = "50%";
-    mySettings.style.left = "50%";
-    elemDisplay(mySettings, true, "block");
-    setTippy(mySettingsBtn, "Close the settings", bottomButtonsPlacement);
+    // backdrop locks/dims the background and centers the fixed-size panel
+    elemDisplay(mySettingsBackdrop, true, "flex");
+    setTippy(mySettingsBtn, "Đóng cài đặt", bottomButtonsPlacement);
     isMySettingsVisible = true;
-    videoMediaContainer.style.opacity = 0.3;
 
     return;
   }
-  elemDisplay(mySettings, false);
-  setTippy(mySettingsBtn, "Open the settings", bottomButtonsPlacement);
+  elemDisplay(mySettingsBackdrop, false);
+  setTippy(mySettingsBtn, "Mở cài đặt", bottomButtonsPlacement);
   isMySettingsVisible = false;
-  videoMediaContainer.style.opacity = 1;
 }
 
 /**
@@ -9703,6 +9621,26 @@ function openTab(evt, tabName) {
   evt.currentTarget.className += " active";
 }
 
+let peerNameSuccessIconTimeout = null;
+/**
+ * Briefly flash a green checkmark next to the rename input to confirm
+ * the rename succeeded (fades in, holds ~3s, fades out).
+ */
+function showPeerNameSuccessIcon() {
+  const icon = getId("myPeerNameSuccessIcon");
+  if (!icon) return;
+  if (peerNameSuccessIconTimeout) clearTimeout(peerNameSuccessIconTimeout);
+  icon.style.display = "inline-flex";
+  void icon.offsetWidth; // force reflow so the fade-in re-triggers on repeat renames
+  icon.classList.add("visible");
+  peerNameSuccessIconTimeout = setTimeout(() => {
+    icon.classList.remove("visible");
+    peerNameSuccessIconTimeout = setTimeout(() => {
+      icon.style.display = "none";
+    }, 250);
+  }, 3000);
+}
+
 /**
  * Update myPeerName to other peers in the room
  */
@@ -9713,7 +9651,7 @@ async function updateMyPeerName() {
   // check if peer name is already in use in the room
   if (await checkUserName(myPeerNameSet.value)) {
     myPeerNameSet.value = "";
-    return userLog("warning", "Username is already in use!");
+    return userLog("warning", "Tên người dùng đã được sử dụng!");
   }
 
   // prevent xss execution itself
@@ -9722,7 +9660,7 @@ async function updateMyPeerName() {
   // prevent XSS injection to remote peer
   if (isHtml(myPeerNameSet.value)) {
     myPeerNameSet.value = "";
-    return userLog("warning", "Invalid name!");
+    return userLog("warning", "Tên không hợp lệ!");
   }
 
   const myNewPeerName = myPeerNameSet.value;
@@ -9749,190 +9687,135 @@ async function updateMyPeerName() {
 
   setPeerAvatarImgName("myVideoAvatarImage", myPeerName, myPeerAvatar);
   setPeerAvatarImgName("myProfileAvatar", myPeerName, myPeerAvatar);
+  updateSoloCompactAvatar();
   setPeerChatAvatarImgName("right", myPeerName, myPeerAvatar);
-  userLog("toast", "My name changed to " + myPeerName);
+  showPeerNameSuccessIcon();
 }
 
 /**
  * Update my avatar from URL in-memory only (cleared on page refresh)
  */
 async function updateMyPeerAvatarByUrl() {
+  const RANDOM_AVATAR_COUNT = 10; // 5x2 grid
+
+  function buildRandomAvatarUrls() {
+    const urls = [];
+    for (let i = 0; i < RANDOM_AVATAR_COUNT; i++) {
+      const seed = Math.random().toString(36).substring(2, 10);
+      const style = DICEBEAR_AVATAR_STYLES[i % DICEBEAR_AVATAR_STYLES.length];
+      urls.push(
+        `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}`,
+      );
+    }
+    return urls;
+  }
+
+  // Only carry the current avatar into the confirm value if it's a real
+  // (non-generated) URL - the DOM preview can still show the generated
+  // data: fallback, but that's never a valid confirmable avatar value.
+  let selectedAvatarUrl =
+    myPeerAvatar && isValidAvatarURL(myPeerAvatar) ? myPeerAvatar : "";
+
   const result = await Swal.fire({
     background: swBg,
-    title: "Set avatar URL",
-    input: "url",
-    inputLabel: "Public image URL",
-    inputPlaceholder: "https://example.com/avatar.jpg",
-    confirmButtonText: "Apply",
+    title: isMobileDevice ? "ĐỔI AVATAR" : "ĐỔI ẢNH ĐẠI DIỆN",
+    html: '<div id="avatarPickerRoot"></div>',
+    confirmButtonText: "Áp dụng",
     showCancelButton: true,
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
-    inputValidator: (value) => {
-      if (!value) return "Please enter an image URL";
-      if (value.startsWith("data:")) return "Base64 avatars are not supported";
-      if (!isValidAvatarURL(value)) return "Only http/https URLs are supported";
-      return null;
-    },
-    preConfirm: (url) =>
-      new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(url);
-        img.onerror = () => {
-          Swal.showValidationMessage(
-            "Could not load the image, the URL may be invalid, restricted, or not an image",
-          );
-          resolve(false); // keep dialog open
-        };
-        img.src = url;
-      }),
     didOpen: () => {
-      const input = document.querySelector(".swal2-input");
-      if (!input) return;
+      const root = document.getElementById("avatarPickerRoot");
+      if (!root) return;
 
+      // Big round avatar preview
       const preview = document.createElement("img");
+      preview.src = getId("myProfileAvatar")?.src || "";
       preview.style.cssText =
-        "display:none;width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid #4caf50;margin:8px auto 4px;";
-      input.parentNode.insertBefore(preview, input);
+        "display:block;width:96px;height:96px;border-radius:50%;object-fit:cover;border:2px solid var(--ds-brand-500);margin:4px auto 16px;background:var(--ds-bg-1);";
+      root.appendChild(preview);
 
-      function updatePreview(url) {
-        if (!url) {
-          preview.style.display = "none";
-          return;
-        }
-        preview.src = url;
-        preview.style.display = "block";
+      const grid = document.createElement("div");
+      grid.style.cssText =
+        "display:grid;grid-template-columns:repeat(5,1fr);gap:10px;justify-items:center;margin-bottom:14px;";
+
+      function renderGrid(urls) {
+        grid.innerHTML = "";
+        urls.forEach((url) => {
+          const img = document.createElement("img");
+          img.src = url;
+          img.style.cssText =
+            "width:48px;height:48px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:border-color 0.2s;object-fit:cover;background:var(--ds-bg-1);";
+          img.addEventListener("mouseover", () => {
+            if (url !== selectedAvatarUrl) img.style.borderColor = "var(--ds-brand-500)";
+          });
+          img.addEventListener("mouseout", () => {
+            if (url !== selectedAvatarUrl) img.style.borderColor = "transparent";
+          });
+          img.addEventListener("click", () => {
+            selectedAvatarUrl = url;
+            preview.src = url;
+            Array.from(grid.children).forEach(
+              (c) => (c.style.borderColor = "transparent"),
+            );
+            img.style.borderColor = "var(--ds-brand-500)";
+          });
+          grid.appendChild(img);
+        });
       }
 
-      input.addEventListener("input", (e) =>
-        updatePreview(e.target.value.trim()),
+      renderGrid(buildRandomAvatarUrls());
+      root.appendChild(grid);
+
+      // Refresh button - reshuffles the random avatar list. Placed in the
+      // same row as Áp dụng/Hủy (Swal's own actions bar), not its own row.
+      const refreshBtn = document.createElement("button");
+      refreshBtn.type = "button";
+      refreshBtn.setAttribute("aria-label", "Đổi danh sách ảnh đại diện");
+      refreshBtn.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">' +
+        '<path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>';
+      refreshBtn.style.cssText =
+        "display:flex;align-items:center;justify-content:center;width:36px;height:36px;margin:0.3125em;border-radius:50%;border:1px solid var(--ds-border);background:transparent;color:var(--ds-border-strong);cursor:pointer;";
+      refreshBtn.addEventListener(
+        "mouseover",
+        () => (refreshBtn.style.borderColor = "var(--ds-brand-500)"),
+      );
+      refreshBtn.addEventListener(
+        "mouseout",
+        () => (refreshBtn.style.borderColor = "var(--ds-border)"),
+      );
+      refreshBtn.addEventListener("click", () =>
+        renderGrid(buildRandomAvatarUrls()),
       );
 
-      function makeAvatarImg(url) {
-        const img = document.createElement("img");
-        img.src = url;
-        img.title = "Click to use this avatar";
-        img.style.cssText =
-          "width:48px;height:48px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:border-color 0.2s;object-fit:cover;background:#222;flex-shrink:0;";
-        img.addEventListener(
-          "mouseover",
-          () => (img.style.borderColor = "#4caf50"),
-        );
-        img.addEventListener(
-          "mouseout",
-          () => (img.style.borderColor = "transparent"),
-        );
-        img.addEventListener("click", () => {
-          input.value = url;
-          input.dispatchEvent(new Event("input"));
-          updatePreview(url);
-        });
-        return img;
-      }
-
-      // Self-hosted avatars
-      const localLabel = document.createElement("p");
-      localLabel.textContent = "Pick an avatar:";
-      localLabel.style.cssText =
-        "color:#aaa;font-size:12px;margin:10px 0 6px;text-align:center;";
-
-      const localGrid = document.createElement("div");
-      localGrid.style.cssText =
-        "display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-height:120px;overflow-y:scroll;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:4px 2px;margin-bottom:4px;";
-      localGrid.addEventListener("touchmove", (e) => e.stopPropagation(), {
-        passive: true,
-      });
-
-      for (let i = 1; i <= 25; i++) {
-        const url = `${window.location.origin}/images/avatars/avatar_${String(i).padStart(2, "0")}.png`;
-        localGrid.appendChild(makeAvatarImg(url));
-      }
-
-      // DiceBear random avatars
-      const randomAvatarLabel = document.createElement("p");
-      randomAvatarLabel.textContent = "Or pick a random avatar:";
-      randomAvatarLabel.style.cssText =
-        "color:#aaa;font-size:12px;margin:10px 0 6px;text-align:center;";
-
-      const randomAvatarGrid = document.createElement("div");
-      randomAvatarGrid.style.cssText =
-        "display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-bottom:4px;";
-      const dicebearStyles = [
-        "bottts-neutral",
-        "adventurer-neutral",
-        "thumbs",
-        "initials",
-        "identicon",
-        "shapes",
-      ];
-
-      for (let i = 0; i < 6; i++) {
-        const seed = Math.random().toString(36).substring(2, 10);
-        const style = dicebearStyles[i % dicebearStyles.length];
-        const url = `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}`;
-        randomAvatarGrid.appendChild(makeAvatarImg(url));
-      }
-
-      let insertAfter = input;
-      for (const el of [
-        localLabel,
-        localGrid,
-        randomAvatarLabel,
-        randomAvatarGrid,
-      ]) {
-        insertAfter.parentNode.insertBefore(el, insertAfter.nextSibling);
-        insertAfter = el;
+      const actions = Swal.getActions();
+      if (actions) {
+        actions.insertBefore(refreshBtn, actions.firstChild);
+      } else {
+        root.appendChild(refreshBtn);
       }
     },
+    preConfirm: () => selectedAvatarUrl,
   });
 
   if (!result.isConfirmed || !result.value) return;
 
   try {
     myPeerAvatar = result.value;
-    hasTemporaryAvatar = true;
     lsSettings.peer_avatar = myPeerAvatar;
+    lsSettings.peer_avatar_auto = false; // hand-picked now, not auto-assigned
     lS.setSettings(lsSettings);
 
     setPeerAvatarImgName("myVideoAvatarImage", myPeerName, myPeerAvatar);
     setPeerAvatarImgName("myProfileAvatar", myPeerName, myPeerAvatar);
+    updateSoloCompactAvatar();
     setPeerChatAvatarImgName("right", myPeerName, myPeerAvatar);
-    updateMyAvatarResetButtonVisibility();
 
     emitMyPeerProfile();
-
-    userLog("toast", "Avatar saved and will persist across sessions");
   } catch (err) {
     console.error("Failed to set avatar URL", err);
-    userLog("error", "Unable to apply avatar URL");
   }
-}
-
-/**
- * Reset in-memory avatar to default generated/fallback avatar
- */
-function resetMyPeerAvatarInMemory() {
-  myPeerAvatar = false;
-  hasTemporaryAvatar = false;
-  lsSettings.peer_avatar = "";
-  lS.setSettings(lsSettings);
-  setPeerAvatarImgName("myVideoAvatarImage", myPeerName, myPeerAvatar);
-  setPeerAvatarImgName("myProfileAvatar", myPeerName, myPeerAvatar);
-  setPeerChatAvatarImgName("right", myPeerName, myPeerAvatar);
-  updateMyAvatarResetButtonVisibility();
-
-  emitMyPeerProfile();
-
-  userLog("toast", "Avatar reset and removed from storage");
-}
-
-/**
- * Show reset avatar button only for uploaded temporary avatars
- */
-function updateMyAvatarResetButtonVisibility() {
-  if (!myProfileAvatarResetBtn) return;
-  myProfileAvatarResetBtn.classList.toggle("hidden", !hasTemporaryAvatar);
-  if (myProfileAvatarUploadBtn)
-    myProfileAvatarUploadBtn.classList.toggle("hidden", hasTemporaryAvatar);
 }
 
 /**
@@ -9952,8 +9835,12 @@ function handlePeerName(config) {
 
   const videoName = getId(peer_id + "_name");
   const screenName = getId(peer_id + "_screen_name");
-  if (videoName) videoName.innerText = peer_name;
-  if (screenName) screenName.innerText = peer_name + " (screen)";
+  // Rebuild via setPeerNameHTML (not innerText) so the icon/mic-badge
+  // pill structure survives a name change instead of being wiped down
+  // to plain text.
+  if (videoName) setPeerNameHTML(videoName, peer_name, false, peer_id);
+  if (screenName)
+    setPeerNameHTML(screenName, peer_name, false, peer_id, true);
   // change also avatar and btn value - name on chat lists....
   const msgerPeerName = getId(peer_id + "_pMsgBtn");
   const msgerPeerAvatar = getId(peer_id + "_pMsgAvatar");
@@ -10018,13 +9905,13 @@ function setMyHandStatus() {
     // Raise hand
     setColor(myHandBtn, "#FFD700");
     elemDisplay(myHandStatusIcon, true);
-    setTippy(myHandBtn, "Lower your hand (H)", bottomButtonsPlacement);
+    setTippy(myHandBtn, "Hạ tay (H)", bottomButtonsPlacement);
     playSound("raiseHand");
   } else {
     // Lower hand
     setColor(myHandBtn, "var(--btn-bar-bg-color)");
     elemDisplay(myHandStatusIcon, false);
-    setTippy(myHandBtn, "Raise your hand (H)", bottomButtonsPlacement);
+    setTippy(myHandBtn, "Giơ tay (H)", bottomButtonsPlacement);
   }
   if (myHandBtn && myHandBtn.setAttribute)
     myHandBtn.setAttribute("aria-pressed", String(!!myHandStatus));
@@ -10038,23 +9925,36 @@ function setMyHandStatus() {
 function setMyAudioStatus(status) {
   setTimeout(() => {
     refreshPeerNameTag(document.getElementById("myVideoPeerName"));
+    refreshPeerNameTag(document.getElementById("myScreenPeerName"));
   }, 100);
   console.log("My audio status", status);
   const audioClassName = status ? className.audioOn : className.audioOff;
   audioBtn.className = audioClassName;
   myAudioStatusIcon.className = audioClassName;
+
+  // Mic-off badge on the floating self-view thumbnail (top-right)
+  const soloWrapForAudio = getId("myVideoWrap");
+  if (soloWrapForAudio) {
+    soloWrapForAudio.classList.toggle("solo-audio-off", !status);
+  }
+
   // send my audio status to all peers in the room
   emitPeerStatus("audio", status);
-  const audioStatusLabel = status ? "My audio is on" : "My audio is off";
+  const audioStatusLabel = status
+    ? "Âm thanh của tôi đang bật"
+    : "Âm thanh của tôi đang tắt";
   setTippy(myAudioStatusIcon, audioStatusLabel, "bottom");
   setTippy(
     audioBtn,
-    status ? "Stop the audio (A)" : "Start the audio (A)",
+    status ? "Tắt âm thanh (A)" : "Bật âm thanh (A)",
     bottomButtonsPlacement,
   );
   if (audioBtn && audioBtn.setAttribute)
     audioBtn.setAttribute("aria-pressed", String(!!status));
   status ? playSound("on") : playSound("off");
+
+  if (typeof isInPagePip !== "undefined" && isInPagePip)
+    updatePipLocalControlButtons();
 }
 
 /**
@@ -10064,6 +9964,7 @@ function setMyAudioStatus(status) {
 function setMyVideoStatus(status) {
   setTimeout(() => {
     refreshPeerNameTag(document.getElementById("myVideoPeerName"));
+    refreshPeerNameTag(document.getElementById("myScreenPeerName"));
   }, 100);
   console.log("My video status", status);
 
@@ -10082,17 +9983,28 @@ function setMyVideoStatus(status) {
     ]);
   }
 
+  // Swap the floating self-view thumbnail to its compact camera-off
+  // placeholder. Note: this is unrelated to the "hide preview" eye
+  // button, which only hides the widget locally and never touches
+  // the real camera track.
+  const soloWrapForVideo = getId("myVideoWrap");
+  if (soloWrapForVideo) {
+    soloWrapForVideo.classList.toggle("solo-cam-off", !status);
+  }
+
   // send my video status to all peers in the room
   emitPeerStatus("video", status);
 
-  const videoStatusLabel = status ? "My video is on" : "My video is off";
+  const videoStatusLabel = status
+    ? "Video của tôi đang bật"
+    : "Video của tôi đang tắt";
 
   if (!isMobileDevice) {
     if (myVideoStatusIcon)
       setTippy(myVideoStatusIcon, videoStatusLabel, "bottom");
     setTippy(
       videoBtn,
-      status ? "Stop the video (V)" : "Start the video (V)",
+      status ? "Tắt video (V)" : "Bật video (V)",
       bottomButtonsPlacement,
     );
   }
@@ -10117,6 +10029,9 @@ function setMyVideoStatus(status) {
     if (spinner) elemDisplay(spinner, false);
     playSound("off");
   }
+
+  if (typeof isInPagePip !== "undefined" && isInPagePip)
+    updatePipLocalControlButtons();
 }
 
 /**
@@ -10140,9 +10055,6 @@ function handlePeerStatus(config) {
     case "hand":
       setPeerHandStatus(peer_id, peer_name, status);
       break;
-    case "privacy":
-      setVideoPrivacyStatus(peer_id + "___video", status);
-      break;
     default:
       break;
   }
@@ -10158,7 +10070,7 @@ function setPeerHandStatus(peer_id, peer_name, status) {
   const peerHandStatus = getId(peer_id + "_handStatus");
   if (status) {
     elemDisplay(peerHandStatus, true);
-    userLog("toast", `${icons.user} ${peer_name} \n has raised the hand!`);
+    userLog("toast", `${icons.user} ${peer_name} \n đã giơ tay!`);
     playSound("raiseHand");
   } else {
     elemDisplay(peerHandStatus, false);
@@ -10173,9 +10085,14 @@ function setPeerHandStatus(peer_id, peer_name, status) {
 function setPeerAudioStatus(peer_id, status) {
   setTimeout(() => {
     refreshPeerNameTag(document.getElementById(peer_id + "_name"));
+    // The screen tile has its own separate name pill (peer_id+"_screen_name")
+    // that never got a refresh here before, so muting/unmuting while
+    // already screen sharing (or vice versa) never showed the mic-off icon.
+    refreshPeerNameTag(document.getElementById(peer_id + "_screen_name"));
+    if (typeof isInPagePip !== "undefined" && isInPagePip)
+      updatePipStatusBadges();
   }, 100);
   const peerAudioStatus = getId(peer_id + "_audioStatus");
-  const peerAudioVolume = getId(peer_id + "_audioVolume");
 
   if (peerAudioStatus) {
     setMediaButtonsClass([
@@ -10183,34 +10100,12 @@ function setPeerAudioStatus(peer_id, status) {
     ]);
     setTippy(
       peerAudioStatus,
-      status ? "Participant audio is on" : "Participant audio is off",
+      status
+        ? "Âm thanh người tham gia đang bật"
+        : "Âm thanh người tham gia đang tắt",
       "bottom",
     );
     status ? playSound("on") : playSound("off");
-  }
-  if (peerAudioVolume) {
-    elemDisplay(peerAudioVolume, status);
-  }
-}
-
-/**
- * Handle Peer audio volume 0/100
- * @param {string} audioVolumeId audio volume input id
- * @param {string} mediaId peer audio id
- */
-function handleAudioVolume(audioVolumeId, mediaId) {
-  const media = getId(mediaId);
-  const audioVolume = getId(audioVolumeId);
-  if (audioVolume && media) {
-    audioVolume.style.maxWidth = "40px";
-    audioVolume.style.display = "inline";
-    audioVolume.style.cursor = "pointer";
-    audioVolume.value = 100;
-    audioVolume.addEventListener("input", () => {
-      media.volume = audioVolume.value / 100;
-    });
-  } else {
-    if (audioVolume) elemDisplay(audioVolume, false);
   }
 }
 
@@ -10222,15 +10117,8 @@ function handlePeerAudioBtn(peer_id) {
   if (!buttons.remote.audioBtnClickAllowed) return;
   const peerAudioBtn = getId(peer_id + "_audioStatus");
   peerAudioBtn.onclick = () => {
-    if (peerAudioBtn.className === className.audioOn) {
-      isPresenter
-        ? disablePeer(peer_id, "audio")
-        : msgPopup(
-            "warning",
-            "Only the presenter can mute participants",
-            "top-end",
-            4000,
-          );
+    if (peerAudioBtn.className === className.audioOn && isPresenter) {
+      disablePeer(peer_id, "audio");
     }
   };
 }
@@ -10243,15 +10131,8 @@ function handlePeerVideoBtn(peer_id) {
   if (!useVideo || !buttons.remote.videoBtnClickAllowed) return;
   const peerVideoBtn = getId(peer_id + "_videoStatus");
   peerVideoBtn.onclick = () => {
-    if (peerVideoBtn.className === className.videoOn) {
-      isPresenter
-        ? disablePeer(peer_id, "video")
-        : msgPopup(
-            "warning",
-            "Only the presenter can hide participants",
-            "top-end",
-            4000,
-          );
+    if (peerVideoBtn.className === className.videoOn && isPresenter) {
+      disablePeer(peer_id, "video");
     }
   };
 }
@@ -10276,6 +10157,8 @@ function handlePeerVideoAudioUrl(peer_id, peerYoutubeBtnId) {
 function setPeerVideoStatus(peer_id, status) {
   setTimeout(() => {
     refreshPeerNameTag(document.getElementById(peer_id + "_name"));
+    if (typeof isInPagePip !== "undefined" && isInPagePip)
+      updatePipStatusBadges();
   }, 100);
   const peerVideoPlayer = getId(peer_id + "___video");
   const peerVideoAvatarImage = getId(peer_id + "_avatar");
@@ -10293,7 +10176,7 @@ function setPeerVideoStatus(peer_id, status) {
       setMediaButtonsClass([
         { element: peerVideoStatus, status: true, mediaType: "video" },
       ]);
-      setTippy(peerVideoStatus, "Participant video is on", "bottom");
+      setTippy(peerVideoStatus, "Video người tham gia đang bật", "bottom");
       playSound("on");
     }
   } else {
@@ -10309,7 +10192,7 @@ function setPeerVideoStatus(peer_id, status) {
       setMediaButtonsClass([
         { element: peerVideoStatus, status: false, mediaType: "video" },
       ]);
-      setTippy(peerVideoStatus, "Participant video is off", "bottom");
+      setTippy(peerVideoStatus, "Video người tham gia đang tắt", "bottom");
       playSound("off");
     }
   }
@@ -10319,6 +10202,25 @@ function setPeerScreenStatus(peer_id, status, extras) {
   // Track screen status on the peer model
   if (!allPeers[peer_id]) allPeers[peer_id] = {};
   allPeers[peer_id]["peer_screen_status"] = !!status;
+
+  // Exposed for the control-bar bridge (client.html) so it can disable
+  // "Chia sẻ màn hình" while a peer is already sharing theirs.
+  window.isRemoteScreenSharing = !!status;
+  // The bridge's MutationObserver only watches the OLD hidden buttons'
+  // class/style, so it never notices this flag changing on its own -
+  // ask it to re-render its button states right now.
+  if (typeof window.updateNewControlBarUI === "function") {
+    window.updateNewControlBarUI();
+  }
+
+  // In a 1-on-1 call, force-hide/show my floating self-view thumbnail
+  // whenever the remote peer starts/stops screen sharing (overrides
+  // any manual hide - mirrors the isRemoteScreenSharing effect).
+  syncSoloVisibilityForRemoteScreenShare(!!status);
+
+  // Show only ONE tile per participant in solo mode (camera OR screen,
+  // never both stacked) - matches the reference's single swapped video.
+  updateSoloScreenTileVisibility();
 
   // Initialize extras object if not already present
   if (!allPeers[peer_id]["extras"]) {
@@ -10665,7 +10567,7 @@ function handleScreenStart(peer_id, extras) {
 
   if (remoteScreenStatusBtn) {
     remoteScreenStatusBtn.className = className.videoOn;
-    setTippy(remoteScreenStatusBtn, "Participant screen share is on", "bottom");
+    setTippy(remoteScreenStatusBtn, "Người tham gia đang chia sẻ màn hình", "bottom");
   }
   if (remoteScreenAvatarImage) elemDisplay(remoteScreenAvatarImage, false);
 }
@@ -10686,7 +10588,7 @@ function handleScreenStop(peer_id, peer_use_video) {
     remoteScreenStatusBtn.className = className.videoOff;
     setTippy(
       remoteScreenStatusBtn,
-      "Participant screen share is off",
+      "Người tham gia đã dừng chia sẻ màn hình",
       "bottom",
     );
   }
@@ -10707,8 +10609,17 @@ function handleScreenStop(peer_id, peer_use_video) {
   // Remove dedicated remote screen tile if present
   if (remoteScreenWrap) {
     remoteScreenWrap.remove();
+    // Also drop the stale tracking entry - handleRemovePeer() later does
+    // `peerScreenMediaElements[key].parentNode.removeChild(...)` if this
+    // key still exists; parentNode is null on an already-.remove()'d node,
+    // which throws and aborts the rest of that peer's cleanup (leaving a
+    // dead/black tile behind) when this same peer later leaves the room.
+    delete peerScreenMediaElements[peer_id + "___screen"];
     adaptAspectRatio();
   }
+  // Bring their camera tile back as the sole solo-mode tile
+  if (allPeers[peer_id]) allPeers[peer_id]["peer_screen_status"] = false;
+  updateSoloScreenTileVisibility();
   if (remoteScreenAvatarImage && remoteScreenStream && !peer_use_video) {
     elemDisplay(remoteScreenAvatarImage, true, "block");
     remoteScreenStream.srcObject.getVideoTracks().forEach((track) => {
@@ -10759,7 +10670,6 @@ function setMyAudioOff(peer_name) {
   }
   audioBtn.className = className.audioOff;
   setMyAudioStatus(myAudioStatus);
-  userLog("toast", `${icons.user} ${peer_name} \n has disabled your audio`);
   playSound("off");
 }
 
@@ -10778,7 +10688,6 @@ function setMyAudioOn(peer_name) {
   }
   audioBtn.className = className.audioOn;
   setMyAudioStatus(myAudioStatus);
-  userLog("toast", `${icons.user} ${peer_name} \n has enabled your audio`);
   playSound("on");
 }
 
@@ -10798,7 +10707,6 @@ function setMyVideoOff(peer_name) {
   }
   videoBtn.className = className.videoOff;
   setMyVideoStatus(myVideoStatus);
-  userLog("toast", `${icons.user} ${peer_name} \n has disabled your video`);
   playSound("off");
 }
 
@@ -10809,10 +10717,6 @@ function setMyVideoOff(peer_name) {
 function setMyScreenOff(peer_name) {
   if (isScreenStreaming) {
     toggleScreenSharing();
-    userLog(
-      "toast",
-      `${icons.user} ${peer_name} \n has stopped your screen sharing`,
-    );
     playSound("off");
   }
 }
@@ -10824,67 +10728,22 @@ function setMyScreenOff(peer_name) {
  */
 function disablePeer(peer_id, element) {
   if (!thereArePeerConnections()) {
-    return toastMessage("info", "No participants detected", "", "top");
+    return toastMessage("info", "Không phát hiện người tham gia nào", "", "top");
   }
-  let text, imageUrl, title, confirmButtonText;
-
+  // No confirmation prompt - act immediately.
   switch (element) {
     case "audio":
-      imageUrl = images.audioOff;
-      title = "Mute this participant?";
-      text =
-        "Once muted, you won't be able to unmute them, but they can unmute themselves at any time.";
-      confirmButtonText = "Mute";
+      emitPeerAction(peer_id, "muteAudio");
       break;
     case "video":
-      title = "Hide this participant?";
-      imageUrl = images.videoOff;
-      text =
-        "Once hided, you won't be able to unhide them, but they can unhide themselves at any time.";
-      confirmButtonText = "Hide";
+      emitPeerAction(peer_id, "hideVideo");
       break;
     case "screen":
-      title = "Stop screen sharing?";
-      imageUrl = images.screenOff;
-      text =
-        "Once stopped, you wan't be able to start then, but they can start screen themselves at any time.";
-      confirmButtonText = "Stop";
+      emitPeerAction(peer_id, "stopScreen");
       break;
     default:
       break;
   }
-
-  Swal.fire({
-    background: swBg,
-    position: "top",
-    imageUrl: imageUrl,
-    title: title,
-    text: text,
-    showDenyButton: true,
-    confirmButtonText: confirmButtonText,
-    denyButtonText: `Cancel`,
-    showClass: { popup: "animate__animated animate__fadeInDown" },
-    hideClass: { popup: "animate__animated animate__fadeOutUp" },
-  }).then((result) => {
-    if (result.isConfirmed) {
-      switch (element) {
-        case "audio":
-          userLog("toast", "Mute audio 👍");
-          emitPeerAction(peer_id, "muteAudio");
-          break;
-        case "video":
-          userLog("toast", "Hide video 👍");
-          emitPeerAction(peer_id, "hideVideo");
-          break;
-        case "screen":
-          userLog("toast", "Stop screen 👍");
-          emitPeerAction(peer_id, "stopScreen");
-          break;
-        default:
-          break;
-      }
-    }
-  });
 }
 
 /**
@@ -10914,13 +10773,13 @@ function handleRoomAction(config, emit = false) {
           background: swBg,
           imageUrl: images.locked,
           input: "text",
-          inputPlaceholder: "Set Room password",
-          confirmButtonText: `OK`,
-          denyButtonText: `Cancel`,
+          inputPlaceholder: "Đặt mật khẩu phòng",
+          confirmButtonText: `Đồng ý`,
+          denyButtonText: `Hủy`,
           showClass: { popup: "animate__animated animate__fadeInDown" },
           hideClass: { popup: "animate__animated animate__fadeOutUp" },
           inputValidator: (pwd) => {
-            if (!pwd) return "Please enter the Room password";
+            if (!pwd) return "Vui lòng nhập mật khẩu phòng";
             thisRoomPassword = pwd;
           },
         }).then((result) => {
@@ -10954,34 +10813,40 @@ function handleRoomStatus(config) {
   switch (action) {
     case "lock":
       playSound("locked");
-      userLog(
-        "toast",
-        `${icons.user} ${peer_name} \n has 🔒 LOCKED the room by password`,
-        "top-end",
-      );
       elemDisplay(lockRoomBtn, false);
       elemDisplay(unlockRoomBtn, true);
       isRoomLocked = true;
+      updateRoomLockStatusIcon();
 
       break;
     case "unlock":
-      userLog(
-        "toast",
-        `${icons.user} ${peer_name} \n has 🔓 UNLOCKED the room`,
-        "top-end",
-      );
       elemDisplay(unlockRoomBtn, false);
       elemDisplay(lockRoomBtn, true);
       isRoomLocked = false;
+      updateRoomLockStatusIcon();
 
       break;
     case "checkPassword":
       isRoomLocked = true;
+      updateRoomLockStatusIcon();
       password == "OK" ? joinToChannel() : handleRoomLocked();
       break;
     default:
       break;
   }
+}
+
+/**
+ * Sync the "Khóa phòng" row icon (left of the lock/unlock buttons) with
+ * the room's actual lock state - shows an open padlock (orange) when
+ * unlocked, a closed padlock (red) when locked.
+ */
+function updateRoomLockStatusIcon() {
+  if (!roomLockStatusIcon) return;
+  roomLockStatusIcon.classList.toggle("fa-lock", isRoomLocked);
+  roomLockStatusIcon.classList.toggle("fa-lock-open", !isRoomLocked);
+  roomLockStatusIcon.classList.toggle("red", isRoomLocked);
+  roomLockStatusIcon.classList.toggle("orange", !isRoomLocked);
 }
 
 /**
@@ -10996,10 +10861,10 @@ function handleRoomLocked() {
     background: swBg,
     position: "center",
     imageUrl: images.locked,
-    title: "Oops, Wrong Room Password",
-    text: "The room is locked, try with another one.",
+    title: "Rất tiếc, sai mật khẩu phòng",
+    text: "Phòng đang bị khóa, hãy thử mật khẩu khác.",
     showDenyButton: false,
-    confirmButtonText: `Ok`,
+    confirmButtonText: `Đồng ý`,
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
   }).then((result) => {
@@ -11018,14 +10883,14 @@ function handleUnlockTheRoom() {
     allowEscapeKey: false,
     background: swBg,
     imageUrl: images.locked,
-    title: "Oops, Room is Locked",
+    title: "Rất tiếc, phòng đang bị khóa",
     input: "text",
-    inputPlaceholder: "Enter the Room password",
-    confirmButtonText: `OK`,
+    inputPlaceholder: "Nhập mật khẩu phòng",
+    confirmButtonText: `Đồng ý`,
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
     inputValidator: (pwd) => {
-      if (!pwd) return "Please enter the Room password";
+      if (!pwd) return "Vui lòng nhập mật khẩu phòng";
       thisRoomPassword = pwd;
     },
   }).then(() => {
@@ -11049,27 +10914,27 @@ function sendVideoUrl(peer_id = null, peer_name = "", broadcast = !peer_id) {
   playSound("newMessage");
 
   const targetPeerName = !broadcast
-    ? filterXSS(peer_name || resolvePeerNameById(peer_id) || "Participant")
+    ? filterXSS(peer_name || resolvePeerNameById(peer_id) || "Người tham gia")
     : "";
   const targetLabel =
-    !broadcast && targetPeerName ? ` with ${targetPeerName}` : "";
+    !broadcast && targetPeerName ? ` với ${targetPeerName}` : "";
 
   Swal.fire({
     background: swBg,
     position: "center",
     imageUrl: images.vaShare,
-    title: `Share a Video or Audio${targetLabel}`,
-    text: `Paste a Video or audio URL${targetLabel}`,
+    title: `Chia sẻ Video hoặc Audio${targetLabel}`,
+    text: `Dán URL Video hoặc audio${targetLabel}`,
     input: "text",
     showCancelButton: true,
-    confirmButtonText: `Share`,
+    confirmButtonText: `Chia sẻ`,
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
   }).then((result) => {
     if (result.value) {
       result.value = filterXSS(result.value);
       if (!thereArePeerConnections()) {
-        return toastMessage("info", "No participants detected", "", "top");
+        return toastMessage("info", "Không phát hiện người tham gia nào", "", "top");
       }
       console.log("Video URL: " + result.value);
       /*
@@ -11080,7 +10945,7 @@ function sendVideoUrl(peer_id = null, peer_name = "", broadcast = !peer_id) {
       if (!isVideoTypeSupported(result.value)) {
         return userLog(
           "warning",
-          "Something wrong, try with another Video or audio URL",
+          "URL không hợp lệ, vui lòng thử một URL Video hoặc audio khác",
         );
       }
       const is_youtube = getVideoType(result.value) == "na" ? true : false;
@@ -11108,21 +10973,28 @@ function sendVideoUrl(peer_id = null, peer_name = "", broadcast = !peer_id) {
 
   // Take URL from clipboard ex:
   // https://www.youtube.com/watch?v=1ZYbU82GVz4
-
-  navigator.clipboard
-    .readText()
-    .then((clipboardText) => {
-      if (!clipboardText) return false;
-      const sanitizedText = filterXSS(clipboardText);
-      const inputElement = Swal.getInput();
-      if (isVideoTypeSupported(sanitizedText) && inputElement) {
-        inputElement.value = sanitizedText;
-      }
-      return false;
-    })
-    .catch(() => {
-      return false;
-    });
+  //
+  // Mobile-only skip: iOS shows its own native "Dán"/Paste permission
+  // bubble on top of the dialog the instant this Clipboard API call
+  // fires, so the dialog looks like it needs a second tap before it's
+  // actually usable. Mobile users can still paste normally (long-press)
+  // straight into the input, so just skip the auto-fill there.
+  if (!isMobileDevice) {
+    navigator.clipboard
+      .readText()
+      .then((clipboardText) => {
+        if (!clipboardText) return false;
+        const sanitizedText = filterXSS(clipboardText);
+        const inputElement = Swal.getInput();
+        if (isVideoTypeSupported(sanitizedText) && inputElement) {
+          inputElement.value = sanitizedText;
+        }
+        return false;
+      })
+      .catch(() => {
+        return false;
+      });
+  }
 }
 
 /**
@@ -11248,20 +11120,20 @@ function handleVideoPlayer(config) {
   //
   switch (video_action) {
     case "open":
-      userLog("toast", `${icons.user} ${peer_name} \n open video player`);
+      userLog("toast", `${icons.user} ${peer_name} \n đã mở trình phát video`);
       openVideoUrlPlayer(config);
       appendMessage(
         peer_name,
         leftChatAvatar,
         "left",
-        `${icons.share} Shared media: <br/><a href="${video_src}" target="_blank" rel="noopener noreferrer">${video_src}</a>`,
+        `${icons.share} Media đã chia sẻ: <br/><a href="${video_src}" target="_blank" rel="noopener noreferrer">${video_src}</a>`,
         !broadcast,
         null,
         peer_name,
       );
       break;
     case "close":
-      userLog("toast", `${icons.user} ${peer_name} \n close video player`);
+      userLog("toast", `${icons.user} ${peer_name} \n đã đóng trình phát video`);
       closeVideoUrlPlayer();
       break;
     default:
@@ -11277,14 +11149,7 @@ function handlePeerKickOutBtn(peer_id) {
   if (!buttons.remote.showKickOutBtn) return;
   const peerKickOutBtn = getId(peer_id + "_kickOut");
   peerKickOutBtn.addEventListener("click", (e) => {
-    isPresenter
-      ? kickOut(peer_id)
-      : msgPopup(
-          "warning",
-          "Only the presenter can eject participants",
-          "top-end",
-          4000,
-        );
+    if (isPresenter) kickOut(peer_id);
   });
 }
 
@@ -11299,11 +11164,11 @@ function kickOut(peer_id) {
     background: swBg,
     position: "top",
     imageUrl: images.leave,
-    title: "Kick out",
-    text: `Are you sure you want to kick out ${pName}?`,
+    title: "Mời ra khỏi phòng",
+    text: `Bạn có chắc muốn mời ${pName} ra khỏi phòng?`,
     showDenyButton: true,
-    confirmButtonText: `Yes`,
-    denyButtonText: `No`,
+    confirmButtonText: `Có`,
+    denyButtonText: `Không`,
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
   }).then((result) => {
@@ -11337,7 +11202,7 @@ function handleKickedOut(config) {
     background: swBg,
     position: "center",
     imageUrl: images.leave,
-    title: "Kicked out!",
+    title: "Bạn đã bị mời ra khỏi phòng!",
     html: renderRoomTemplate("tpl-kicked-out-modal", {
       text: {
         peerName: peer_name,
@@ -11370,30 +11235,7 @@ function handleKickedOut(config) {
  * MiroTalk about info
  */
 function showAbout() {
-  playSound("newMessage");
-
-  const aboutHtml = brand.about.html;
-
-  Swal.fire({
-    background: swBg,
-    position: "center",
-    title:
-      brand.about?.title && brand.about.title.trim() !== ""
-        ? brand.about.title
-        : "WebRTC P2P v1.8.75",
-    imageUrl:
-      brand.about?.imageUrl && brand.about.imageUrl.trim() !== ""
-        ? brand.about.imageUrl
-        : images.about,
-    customClass: { image: "img-about" },
-    html: renderRoomTemplate("tpl-about-modal", {
-      html: {
-        aboutHtml,
-      },
-    }),
-    showClass: { popup: "animate__animated animate__fadeInDown" },
-    hideClass: { popup: "animate__animated animate__fadeOutUp" },
-  });
+  // No-op: about popup removed.
 }
 
 /**
@@ -11406,9 +11248,24 @@ function initExitMeeting() {
 /**
  * Leave the Room and create a new one
  */
-function leaveRoom() {
-  checkRecording();
-  surveyActive ? leaveFeedback() : redirectOnLeave();
+function leaveRoom(skipConfirm = false) {
+  if (skipConfirm) {
+    checkRecording();
+    redirectOnLeave();
+    return;
+  }
+  showPP({
+    icon: "log-out",
+    variant: "danger",
+    title: "Rời cuộc gọi?",
+    desc: "Bạn có chắc muốn rời khỏi cuộc gọi này không?",
+    confirmText: "Rời phòng",
+    cancelText: "Hủy",
+    onConfirm: () => {
+      checkRecording();
+      redirectOnLeave();
+    },
+  });
 }
 
 /**
@@ -11419,39 +11276,13 @@ function exitRoom() {
   redirectOnLeave();
 }
 
-/**
- * Ask for feedback when room exit
- */
-function leaveFeedback() {
-  Swal.fire({
-    allowOutsideClick: false,
-    allowEscapeKey: false,
-    showDenyButton: true,
-    showCancelButton: true,
-    confirmButtonColor: "green",
-    denyButtonColor: "red",
-    cancelButtonColor: "gray",
-    background: swBg,
-    imageUrl: images.feedback,
-    position: "top",
-    title: "Leave a feedback",
-    text: "Do you want to rate your MiroTalk experience?",
-    confirmButtonText: `Yes`,
-    denyButtonText: `No`,
-    cancelButtonText: `Cancel`,
-    showClass: { popup: "animate__animated animate__fadeInDown" },
-    hideClass: { popup: "animate__animated animate__fadeOutUp" },
-  }).then((result) => {
-    if (result.isConfirmed) {
-      openURL(surveyURL);
-    } else if (result.isDenied) {
-      redirectOnLeave();
-    }
-  });
-}
-
 function redirectOnLeave() {
-  redirectActive ? openURL(redirectURL) : openURL("/");
+  playSound("eject");
+  // Give the sound a moment to actually be heard before the page
+  // navigates away and cuts it off.
+  setTimeout(() => {
+    redirectActive ? openURL(redirectURL) : openURL("/");
+  }, 250);
 }
 
 /**
@@ -11645,8 +11476,8 @@ function showDisconnectBanner() {
   if (!banner) return;
   banner.classList.remove("reconnected");
   icon.className = "fa-solid fa-wifi-exclamation";
-  title.textContent = "Connection lost";
-  msg.innerHTML = "Reconnecting to signaling server\u2026";
+  title.textContent = "M\u1ea5t k\u1ebft n\u1ed1i";
+  msg.innerHTML = "\u0110ang k\u1ebft n\u1ed1i l\u1ea1i v\u1edbi m\u00e1y ch\u1ee7\u2026";
   spinner.style.opacity = "1";
   if (disconnectBannerRafId) cancelAnimationFrame(disconnectBannerRafId);
   disconnectBannerRafId = requestAnimationFrame(() => {
@@ -11667,8 +11498,8 @@ function hideDisconnectBanner() {
   if (!banner.classList.contains("visible")) return;
   banner.classList.add("reconnected");
   icon.className = "fa-solid fa-circle-check";
-  title.textContent = "Back online";
-  msg.textContent = "Connection restored successfully";
+  title.textContent = "Đã kết nối lại";
+  msg.textContent = "Kết nối được khôi phục thành công";
   setTimeout(() => {
     banner.classList.remove("visible");
     setTimeout(() => banner.classList.remove("reconnected"), 420);
@@ -11682,6 +11513,15 @@ function hideDisconnectBanner() {
  * @param {integer} timer toast duration ms
  */
 function userLog(type, message, timer = 3000) {
+  // "icon" must stay the literal SweetAlert2 icon keyword (warning/error/
+  // info/success) - it's a controlled enum, not display text. "title" is
+  // the actual on-screen text, translated here.
+  const typeTitles = {
+    warning: "Cảnh báo",
+    error: "Lỗi",
+    info: "Thông tin",
+    success: "Thành công",
+  };
   switch (type) {
     case "warning":
     case "error":
@@ -11689,7 +11529,7 @@ function userLog(type, message, timer = 3000) {
         background: swBg,
         position: "center",
         icon: type,
-        title: type,
+        title: typeTitles[type],
         text: message,
         showClass: { popup: "animate__animated animate__fadeInDown" },
         hideClass: { popup: "animate__animated animate__fadeOutUp" },
@@ -11702,7 +11542,7 @@ function userLog(type, message, timer = 3000) {
         background: swBg,
         position: "center",
         icon: type,
-        title: type,
+        title: typeTitles[type],
         text: message,
         showClass: { popup: "animate__animated animate__fadeInDown" },
         hideClass: { popup: "animate__animated animate__fadeOutUp" },
@@ -11713,7 +11553,7 @@ function userLog(type, message, timer = 3000) {
         background: swBg,
         position: "center",
         icon: "success",
-        title: "Success",
+        title: "Thành công",
         html: message,
         showClass: { popup: "animate__animated animate__fadeInDown" },
         hideClass: { popup: "animate__animated animate__fadeOutUp" },
@@ -12008,6 +11848,23 @@ function elemDisplay(element, display, mode = "inline") {
 }
 
 /**
+ * Fade the loading backdrop out (opacity transition, see .loading-backdrop
+ * in client.css) instead of yanking it away instantly, so whatever's
+ * appearing underneath (the name-entry dialog, or the room itself) has
+ * time to crossfade in smoothly rather than cutting over abruptly.
+ */
+function fadeOutLoadingBackdrop() {
+  if (!loadingBackdrop) return;
+  loadingBackdrop.style.opacity = "0";
+  loadingBackdrop.style.pointerEvents = "none";
+  loadingBackdrop.addEventListener(
+    "transitionend",
+    () => elemDisplay(loadingBackdrop, false),
+    { once: true },
+  );
+}
+
+/**
  * Sanitize XSS scripts
  * @param {object} src object
  * @returns sanitized object
@@ -12184,11 +12041,11 @@ function setupQuickDeviceSwitchDropdowns() {
     if (!videoMenu) return;
     videoMenu.innerHTML = "";
 
-    appendMenuHeader(videoMenu, "fas fa-video", "Cameras");
+    appendMenuHeader(videoMenu, "fas fa-video", "Camera");
     appendSelectOptions(
       videoMenu,
       videoSelect,
-      "No cameras found",
+      "Không tìm thấy camera",
       rebuildVideoMenu,
     );
 
@@ -12200,12 +12057,12 @@ function setupQuickDeviceSwitchDropdowns() {
     const settingsIcon = document.createElement("i");
     settingsIcon.className = "fas fa-cog";
     settingsBtn.appendChild(settingsIcon);
-    settingsBtn.appendChild(document.createTextNode(" Open Video Settings"));
+    settingsBtn.appendChild(document.createTextNode(" Mở cài đặt Video"));
     settingsBtn.addEventListener("click", () => {
       hideShowMySettings();
-      // Simulate tab click to open video devices tab
+      // Simulate tab click to open the devices tab
       setTimeout(() => {
-        tabVideoBtn.click();
+        tabDevicesBtn.click();
       }, 100);
     });
     videoMenu.appendChild(settingsBtn);
@@ -12215,30 +12072,30 @@ function setupQuickDeviceSwitchDropdowns() {
     if (!audioMenu) return;
     audioMenu.innerHTML = "";
 
-    appendMenuHeader(audioMenu, "fas fa-microphone", "Microphones");
+    appendMenuHeader(audioMenu, "fas fa-microphone", "Micro");
     appendSelectOptions(
       audioMenu,
       audioInputSelect,
-      "No microphones found",
+      "Không tìm thấy micro",
       rebuildAudioMenu,
     );
 
     appendMenuDivider(audioMenu);
 
-    appendMenuHeader(audioMenu, "fas fa-volume-high", "Speakers");
+    appendMenuHeader(audioMenu, "fas fa-volume-high", "Loa");
     if (!audioOutputSelect || audioOutputSelect.disabled) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "app-dropdown-action";
       btn.disabled = true;
-      btn.textContent = "Speaker selection not supported";
+      btn.textContent = "Không hỗ trợ chọn loa";
       audioMenu.appendChild(btn);
       return;
     }
     appendSelectOptions(
       audioMenu,
       audioOutputSelect,
-      "No speakers found",
+      "Không tìm thấy loa",
       rebuildAudioMenu,
     );
 
@@ -12252,7 +12109,7 @@ function setupQuickDeviceSwitchDropdowns() {
     const testIcon = document.createElement("i");
     testIcon.className = "fa-solid fa-circle-play";
     testBtn.appendChild(testIcon);
-    testBtn.appendChild(document.createTextNode(" Test Speaker"));
+    testBtn.appendChild(document.createTextNode(" Kiểm tra loa"));
     testBtn.addEventListener("click", () =>
       playSpeaker(audioOutputSelect?.value, "speaker"),
     );
@@ -12265,12 +12122,12 @@ function setupQuickDeviceSwitchDropdowns() {
     const settingsIcon = document.createElement("i");
     settingsIcon.className = "fas fa-cog";
     settingsBtn.appendChild(settingsIcon);
-    settingsBtn.appendChild(document.createTextNode(" Open Audio Settings"));
+    settingsBtn.appendChild(document.createTextNode(" Mở cài đặt Âm thanh"));
     settingsBtn.addEventListener("click", () => {
       hideShowMySettings();
-      // Simulate tab click to open audio devices tab
+      // Simulate tab click to open the devices tab
       setTimeout(() => {
-        tabAudioBtn.click();
+        tabDevicesBtn.click();
       }, 100);
     });
     audioMenu.appendChild(settingsBtn);
@@ -12643,11 +12500,70 @@ function chatCenter() {
   const msgerDraggable = getId("msgerDraggable");
   if (msgerDraggable) {
     elemDisplay(msgerDraggable, true, "flex");
-    msgerDraggable.style.top = "50%";
-    msgerDraggable.style.left = "50%";
-    msgerDraggable.style.transform = "translate(-50%, -50%)";
+    // #msgerDraggable is already "fixed inset-0 ... flex items-center
+    // justify-center" (mirrors reference's chat wrapper exactly) - it
+    // centers its child via flexbox on its own. Setting top/left/transform
+    // here (leftover from before that Tailwind rewrite) fights the
+    // inset-0 sizing: with top/left overridden but right/bottom still 0
+    // from inset-0, the box's used width/height shrink to satisfy every
+    // inset at once, so the panel renders as a small centered box instead
+    // of covering the screen - that's the "near-full but not full" bug.
+    // Clear any earlier drag/keyboard-avoidance inline overrides instead.
+    msgerDraggable.style.top = "";
+    msgerDraggable.style.left = "";
+    msgerDraggable.style.right = "";
+    msgerDraggable.style.bottom = "";
+    msgerDraggable.style.width = "";
+    msgerDraggable.style.height = "";
+    msgerDraggable.style.transform = "";
+    msgerDraggable.style.position = "";
   }
 }
+/**
+ * Keep the chat panel tracking the actual visible viewport (not the full
+ * layout viewport) on mobile/tablet - mirrors App.tsx's visualViewport
+ * effect. When the on-screen keyboard opens, the visual viewport shrinks
+ * and its offsetTop can grow; without this, the panel keeps the layout
+ * viewport's height and the keyboard just covers the input instead of the
+ * whole panel shrinking to stay above it.
+ */
+function applyChatViewportStyle() {
+  const msgerDraggable = getId("msgerDraggable");
+  if (!msgerDraggable || !isChatRoomVisible) return;
+  if (window.innerWidth < 1024 && window.visualViewport) {
+    const vv = window.visualViewport;
+    // client.html has a `#msgerDraggable { top/left/width/height: ... !important }`
+    // rule (a blunt fix for the old JS-centering bug that chatCenter() now
+    // fixes properly) - a plain inline style can't win against an
+    // !important class rule, so this must set `!important` too via
+    // setProperty to actually be able to track the visual viewport.
+    const set = (prop, val) =>
+      msgerDraggable.style.setProperty(prop, val, "important");
+    set("position", "fixed");
+    set("height", vv.height + "px");
+    set("top", vv.offsetTop + "px");
+    set("width", "100%");
+    set("left", "0");
+    set("right", "auto");
+    set("bottom", "auto");
+    set("transform", "none");
+  } else {
+    const remove = (prop) => msgerDraggable.style.removeProperty(prop);
+    remove("position");
+    remove("height");
+    remove("top");
+    remove("width");
+    remove("left");
+    remove("right");
+    remove("bottom");
+    remove("transform");
+  }
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", applyChatViewportStyle);
+  window.visualViewport.addEventListener("scroll", applyChatViewportStyle);
+}
+
 function canBePinned() {
   return (
     window.innerWidth >= 1024 &&
@@ -12673,12 +12589,21 @@ function chatUnpin() {
 function hideChatRoomAndEmojiPicker() {
   const msgerDraggable = getId("msgerDraggable");
 
-  if (msgerDraggable) elemDisplay(msgerDraggable, false);
+  if (msgerDraggable) {
+    elemDisplay(msgerDraggable, false);
+    // Clear any keyboard-avoidance/drag inline overrides so the next open
+    // starts clean (chatCenter()/chatPin() decide positioning from there).
+    msgerDraggable.style.position = "";
+    msgerDraggable.style.height = "";
+    msgerDraggable.style.top = "";
+    msgerDraggable.style.width = "";
+    msgerDraggable.style.left = "";
+  }
   isChatRoomVisible = false;
 
   syncChatToolbarButtons();
   if (typeof chatRoomBtn !== "undefined" && chatRoomBtn) {
-    setTippy(chatRoomBtn, "Open the chat (C)", bottomButtonsPlacement);
+    setTippy(chatRoomBtn, "Mở khung chat (C)", bottomButtonsPlacement);
   }
 }
 
@@ -12816,4 +12741,795 @@ function updateTopHeaderPeerCount() {
   if (typeof resizeVideoMedia === "function") {
     resizeVideoMedia();
   }
+
+  // 1 remote peer connected (2 total incl. me): switch my tile to the
+  // small floating draggable self-view, matching the reference layout.
+  toggleSoloSelfView(totalPeers === 2);
+
+  // Re-sync camera-tile-vs-screen-tile visibility whenever the peer
+  // count changes (e.g. the peer leaves mid-share) - toggleSoloSelfView
+  // above may have just reset myVideoWrap's inline display, which would
+  // otherwise leave the camera tile visible again even though screen
+  // sharing is still active.
+  syncSoloVisibilityForLocalScreenShare(isScreenStreaming);
+}
+
+// ---- Solo self-view (1-on-1 floating local video) state ----
+// Mirrors FloatingLocalVideo.tsx: corner snap position, independent
+// "hidden" flag (never touches the real camera), and the 5s idle fade.
+let soloCorner = "bottom-right";
+let soloHidden = false;
+let soloDragging = false;
+let soloFadeTimer = null;
+let soloPointerStart = { x: 0, y: 0 };
+
+/**
+ * Toggle the floating draggable self-view thumbnail used when exactly
+ * one other participant is in the room, so the remote peer's tile
+ * fills the main stage - mirrors FloatingLocalVideo.tsx.
+ * @param {boolean} enable
+ */
+function toggleSoloSelfView(enable) {
+  const wrap = getId("myVideoWrap");
+  if (!wrap) return;
+
+  ensureSoloWidgets(wrap);
+
+  if (videoMediaContainer) {
+    videoMediaContainer.classList.toggle("solo-active", enable);
+  }
+
+  const isSolo = wrap.classList.contains("solo-self");
+  if (enable && !isSolo) {
+    // Fresh default each time solo mode (re)starts, same as the
+    // reference's useState(...) evaluated on mount.
+    soloCorner = window.innerWidth < 1024 ? "top-right" : "bottom-right";
+    soloHidden = false;
+    wrap.classList.add("solo-self", `corner-${soloCorner}`);
+    wrap.classList.remove("solo-hidden", "solo-faded");
+    // Sync compact-avatar/mic-badge state in case setMyVideoStatus /
+    // setMyAudioStatus haven't run since the actual current status
+    // was established (avoids a stale placeholder on first solo entry).
+    wrap.classList.toggle("solo-cam-off", !myVideoStatus);
+    wrap.classList.toggle("solo-audio-off", !myAudioStatus);
+    resetSoloFadeTimer(wrap);
+    updateRemoteNameTagPosition();
+    updateSoloScreenTileVisibility();
+  } else if (!enable && isSolo) {
+    clearTimeout(soloFadeTimer);
+    wrap.classList.remove(
+      "solo-self",
+      "solo-hidden",
+      "solo-faded",
+      "solo-dragging",
+      "corner-top-left",
+      "corner-top-right",
+      "corner-bottom-left",
+      "corner-bottom-right",
+    );
+    wrap.style.transform = "";
+    wrap.style.display = "";
+    updateRemoteNameTagPosition();
+    resetSoloScreenTileVisibility();
+    // PiP only makes sense in the 1-on-1 view it was opened from -
+    // force it closed if we just left solo mode (peer left, or a 3rd
+    // participant joined and the grid takes over).
+    if (typeof isInPagePip !== "undefined" && isInPagePip) {
+      togglePagePip("close");
+    }
+  }
+}
+
+/**
+ * Lazily build the extra elements the floating thumbnail needs (the
+ * eye-off "hide preview" button, the "show camera" pill shown while
+ * hidden, the mic-off badge, and the compact camera-off placeholder)
+ * and wire up pointer drag-to-corner + the idle fade timer. Runs once
+ * per call (guarded by a data attribute).
+ * @param {HTMLElement} wrap myVideoWrap element
+ */
+function ensureSoloWidgets(wrap) {
+  if (wrap.dataset.soloReady) return;
+  wrap.dataset.soloReady = "1";
+
+  // Eye-off: hides the floating preview locally only - the outgoing
+  // camera track and the remote peer's view are never affected.
+  const eyeBtn = document.createElement("button");
+  eyeBtn.id = "mySoloEyeBtn";
+  eyeBtn.className = "solo-eye-btn";
+  eyeBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path>' +
+    '<path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path>' +
+    '<path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"></path>' +
+    '<path d="m2 2 20 20"></path></svg>';
+  eyeBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+  eyeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setSoloHidden(wrap, true);
+  });
+  wrap.appendChild(eyeBtn);
+
+  // "Show camera" pill, shown only while hidden
+  const showBtn = document.createElement("button");
+  showBtn.id = "mySoloShowBtn";
+  showBtn.className = "solo-show-btn";
+  showBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path>' +
+    '<circle cx="12" cy="12" r="3"></circle></svg>';
+  showBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+  showBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setSoloHidden(wrap, false);
+  });
+  wrap.appendChild(showBtn);
+
+  // Mic-off badge (top-right), independent of hover/fade
+  const badges = document.createElement("div");
+  badges.className = "solo-status-badges";
+  badges.innerHTML =
+    '<span class="solo-mic-off-badge">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M12 19v3"></path><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"></path>' +
+    '<path d="M16.95 16.95A7 7 0 0 1 5 12v-2"></path><path d="M18.89 13.23A7 7 0 0 0 19 12v-2"></path>' +
+    '<path d="m2 2 20 20"></path><path d="M9 9v3a3 3 0 0 0 5.12 2.12"></path></svg></span>';
+  wrap.appendChild(badges);
+
+  // Compact camera-off placeholder: shows the actual chosen avatar photo
+  // (circular) when one is set, falling back to a generic user icon
+  // otherwise - see updateSoloCompactAvatar().
+  const avatar = document.createElement("div");
+  avatar.className = "solo-compact-avatar";
+  avatar.innerHTML =
+    '<div class="solo-compact-avatar-ring"><div class="solo-compact-avatar-circle">' +
+    '<img id="mySoloAvatarImg" class="solo-compact-avatar-img" style="display:none" />' +
+    '<svg id="mySoloAvatarIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>' +
+    "</div></div>";
+  wrap.appendChild(avatar);
+  updateSoloCompactAvatar();
+
+  // Drag-to-corner (pointer events cover mouse + touch + pen)
+  wrap.addEventListener("pointerdown", (e) => {
+    if (
+      !wrap.classList.contains("solo-self") ||
+      wrap.classList.contains("solo-hidden")
+    )
+      return;
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    soloDragging = true;
+    wrap.classList.add("solo-dragging");
+    resetSoloFadeTimer(wrap);
+    soloPointerStart = { x: e.clientX, y: e.clientY };
+    try {
+      wrap.setPointerCapture(e.pointerId);
+    } catch (err) {
+      /* ignore */
+    }
+  });
+
+  wrap.addEventListener("pointermove", (e) => {
+    resetSoloFadeTimer(wrap);
+    if (!soloDragging) return;
+    const dx = e.clientX - soloPointerStart.x;
+    const dy = e.clientY - soloPointerStart.y;
+    wrap.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+  });
+
+  const endSoloDrag = (e) => {
+    if (!soloDragging) return;
+    soloDragging = false;
+    try {
+      wrap.releasePointerCapture(e.pointerId);
+    } catch (err) {
+      /* ignore */
+    }
+    // Compute the corner/hidden target FIRST, while "solo-dragging" is
+    // still applied (transform has no transition), so the box's actual
+    // dragged position is read correctly. Only then remove the class
+    // and clear the transform, so the snap-to-corner animates smoothly
+    // via the top/left/right/bottom transition.
+    snapSoloToNearestCorner(wrap);
+    wrap.classList.remove("solo-dragging");
+    wrap.style.transform = "";
+  };
+  wrap.addEventListener("pointerup", endSoloDrag);
+  wrap.addEventListener("pointercancel", endSoloDrag);
+}
+
+/**
+ * On drag release, snap the thumbnail to whichever quadrant of the
+ * video stage its center now falls in, or hide it entirely (showing
+ * the small "Eye" pill in that corner) if it was dragged mostly out
+ * of the stage bounds - mirrors handlePointerUp in FloatingLocalVideo.tsx.
+ * @param {HTMLElement} wrap
+ */
+function snapSoloToNearestCorner(wrap) {
+  const container = videoMediaContainer;
+  if (!container) return;
+
+  const boxRect = wrap.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+
+  const boxCenterX = boxRect.left + boxRect.width / 2;
+  const boxCenterY = boxRect.top + boxRect.height / 2;
+  const isLeft = boxCenterX < containerRect.left + containerRect.width / 2;
+  const isTop = boxCenterY < containerRect.top + containerRect.height / 2;
+
+  let newCorner = "bottom-right";
+  if (isTop && isLeft) newCorner = "top-left";
+  else if (isTop && !isLeft) newCorner = "top-right";
+  else if (!isTop && isLeft) newCorner = "bottom-left";
+
+  const isOutOfBoundsX =
+    boxRect.left > containerRect.right - (boxRect.width * 2) / 3 ||
+    boxRect.right < containerRect.left + (boxRect.width * 2) / 3;
+  const isOutOfBoundsY =
+    boxRect.top > containerRect.bottom - (boxRect.height * 2) / 3 ||
+    boxRect.bottom < containerRect.top + (boxRect.height * 2) / 3;
+
+  setSoloCorner(wrap, newCorner);
+
+  if (isOutOfBoundsX || isOutOfBoundsY) {
+    setSoloHidden(wrap, true);
+  }
+}
+
+/**
+ * @param {HTMLElement} wrap
+ * @param {"top-left"|"top-right"|"bottom-left"|"bottom-right"} corner
+ */
+function setSoloCorner(wrap, corner) {
+  wrap.classList.remove(
+    "corner-top-left",
+    "corner-top-right",
+    "corner-bottom-left",
+    "corner-bottom-right",
+  );
+  wrap.classList.add(`corner-${corner}`);
+  soloCorner = corner;
+  updateRemoteNameTagPosition();
+}
+
+/**
+ * @param {HTMLElement} wrap
+ * @param {boolean} hidden
+ */
+function setSoloHidden(wrap, hidden) {
+  soloHidden = hidden;
+  wrap.classList.toggle("solo-hidden", hidden);
+  resetSoloFadeTimer(wrap);
+}
+
+/**
+ * Resets the 5s idle fade timer (any pointer activity keeps the
+ * eye-off/show button at full opacity; after 5s of no activity it
+ * dims to 30%, same as isFadedOut in FloatingLocalVideo.tsx).
+ * @param {HTMLElement} wrap
+ */
+function resetSoloFadeTimer(wrap) {
+  wrap.classList.remove("solo-faded");
+  clearTimeout(soloFadeTimer);
+  soloFadeTimer = setTimeout(() => {
+    wrap.classList.add("solo-faded");
+  }, 5000);
+}
+
+/**
+ * Force the floating self-view thumbnail hidden while the remote peer
+ * is screen sharing, and restore it once they stop - overrides any
+ * manual hidden state, mirroring the isRemoteScreenSharing effect.
+ * @param {boolean} isRemoteSharing
+ */
+function syncSoloVisibilityForRemoteScreenShare(isRemoteSharing) {
+  const wrap = getId("myVideoWrap");
+  if (!wrap || !wrap.classList.contains("solo-self")) return;
+  setSoloHidden(wrap, isRemoteSharing);
+}
+
+/**
+ * Hide my own camera tile entirely while I'm screen sharing (the
+ * reference's single video slot swaps content instead of showing both),
+ * restoring it when I stop. Applies whether or not a peer is connected -
+ * previously this bailed out unless the floating solo self-view was
+ * active (peer connected), so sharing alone in the waiting room, or a
+ * peer leaving mid-share, left BOTH the camera tile and the screen tile
+ * visible next to the waiting card (3-way split instead of the
+ * reference's 2-cell layout).
+ * @param {boolean} isSharing
+ */
+function syncSoloVisibilityForLocalScreenShare(isSharing) {
+  const wrap = getId("myVideoWrap");
+  if (!wrap) return;
+  // Also stays hidden while the in-page PiP window is open - matches
+  // FloatingLocalVideo.tsx: `if (isScreenSharing || isPipActive) return null;`
+  const pipOpen = typeof isInPagePip !== "undefined" && isInPagePip;
+  wrap.style.display = isSharing || pipOpen ? "none" : "";
+}
+
+/**
+ * Keep the remote peer's name-tag out of the way of my floating
+ * thumbnail: move it to top-left only when my corner is bottom-left,
+ * otherwise keep the default bottom-left position (mirrors App.tsx's
+ * nameTagPosition={pipCorner === 'bottom-left' ? 'top-left' : 'bottom-left'}).
+ */
+function updateRemoteNameTagPosition() {
+  if (!videoMediaContainer) return;
+  const shouldMoveUp = soloCorner === "bottom-left";
+  videoMediaContainer
+    .querySelectorAll(".videoPeerName")
+    .forEach((tag) => {
+      if (tag.closest("#myVideoWrap") || tag.closest("#waitingRoomCard"))
+        return;
+      tag.classList.toggle("name-pos-top-left", shouldMoveUp);
+    });
+}
+
+/**
+ * In solo/1-on-1 mode each participant must show as a SINGLE tile,
+ * never their camera and screen tiles stacked side by side - matches
+ * the reference, where one <video> element's content swaps between
+ * camera and screen instead of a second element appearing alongside it.
+ * Call whenever a peer's screen-share flag changes, and right after a
+ * screen tile is created/removed, so there is no frame where both (or
+ * neither) tile is visible.
+ */
+function updateSoloScreenTileVisibility() {
+  if (
+    !videoMediaContainer ||
+    !videoMediaContainer.classList.contains("solo-active")
+  )
+    return;
+
+  Object.keys(peerConnections).forEach((peer_id) => {
+    const isSharing = !!(
+      allPeers[peer_id] && allPeers[peer_id]["peer_screen_status"]
+    );
+    const camWrap = getId(peer_id + "_videoWrap");
+    const screenWrap = getId(peer_id + "_screenWrap");
+    // "" reverts to the .Camera/.Screen class default (flex) instead
+    // of hardcoding a value that could drift from the base stylesheet.
+    if (camWrap) camWrap.style.display = isSharing ? "none" : "";
+    if (screenWrap) screenWrap.style.display = isSharing ? "" : "none";
+  });
+
+  if (typeof isInPagePip !== "undefined" && isInPagePip) {
+    syncPipVideoSource();
+    updatePipStatusBadges();
+  }
+}
+
+/**
+ * Undo any inline display overrides updateSoloScreenTileVisibility left
+ * behind, so tiles render normally again once solo mode ends (e.g. a
+ * 3rd participant joins and the grid takes over).
+ */
+function resetSoloScreenTileVisibility() {
+  Object.keys(peerConnections).forEach((peer_id) => {
+    const camWrap = getId(peer_id + "_videoWrap");
+    const screenWrap = getId(peer_id + "_screenWrap");
+    if (camWrap) camWrap.style.display = "";
+    if (screenWrap) screenWrap.style.display = "";
+  });
+}
+
+// ---------------------------------------------------------------
+// In-page Picture-in-Picture (mirrors FloatingRemoteVideo.tsx)
+//
+// This is a draggable/resizable overlay INSIDE the page, not the real
+// browser documentPictureInPicture window - the control-bar button
+// only checks 'documentPictureInPicture' in window as a capability
+// GATE (matching ControlBar.tsx's supportsPip), same as the reference.
+// The older real-PiP feature (documentPiPBtn in Settings) is untouched.
+// ---------------------------------------------------------------
+
+let isInPagePip = false;
+let pipSize = { width: 240, height: 135 };
+let pipPos = { x: 0, y: 0 };
+let pipDragging = false;
+let pipDragStart = { x: 0, y: 0 };
+let pipPosStart = { x: 0, y: 0 };
+let pipResizing = false;
+let pipResizeCorner = null;
+let pipSizeStart = { w: 0, h: 0 };
+
+const PIP_MIN_WIDTH = 160;
+
+/**
+ * @param {"toggle"|"open"|"close"} [action]
+ */
+function togglePagePip(action = "toggle") {
+  if (action === "close") {
+    setPagePip(false);
+    return;
+  }
+  if (action === "open") {
+    setPagePip(true);
+    return;
+  }
+  setPagePip(!isInPagePip);
+}
+
+/**
+ * @param {boolean} enable
+ */
+function setPagePip(enable) {
+  if (enable === isInPagePip) return;
+  // disablePip={!remotePeer} in ControlBar.tsx
+  if (enable && Object.keys(peerConnections).length < 1) return;
+
+  isInPagePip = enable;
+  window.isInPagePip = enable; // read by the control-bar bridge in client.html
+
+  const overlay = getId("pipOverlay");
+  const placeholder = getId("pipStagePlaceholder");
+
+  if (enable) {
+    initPipOverlayInteractions();
+    // Fresh default position/size every open, same as the reference
+    // remounting <FloatingRemoteVideo> each time isInPagePip flips true.
+    pipSize = { width: 240, height: 135 };
+    pipPos = {
+      x: window.innerWidth - pipSize.width - 20,
+      y: window.innerHeight - pipSize.height - 20,
+    };
+    applyPipTransform();
+    if (overlay) overlay.style.display = "flex";
+    if (placeholder) placeholder.classList.add("pip-active");
+    updatePipStagePlaceholderText();
+    syncPipVideoSource();
+    updatePipStatusBadges();
+    updatePipLocalControlButtons();
+  } else {
+    if (overlay) overlay.style.display = "none";
+    if (placeholder) placeholder.classList.remove("pip-active");
+  }
+
+  // Floating self-view has no equivalent while PiP is open, same as
+  // while screen sharing
+  syncSoloVisibilityForLocalScreenShare(isScreenStreaming);
+
+  if (typeof window.updateNewControlBarUI === "function") {
+    window.updateNewControlBarUI();
+  }
+}
+
+function applyPipTransform() {
+  const overlay = getId("pipOverlay");
+  if (!overlay) return;
+  overlay.style.width = pipSize.width + "px";
+  overlay.style.height = pipSize.height + "px";
+  overlay.style.transform = `translate3d(${pipPos.x}px, ${pipPos.y}px, 0)`;
+}
+
+function updatePipStagePlaceholderText() {
+  const title = getId("pipStagePlaceholderTitle");
+  const iconPip = getId("pipStageIconPip");
+  const iconScreen = getId("pipStageIconScreen");
+  const sharing = !!isScreenStreaming;
+  if (title) {
+    title.textContent = sharing
+      ? "Đang chia sẻ màn hình"
+      : "Đang phát trong Hình trong hình";
+  }
+  if (iconPip) iconPip.style.display = sharing ? "none" : "";
+  if (iconScreen) iconScreen.style.display = sharing ? "" : "none";
+}
+
+/**
+ * Mirror whichever remote tile is currently the "main stage" video
+ * (camera or screen, whichever is visible) into the PiP <video> - the
+ * same MediaStream can play in more than one <video> element at once.
+ */
+function syncPipVideoSource() {
+  const pipVideo = getId("pipVideo");
+  if (!pipVideo || !videoMediaContainer) return;
+  let sourceVideo = null;
+  for (const child of videoMediaContainer.children) {
+    if (child.id === "myVideoWrap" || child.id === "waitingRoomCard") continue;
+    if (getComputedStyle(child).display === "none") continue;
+    const v = child.querySelector("video");
+    if (v && v.srcObject) {
+      sourceVideo = v;
+      break;
+    }
+  }
+  if (sourceVideo && pipVideo.srcObject !== sourceVideo.srcObject) {
+    pipVideo.srcObject = sourceVideo.srcObject;
+    pipVideo.play().catch(() => {});
+  }
+}
+
+/**
+ * Reflect the remote peer's camera-off/mic-off/screen-sharing state on
+ * the PiP window (placeholder text + top-left badges) - mirrors
+ * VideoPlayer.tsx's isPipMode branch.
+ */
+function updatePipStatusBadges() {
+  const overlay = getId("pipOverlay");
+  if (!overlay) return;
+  const peerId = Object.keys(peerConnections)[0];
+  const isScreenActive = !!(
+    peerId &&
+    allPeers[peerId] &&
+    allPeers[peerId]["peer_screen_status"]
+  );
+  const vStatusEl = peerId ? getId(peerId + "_videoStatus") : null;
+  const aStatusEl = peerId ? getId(peerId + "_audioStatus") : null;
+  // className is a FontAwesome icon class ("fas fa-video-slash" etc.),
+  // never the literal word "Off".
+  const isVideoOff = !!(vStatusEl && vStatusEl.className.includes("-slash"));
+  const isAudioOff = !!(aStatusEl && aStatusEl.className.includes("-slash"));
+
+  overlay.classList.toggle("pip-video-off", isVideoOff && !isScreenActive);
+  overlay.classList.toggle("pip-remote-screen-sharing", isScreenActive);
+  overlay.classList.toggle("pip-remote-audio-off", isAudioOff);
+}
+
+/**
+ * Sync the PiP window's own bottom control bar (controls MY media,
+ * same as the main ControlBar) - mirrors FloatingRemoteVideo.tsx's
+ * localAudioMuted/localVideoOff/localScreenSharing button states.
+ */
+function updatePipLocalControlButtons() {
+  const audioBtnEl = getId("pipAudioBtn");
+  const videoBtnEl = getId("pipVideoBtn");
+  const screenBtnEl = getId("pipScreenBtn");
+  if (audioBtnEl) {
+    audioBtnEl.classList.toggle("pip-active-state", !myAudioStatus);
+  }
+  if (videoBtnEl) {
+    videoBtnEl.classList.toggle("pip-disabled-state", !!isScreenStreaming);
+    videoBtnEl.classList.toggle(
+      "pip-active-state",
+      !isScreenStreaming && !myVideoStatus,
+    );
+  }
+  if (screenBtnEl) {
+    screenBtnEl.classList.toggle("pip-active-state", !!isScreenStreaming);
+  }
+}
+
+/**
+ * Wire up drag/resize/buttons for the PiP overlay once (idempotent).
+ */
+function initPipOverlayInteractions() {
+  const overlay = getId("pipOverlay");
+  if (!overlay || overlay.dataset.pipReady) return;
+  overlay.dataset.pipReady = "1";
+
+  overlay.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".no-drag")) return;
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    pipDragging = true;
+    overlay.classList.add("pip-dragging");
+    pipDragStart = { x: e.clientX, y: e.clientY };
+    pipPosStart = { x: pipPos.x, y: pipPos.y };
+    try {
+      overlay.setPointerCapture(e.pointerId);
+    } catch (err) {
+      /* ignore */
+    }
+  });
+
+  overlay.addEventListener("pointermove", (e) => {
+    if (pipDragging) {
+      const dx = e.clientX - pipDragStart.x;
+      const dy = e.clientY - pipDragStart.y;
+      let newX = pipPosStart.x + dx;
+      let newY = pipPosStart.y + dy;
+      newX = Math.max(0, Math.min(newX, window.innerWidth - pipSize.width));
+      newY = Math.max(0, Math.min(newY, window.innerHeight - pipSize.height));
+      pipPos = { x: newX, y: newY };
+      applyPipTransform();
+    } else if (pipResizing) {
+      handlePipResizeMove(e);
+    }
+  });
+
+  const endPipInteraction = (e) => {
+    if (pipDragging) {
+      pipDragging = false;
+      overlay.classList.remove("pip-dragging");
+    }
+    if (pipResizing) {
+      pipResizing = false;
+      pipResizeCorner = null;
+      overlay.classList.remove("pip-resizing");
+    }
+    try {
+      overlay.releasePointerCapture(e.pointerId);
+    } catch (err) {
+      /* ignore */
+    }
+  };
+  overlay.addEventListener("pointerup", endPipInteraction);
+  overlay.addEventListener("pointercancel", endPipInteraction);
+
+  overlay.querySelectorAll(".pip-resize-handle").forEach((handle) => {
+    handle.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      pipResizing = true;
+      pipResizeCorner = handle.dataset.corner;
+      overlay.classList.add("pip-resizing");
+      pipDragStart = { x: e.clientX, y: e.clientY };
+      pipSizeStart = { w: pipSize.width, h: pipSize.height };
+      pipPosStart = { x: pipPos.x, y: pipPos.y };
+      try {
+        overlay.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* ignore */
+      }
+    });
+  });
+
+  getId("pipCloseBtn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    togglePagePip("close");
+  });
+  getId("pipStageCloseBtn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    togglePagePip("close");
+  });
+  getId("pipAudioBtn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    audioBtn?.click();
+  });
+  getId("pipVideoBtn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    videoBtn?.click();
+  });
+  getId("pipScreenBtn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    screenShareBtn?.click();
+  });
+  getId("pipLeaveBtn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const newLeave = document.getElementById("newLeaveBtn");
+    if (newLeave) newLeave.click();
+    else if (typeof leaveRoom === "function") leaveRoom();
+  });
+}
+
+/**
+ * @param {PointerEvent} e
+ */
+function handlePipResizeMove(e) {
+  const dx = e.clientX - pipDragStart.x;
+  const MAX_WIDTH = Math.min(400, window.innerWidth - 40);
+  let newW = pipSizeStart.w;
+  let newX = pipPosStart.x;
+  let newY = pipPosStart.y;
+
+  if (pipResizeCorner === "se") {
+    newW = Math.min(MAX_WIDTH, Math.max(PIP_MIN_WIDTH, pipSizeStart.w + dx));
+  } else if (pipResizeCorner === "sw") {
+    newW = Math.min(MAX_WIDTH, Math.max(PIP_MIN_WIDTH, pipSizeStart.w - dx));
+    newX = pipPosStart.x - (newW - pipSizeStart.w);
+  } else if (pipResizeCorner === "nw") {
+    newW = Math.min(MAX_WIDTH, Math.max(PIP_MIN_WIDTH, pipSizeStart.w - dx));
+    newX = pipPosStart.x - (newW - pipSizeStart.w);
+    const newH = newW * (9 / 16);
+    newY = pipPosStart.y - (newH - pipSizeStart.h);
+  }
+
+  if (newX < 0) {
+    newW += newX;
+    newX = 0;
+  } else if (newX > window.innerWidth - newW) {
+    newW = window.innerWidth - newX;
+  }
+
+  const newH = newW * (9 / 16);
+  if (newY < 0) newY = 0;
+
+  pipSize = { width: newW, height: newH };
+  if (pipResizeCorner !== "se") {
+    pipPos = { x: newX, y: newY };
+  }
+  applyPipTransform();
+}
+
+// ---------------------------------------------------------------
+// PiP suggestion modal (mirrors App.tsx's showPipSuggestion)
+// ---------------------------------------------------------------
+
+function showPipSuggestionModal() {
+  const modal = getId("pipSuggestionModal");
+  if (!modal) return;
+  ensurePipSuggestionInteractions();
+  modal.style.display = "flex";
+  if (window.lucide) window.lucide.createIcons({ root: modal });
+}
+
+function hidePipSuggestionModal() {
+  const modal = getId("pipSuggestionModal");
+  if (modal) modal.style.display = "none";
+}
+
+function ensurePipSuggestionInteractions() {
+  const modal = getId("pipSuggestionModal");
+  if (!modal || modal.dataset.pipSuggestionReady) return;
+  modal.dataset.pipSuggestionReady = "1";
+
+  getId("pipSuggestionLaterBtn")?.addEventListener("click", () => {
+    hidePipSuggestionModal();
+  });
+  getId("pipSuggestionOpenBtn")?.addEventListener("click", () => {
+    hidePipSuggestionModal();
+    togglePagePip("open");
+  });
+}
+
+// ---------------------------------------------------------------
+// Generic confirm/warn popup ("PP") - same visual component as the PiP
+// suggestion modal above, reused for mic/cam permission warnings and
+// screen-share/leave-call confirmations.
+// ---------------------------------------------------------------
+
+/**
+ * Show the generic "PP" popup.
+ * @param {object} opts
+ * @param {string} opts.icon lucide icon name
+ * @param {"default"|"warn"|"danger"} [opts.variant] icon color variant
+ * @param {string} opts.title
+ * @param {string} opts.desc
+ * @param {string} [opts.confirmText]
+ * @param {string} [opts.cancelText]
+ * @param {boolean} [opts.hideCancel] hide the cancel button (info-only popup)
+ * @param {Function} [opts.onConfirm]
+ * @param {Function} [opts.onCancel]
+ */
+function showPP({
+  icon,
+  variant = "default",
+  title,
+  desc,
+  confirmText = "Đồng ý",
+  cancelText = "Hủy",
+  hideCancel = false,
+  onConfirm = null,
+  onCancel = null,
+}) {
+  const modal = getId("ppModal");
+  if (!modal) return;
+
+  const iconWrap = getId("ppIconWrap");
+  const iconEl = getId("ppIcon");
+  iconWrap.className =
+    "pip-suggestion-icon" + (variant !== "default" ? ` icon-${variant}` : "");
+  iconEl.setAttribute("data-lucide", icon);
+
+  getId("ppTitle").textContent = title;
+  getId("ppDesc").textContent = desc;
+
+  // Re-clone the buttons each time so previous calls' listeners never stack.
+  const oldConfirm = getId("ppConfirmBtn");
+  const oldCancel = getId("ppCancelBtn");
+  const confirmBtn = oldConfirm.cloneNode(true);
+  const cancelBtn = oldCancel.cloneNode(true);
+  oldConfirm.replaceWith(confirmBtn);
+  oldCancel.replaceWith(cancelBtn);
+
+  confirmBtn.textContent = confirmText;
+  cancelBtn.textContent = cancelText;
+  cancelBtn.style.display = hideCancel ? "none" : "";
+
+  confirmBtn.addEventListener("click", () => {
+    hidePP();
+    if (onConfirm) onConfirm();
+  });
+  cancelBtn.addEventListener("click", () => {
+    hidePP();
+    if (onCancel) onCancel();
+  });
+
+  modal.style.display = "flex";
+  if (window.lucide) window.lucide.createIcons({ root: modal });
+}
+
+function hidePP() {
+  const modal = getId("ppModal");
+  if (modal) modal.style.display = "none";
 }

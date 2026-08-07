@@ -7,27 +7,75 @@
  */
 
 :root {
-  /* Colors */
-  --ds-brand-50: #eef3ff;
-  --ds-brand-100: #d9e3ff;
-  --ds-brand-300: #8aa9ff;
-  --ds-brand-500: #4678f9;
-  --ds-brand-600: #376df9;
-  --ds-brand-700: #2a5ad6;
+  /* Colors - "Ocean" palette (dark theme, default) */
+  --ds-brand-50: #eef6fb;
+  --ds-brand-100: #d3e9f5;
+  --ds-brand-300: #7fcbea;
+  --ds-brand-500: #4bb4de;
+  --ds-brand-600: #3b8ac4;
+  --ds-brand-700: #345da7;
+  --ds-brand-500-rgb: 75, 180, 222;
+  --ds-brand-600-rgb: 59, 138, 196;
+  --ds-brand-700-rgb: 52, 93, 167;
 
   --ds-neutral-0: #ffffff;
-  --ds-neutral-50: #f9faff;
-  --ds-neutral-100: #e8ecf1;
-  --ds-neutral-300: #b0b6c2;
-  --ds-neutral-500: #6a6f82;
-  --ds-neutral-700: #292b32;
-  --ds-neutral-800: #1d2026;
-  --ds-neutral-900: #0f1117;
+  --ds-neutral-50: #f3f8fc;
+  --ds-neutral-100: #dceaf3;
+  --ds-neutral-300: #8fb0ce;
+  --ds-neutral-500: #6f8fae;
+  --ds-neutral-700: #16324f;
+  --ds-neutral-800: #0e2038;
+  --ds-neutral-900: #0b1a2e;
+
+  --ds-sand: #efdbcb;
 
   --ds-success: #22c55e;
   --ds-warning: #ffc107;
   --ds-danger: #e74c3c;
-  --ds-info: #5a8aff;
+  --ds-info: #4bb4de;
+
+  /* Surfaces */
+  --ds-bg-1: #0e2038; /* page bg gradient start */
+  --ds-bg-1-rgb: 14, 32, 56;
+  --ds-bg-2: #081527; /* page bg gradient end / opaque overlay bg */
+  --ds-bg-2-rgb: 8, 21, 39;
+  --ds-bg-deep: #0b1a2e; /* deep bg (modals, sunken sections) */
+  --ds-bg-deep-rgb: 11, 26, 46;
+  --ds-bg-elevated: #1c3b5c; /* elevated surface (cards) */
+  --ds-bg-panel: #16324f; /* panel / nested card surface */
+  --ds-bg-panel-rgb: 22, 50, 79;
+  --ds-border: #24406b; /* border / divider */
+  --ds-border-strong: #3c6693; /* stronger / hover border */
+  --ds-border-rgb: 36, 64, 107;
+  /* Translucent surface sitting on top of a colored gradient (e.g. the
+     landing-page room-code pill) - black-based in dark, white-based in
+     light, so it reads as a "punched in" surface in both themes. */
+  --ds-overlay-rgb: 0, 0, 0;
+
+  /* Text */
+  --ds-text-primary: #ffffff;
+  --ds-text-primary-rgb: 255, 255, 255;
+  --ds-text-secondary: #dceaf3;
+  --ds-text-tertiary: #c7dbec;
+  --ds-text-muted: #8fb0ce;
+  --ds-text-caption: #6f94b8;
+
+  /* CTA gradient stops - used by button-primary/#about button gradients. */
+  --ds-cta-1: #345da7;
+  --ds-cta-2: #3b8ac4;
+  --ds-cta-3: #4bb4de;
+
+  /* Hero/section gradient stops (e.g. landing .cta-inner) - a diagonal
+     corner/center gradient, kept in the mid-blue range (not the
+     brightest cyan or sand) so the white text sitting on top of it
+     stays legible everywhere on the card. */
+  --ds-hero-1: #345da7;
+  --ds-hero-2: #3b8ac4;
+
+  /* Text sitting directly on a --ds-cta-* gradient, and the matching
+     glow/box-shadow rgb. */
+  --ds-cta-text: #ffffff;
+  --ds-cta-glow-rgb: 75, 180, 222;
 
   /* Spacing (4px base) */
   --ds-space-1: 4px;
@@ -54,7 +102,7 @@
   --ds-shadow-md: 0 6px 18px rgba(0, 0, 0, 0.22);
   --ds-shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.32);
   --ds-shadow-focus:
-    0 0 0 2px var(--ds-brand-500), 0 0 0 4px rgba(70, 120, 249, 0.28);
+    0 0 0 2px var(--ds-brand-500), 0 0 0 4px rgba(var(--ds-brand-500-rgb), 0.28);
 
   /* Stacking order (use these instead of raw z-index values) */
   --ds-z-base: 1;
@@ -99,7 +147,7 @@
 ):focus-visible {
   outline: 2px solid var(--ds-brand-500);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(70, 120, 249, 0.28);
+  box-shadow: 0 0 0 4px rgba(var(--ds-brand-500-rgb), 0.28);
   border-radius: var(--ds-radius-sm);
 }
 

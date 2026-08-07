@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
   <head>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -18,30 +18,29 @@
         width: 0;
         height: 0;
       }
-
-      @media (max-width: 640px) {
-        #msgerDraggable {
-          padding: 0 !important;
-        }
-        #msger {
-          border-radius: 0 !important;
-          border: none !important;
-          max-width: 100% !important;
-        }
-      }
     </style>
 
     <!-- Title and Icon -->
 
     <title id="clientTitle">
-      MiroTalk WebRTC Video call, Chat Room & Screen Sharing.
+      DORA NIHONGO - Gọi video, Trò chuyện & Chia sẻ màn hình WebRTC.
     </title>
     <link id="icon" rel="shortcut icon" href="../images/logo.svg" />
     <link
       id="appleTouchIcon"
       rel="apple-touch-icon"
-      href="../images/logo.svg"
+      href="../images/mirotalk-logo.png"
     />
+
+    <!-- PWA: lets mobile browsers "Add to Home Screen" as a standalone
+         app (own icon, no browser address bar) instead of a bare
+         bookmark. -->
+    <link rel="manifest" href="../manifest.json" />
+    <meta name="theme-color" content="#3b8ac4" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DORA NIHONGO" />
 
     <!-- Meta Information -->
 
@@ -52,7 +51,7 @@
     />
     <meta
       name="description"
-      content="MiroTalk powered by WebRTC, Real-time Simple Secure Fast video calls, chat and screen sharing capabilities in the browser, from your mobile or desktop."
+      content="DORA NIHONGO sử dụng công nghệ WebRTC, hỗ trợ gọi video, trò chuyện và chia sẻ màn hình thời gian thực, đơn giản, an toàn và nhanh chóng ngay trên trình duyệt, từ điện thoại hoặc máy tính."
     />
 
     <!-- https://ogp.me -->
@@ -137,16 +136,21 @@
         width: 100% !important;
         height: 100% !important;
       }
-      /* Desktop pinned state */
+      /* Desktop pinned state. top/height reuse the same --stage-top /
+         --stage-pb custom properties #videoMediaContainer positions
+         itself with (defined in videoGrid.css) so this never drifts out
+         of sync with the video stage's own top/bottom gap - at this
+         breakpoint (>=1024px landscape) they resolve to the reference's
+         sm:pt-11/sm:pb-20 values (44px / 80px). */
       @media (min-width: 1024px) and (orientation: landscape) {
         #msgerDraggable.msger-pinned {
           position: absolute !important;
-          top: 50px !important;
+          top: var(--stage-top) !important;
           right: 16px !important;
           left: auto !important;
           bottom: auto !important;
           width: 320px !important;
-          height: calc(100% - 130px) !important;
+          height: calc(100% - var(--stage-top) - var(--stage-pb)) !important;
           background: transparent !important;
           backdrop-filter: none !important;
           padding: 0 !important;
@@ -217,22 +221,22 @@
       }
       .msg.left-msg .msg-bubble,
       .msg.left-msg .private-msg-bubble {
-        background-color: #1e293b;
-        border: 1px solid rgba(51, 65, 85, 0.8);
-        color: #f1f5f9;
+        background-color: var(--left-msg-bg);
+        border: 1px solid rgba(var(--ds-border-rgb), 0.8);
+        color: var(--ds-text-primary);
         border-bottom-left-radius: 0.125rem;
       }
       .msg.right-msg .msg-bubble,
       .msg.right-msg .private-msg-bubble {
-        background-color: #2563eb;
-        color: #ffffff;
+        background-color: var(--right-msg-bg);
+        color: var(--ds-cta-text);
         border-bottom-right-radius: 0.125rem;
       }
       .msg-footer {
         margin-top: 0.125rem;
         padding: 0 0.25rem;
         font-size: 10px;
-        color: #94a3b8;
+        color: var(--ds-text-muted);
         font-family:
           ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
           "Liberation Mono", "Courier New", monospace;
@@ -253,7 +257,7 @@
         align-items: center;
         justify-content: center;
         text-align: center;
-        color: #64748b;
+        color: var(--ds-text-caption);
         font-size: 0.75rem;
         padding: 2rem 0;
         height: 100%;
@@ -267,7 +271,7 @@
   </head>
 
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>Bạn cần bật JavaScript để chạy ứng dụng này.</noscript>
 
     <!-- Disconnect banner -->
 
@@ -283,9 +287,9 @@
           <i id="disconnectBannerIcon" class="fa-solid fa-wifi-exclamation"></i>
         </span>
         <div class="disconnect-banner-text">
-          <span id="disconnectBannerTitle">Connection lost</span>
+          <span id="disconnectBannerTitle">Mất kết nối</span>
           <span id="disconnectBannerMsg"
-            >Reconnecting to signaling server&hellip;</span
+            >Đang kết nối lại với máy chủ tín hiệu&hellip;</span
           >
         </div>
         <span class="disconnect-banner-spinner" id="disconnectBannerSpinner">
@@ -302,30 +306,32 @@
 
     <!-- show this before to join -->
 
-    <div id="loadingDiv" class="center">
-      <div class="loading-spinner">
-        <div class="spinner-ring"></div>
-        <img class="spinner-logo" src="../images/logo.svg" alt="logo" />
+    <div id="loadingBackdrop" class="loading-backdrop">
+      <div id="loadingDiv">
+        <div class="loading-spinner">
+          <div class="spinner-ring"></div>
+          <img class="spinner-logo" src="../images/logo.svg" alt="logo" />
+        </div>
+        <h1>Đang tải</h1>
+        <pre>
+Vui lòng cho phép truy cập camera hoặc
+micro để sử dụng ứng dụng này.
+              </pre>
       </div>
-      <h1>Loading</h1>
-      <pre>
-Please allow the camera or microphone
-access to use this app.
-            </pre>
     </div>
 
     <!-- Scan to Join -->
 
     <div id="qrRoomPopupContainer" class="top-center fadein">
       <canvas id="qrRoomPopup"></canvas>
-      <div id="qrText">Scan to join the room</div>
+      <div id="qrText">Quét mã để vào phòng</div>
     </div>
 
     <!-- init user devices -->
 
     <div id="initUser" class="init-user hidden">
       <!-- <p>Please allow the camera & microphone access to use this app.</p> -->
-      <div id="initVideoContainer" class="init-video-container">
+      <div id="initVideoContainer" class="init-video-container" style="display: none">
         <div id="initVideoLoader" class="init-video-loader">
           <div class="loading-spinner">
             <div class="spinner-ring"></div>
@@ -340,26 +346,42 @@ access to use this app.
         ></video>
       </div>
       <div class="initComands">
-        <button id="initVideoBtn" class="fas fa-video"></button>
         <button id="initAudioBtn" class="fas fa-microphone"></button>
-        <button id="initScreenShareBtn" class="fas fa-desktop"></button>
+        <button id="initVideoBtn" class="fas fa-video"></button>
+        <button
+          id="initScreenShareBtn"
+          class="fas fa-desktop"
+          style="display: none"
+        ></button>
         <button
           id="initVideoMirrorBtn"
           class="fas fa-arrow-right-arrow-left"
+          style="display: none"
         ></button>
-        <button id="initUsernameEmojiButton" class="fas fa-smile"></button>
-        <button id="initExitBtn" class="fas fa-sign-out-alt red"></button>
+        <button
+          id="initUsernameEmojiButton"
+          class="fas fa-smile"
+          style="display: none"
+        ></button>
+        <button
+          id="initExitBtn"
+          class="fas fa-sign-out-alt red"
+          style="display: none"
+        ></button>
         <select
           id="initVideoSelect"
           class="form-select text-light bg-dark"
+          style="display: none"
         ></select>
         <select
           id="initMicrophoneSelect"
           class="form-select text-light bg-dark"
+          style="display: none"
         ></select>
         <select
           id="initSpeakerSelect"
           class="form-select text-light bg-dark"
+          style="display: none"
         ></select>
       </div>
     </div>
@@ -375,7 +397,7 @@ access to use this app.
           id="audioBtn"
           class="fas fa-microphone"
           type="button"
-          aria-label="Toggle microphone"
+          aria-label="Bật tắt micro"
           aria-pressed="false"
         ></button>
         <div id="audioDropdown" class="dropdown dropup hidden">
@@ -385,7 +407,7 @@ access to use this app.
             type="button"
             data-bs-toggle="dropdown"
             aria-expanded="false"
-            aria-label="Select microphone"
+            aria-label="Chọn micro"
           >
             <i class="fas fa-chevron-up"></i>
           </button>
@@ -401,7 +423,7 @@ access to use this app.
           id="videoBtn"
           class="fas fa-video"
           type="button"
-          aria-label="Toggle camera"
+          aria-label="Bật tắt camera"
           aria-pressed="false"
         ></button>
         <div id="videoDropdown" class="dropdown dropup hidden">
@@ -411,7 +433,7 @@ access to use this app.
             type="button"
             data-bs-toggle="dropdown"
             aria-expanded="false"
-            aria-label="Select camera"
+            aria-label="Chọn camera"
           >
             <i class="fas fa-chevron-up"></i>
           </button>
@@ -427,27 +449,27 @@ access to use this app.
         id="swapCameraBtn"
         class="fas fa-camera-rotate"
         type="button"
-        aria-label="Swap camera"
+        aria-label="Đổi camera"
       ></button>
       <button
         id="screenShareBtn"
         class="fas fa-desktop"
         type="button"
-        aria-label="Toggle screen sharing"
+        aria-label="Bật tắt chia sẻ màn hình"
         aria-pressed="false"
       ></button>
       <button
         id="myHandBtn"
         class="fas fa-hand-paper"
         type="button"
-        aria-label="Raise hand"
+        aria-label="Giơ tay"
         aria-pressed="false"
       ></button>
       <button
         id="chatRoomBtn"
         class="fas fa-comment"
         type="button"
-        aria-label="Toggle chat"
+        aria-label="Bật tắt trò chuyện"
         aria-pressed="false"
       ></button>
 
@@ -459,7 +481,7 @@ access to use this app.
             class="dropdown-toggle device-dropdown-toggle"
             type="button"
             aria-expanded="false"
-            aria-label="Settings menu"
+            aria-label="Menu cài đặt"
           >
             <i class="fas fa-chevron-up"></i>
           </button>
@@ -473,10 +495,10 @@ access to use this app.
               class="device-menu-header extra-menu-group"
               data-buttons="shareRoomBtn"
             >
-              SHARING
+              CHIA SẺ
             </div>
             <button id="shareRoomBtn" class="app-dropdown-action">
-              <i class="fas fa-share-alt"></i> Share Room
+              <i class="fas fa-share-alt"></i> Chia sẻ phòng
             </button>
             <div
               class="device-menu-divider extra-menu-divider"
@@ -487,10 +509,10 @@ access to use this app.
               class="device-menu-header extra-menu-group"
               data-buttons="recordStreamBtn"
             >
-              RECORDING & CAPTURE
+              GHI HÌNH & CHỤP
             </div>
             <button id="recordStreamBtn" class="app-dropdown-action">
-              <i class="fas fa-record-vinyl"></i> Start Recording
+              <i class="fas fa-record-vinyl"></i> Bắt đầu ghi hình
             </button>
 
             <div
@@ -503,10 +525,10 @@ access to use this app.
               class="device-menu-header extra-menu-group"
               data-buttons="documentPiPBtn"
             >
-              TOOLS
+              CÔNG CỤ
             </div>
             <button id="documentPiPBtn" class="app-dropdown-action">
-              <i class="fas fa-images"></i> Document PiP
+              <i class="fas fa-images"></i> Hình trong hình (trình duyệt)
             </button>
 
             <div
@@ -519,13 +541,13 @@ access to use this app.
               class="device-menu-header extra-menu-group"
               data-buttons="hideMeBtn,fullScreenBtn"
             >
-              VIEW & SETTINGS
+              HIỂN THỊ & CÀI ĐẶT
             </div>
             <button id="hideMeBtn" class="app-dropdown-action">
-              <i class="fas fa-user"></i> Hide Me
+              <i class="fas fa-user"></i> Ẩn tôi
             </button>
             <button id="fullScreenBtn" class="app-dropdown-action">
-              <i class="fas fa-expand-alt"></i> Full Screen
+              <i class="fas fa-expand-alt"></i> Toàn màn hình
             </button>
           </div>
         </div>
@@ -535,7 +557,7 @@ access to use this app.
         <button id="leaveRoomBtn" class="fa-solid fa-phone-slash"></button>
         <div id="exitMenu" class="hidden" aria-labelledby="leaveRoomBtn">
           <button id="exitLeaveBtn">
-            <i class="fas fa-sign-out-alt"></i> Leave room
+            <i class="fas fa-sign-out-alt"></i> Rời phòng
           </button>
         </div>
       </div>
@@ -554,7 +576,6 @@ access to use this app.
         <!-- Audio -->
         <button
           id="newAudioBtn"
-          title="Bật Micro"
           class="cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-slate-800 hover:bg-slate-700 text-slate-200"
         >
           <i
@@ -566,7 +587,6 @@ access to use this app.
         <!-- Video -->
         <button
           id="newVideoBtn"
-          title="Bật Camera"
           class="cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-slate-800 hover:bg-slate-700 text-slate-200"
         >
           <i
@@ -578,7 +598,6 @@ access to use this app.
         <!-- Screen Share -->
         <button
           id="newScreenBtn"
-          title="Chia sẻ màn hình"
           class="cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg items-center justify-center transition-all bg-slate-800 hover:bg-slate-700 text-slate-200"
         >
           <svg
@@ -600,7 +619,6 @@ access to use this app.
         <!-- Record -->
         <button
           id="newRecordBtn"
-          title="Ghi hình"
           class="cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all"
         >
           <i
@@ -612,7 +630,6 @@ access to use this app.
         <!-- Chat -->
         <button
           id="newChatBtn"
-          title="Trò chuyện"
           class="cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all relative bg-slate-800 hover:bg-slate-700 text-slate-200"
         >
           <svg
@@ -641,7 +658,6 @@ access to use this app.
         <!-- PiP Mode -->
         <button
           id="newPipBtn"
-          title="Mở Hình trong hình"
           style="opacity: 0.5; pointer-events: none"
           class="cursor-not-allowed hidden md:flex opacity-50 p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all"
         >
@@ -654,7 +670,6 @@ access to use this app.
         <!-- Fullscreen Video (Mobile only) -->
         <button
           id="newFullscreenBtn"
-          title="Toàn màn hình video"
           class="hidden sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all"
         >
           <i
@@ -666,7 +681,6 @@ access to use this app.
         <!-- Settings -->
         <button
           id="newSettingsBtn"
-          title="Cài đặt"
           class="cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition-all"
         >
           <i
@@ -683,7 +697,6 @@ access to use this app.
         <!-- Leave Call -->
         <button
           id="newLeaveBtn"
-          title="Rời cuộc gọi"
           class="cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all shadow-lg shadow-rose-600/30 font-medium"
         >
           <i
@@ -711,6 +724,14 @@ access to use this app.
           const newChat = document.getElementById("newChatBtn");
           const oldPip = document.getElementById("documentPiPBtn");
           const newPip = document.getElementById("newPipBtn");
+
+          // The reference only ever shows this button when the browser
+          // exposes the real Picture-in-Picture API (used purely as a
+          // capability check - the actual PiP is an in-page overlay,
+          // see togglePagePip in client.js), and never on mobile.
+          if (newPip && !("documentPictureInPicture" in window)) {
+            newPip.style.display = "none";
+          }
           const oldFs = document.getElementById("fullScreenBtn");
           const newFs = document.getElementById("newFullscreenBtn");
           const oldSettings = document.getElementById("mySettingsBtn");
@@ -727,7 +748,9 @@ access to use this app.
           newScreen?.addEventListener("click", () => oldScreen?.click());
           newRecord?.addEventListener("click", () => oldRecord?.click());
           newChat?.addEventListener("click", () => oldChat?.click());
-          newPip?.addEventListener("click", () => oldPip?.click());
+          newPip?.addEventListener("click", () => {
+            if (typeof togglePagePip === "function") togglePagePip("toggle");
+          });
           newFs?.addEventListener("click", () => oldFs?.click());
           newSettings?.addEventListener("click", () => oldSettings?.click());
           newLeave?.addEventListener("click", () => {
@@ -735,12 +758,37 @@ access to use this app.
             else oldLeave?.click();
           });
 
+          // Site tooltips (Tippy.js), not native browser title tooltips.
+          // Scoped on purpose to just the control bar buttons, the two
+          // fullscreen buttons, and the chat "share video/audio" button -
+          // short, static labels rather than state-dependent text.
+          if (typeof tippy === "function") {
+            const tip = (el, content) => {
+              // touch: false - only show via real mouse hover, never on
+              // tap (tapping a button on touch devices fires a "focus"
+              // event, which is one of Tippy's default triggers, so
+              // without this the tooltip pops up and stays stuck open
+              // after every tap on mobile).
+              if (el) tippy(el, { content, placement: "top", touch: false });
+            };
+            tip(newAudio, "Micro");
+            tip(newVideo, "Camera");
+            tip(newScreen, "Chia sẻ màn hình");
+            tip(newRecord, "Ghi hình");
+            tip(newChat, "Trò chuyện");
+            tip(newPip, "Hình trong hình");
+            tip(newFs, "Toàn màn hình");
+            tip(newSettings, "Cài đặt");
+            tip(newLeave, "Rời cuộc gọi");
+            tip(document.getElementById("msgerVideoUrlBtn"), "Chia sẻ video/audio");
+            tip(document.getElementById("fullScreenCornerBtn"), "Toàn màn hình");
+          }
+
           const updateUI = () => {
             // Audio state
             if (oldAudio?.className.includes("fa-microphone-slash")) {
               newAudio.className =
                 "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30";
-              newAudio.title = "Bật Micro";
               if (newAudio.getAttribute("data-state") !== "off") {
                 newAudio.innerHTML =
                   '<i data-lucide="mic-off" class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"></i>';
@@ -750,7 +798,6 @@ access to use this app.
             } else {
               newAudio.className =
                 "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-slate-800 hover:bg-slate-700 text-slate-200";
-              newAudio.title = "Tắt Micro";
               if (newAudio.getAttribute("data-state") !== "on") {
                 newAudio.innerHTML =
                   '<i data-lucide="mic" class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"></i>';
@@ -767,12 +814,10 @@ access to use this app.
             if (isScreenSharing) {
               newVideo.className =
                 "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-slate-800/50 text-slate-500 cursor-not-allowed opacity-50";
-              newVideo.title = "Không thể bật camera khi đang chia sẻ màn hình";
               newVideo.disabled = true;
             } else if (oldVideo?.className.includes("fa-video-slash")) {
               newVideo.className =
                 "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30";
-              newVideo.title = "Bật Camera";
               newVideo.disabled = false;
               if (newVideo.getAttribute("data-state") !== "off") {
                 newVideo.innerHTML =
@@ -783,7 +828,6 @@ access to use this app.
             } else {
               newVideo.className =
                 "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all bg-slate-800 hover:bg-slate-700 text-slate-200";
-              newVideo.title = "Tắt Camera";
               newVideo.disabled = false;
               if (newVideo.getAttribute("data-state") !== "on") {
                 newVideo.innerHTML =
@@ -793,15 +837,22 @@ access to use this app.
               }
             }
 
-            // Screen state
-            if (isScreenSharing) {
+            // Screen state (block starting a share while the other
+            // participant is already sharing theirs, like ControlBar.tsx)
+            const remoteIsSharing =
+              !!window.isRemoteScreenSharing && !isScreenSharing;
+            if (remoteIsSharing) {
+              newScreen.className =
+                "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg items-center justify-center transition-all bg-slate-800/50 text-slate-500 cursor-not-allowed opacity-50";
+              newScreen.disabled = true;
+            } else if (isScreenSharing) {
               newScreen.className =
                 "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg items-center justify-center transition-all bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30";
-              newScreen.title = "Dừng chia sẻ màn hình";
+              newScreen.disabled = false;
             } else {
               newScreen.className =
                 "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg items-center justify-center transition-all bg-slate-800 hover:bg-slate-700 text-slate-200";
-              newScreen.title = "Chia sẻ màn hình";
+              newScreen.disabled = false;
             }
 
             // Chat state
@@ -826,15 +877,13 @@ access to use this app.
             }
 
             // PiP state
-            const isPipActive = oldPip?.classList.contains("isActive");
+            const isPipActive = !!window.isInPagePip;
             if (isPipActive) {
               newPip.className =
                 "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-blue-600 text-white items-center justify-center transition-all";
-              newPip.title = "Đóng Hình trong hình";
             } else {
               newPip.className =
                 "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all";
-              newPip.title = "Mở Hình trong hình";
             }
 
             if (oldBottom && newBottom) {
@@ -867,6 +916,13 @@ access to use this app.
               });
           });
 
+          // Also expose updateUI so client.js can trigger a refresh when
+          // the REMOTE peer's screen-share flag changes - that flag isn't
+          // a DOM attribute on any of the watched elements above, so the
+          // MutationObserver alone never notices it (e.g. B's own "Chia
+          // sẻ màn hình" button would stay enabled while A is sharing).
+          window.updateNewControlBarUI = updateUI;
+
           updateUI(); // run once
         }, 1500);
       });
@@ -896,7 +952,6 @@ access to use this app.
           <div class="flex items-center gap-1">
             <button
               id="msgerClose"
-              title="Đóng"
               class="cursor-pointer p-2 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 active:bg-slate-700 transition-colors"
             >
               <i data-lucide="x" class="w-5 h-5"></i>
@@ -904,63 +959,65 @@ access to use this app.
           </div>
         </header>
 
-        <!-- Messages List Area -->
+        <!-- Messages List Area (matches ChatPanel.tsx: this wrapper's own
+        bottom edge is the input bar's top edge, so bottom-3 on the scroll
+        button sits 12px above the input - the composer is a SIBLING below,
+        not nested inside this wrapper) -->
         <div class="msger-layout relative flex-1 overflow-hidden flex flex-col">
-          <section class="msger-main flex-1 overflow-hidden flex flex-col">
-            <main
-              id="msgerChat"
-              class="msger-chat flex-1 p-4 overflow-y-auto space-y-2 font-sans text-xs sm:text-sm no-scrollbar flex flex-col"
-            >
-              <div
-                id="msgerEmptyState"
-                class="h-full flex flex-col items-center justify-center text-center text-slate-500 py-8 m-auto"
-              >
-                <i
-                  data-lucide="message-circle"
-                  class="w-10 h-10 mb-2 opacity-40 text-slate-500"
-                  style="stroke-width: 1.5"
-                ></i>
-                <p class="text-xs">Chưa có tin nhắn nào.</p>
-                <p class="text-[11px] text-slate-600 mt-1">
-                  Gửi tin nhắn để bắt đầu trò chuyện trong phòng gọi.
-                </p>
-              </div>
-              <!-- Chat messages will be appended here -->
-            </main>
-
-            <!-- Floating Down Arrow Button -->
-            <button
-              id="msgerScrollBottomBtn"
-              title="Cuộn xuống tin nhắn mới nhất"
-              class="absolute bottom-16 left-1/2 -translate-x-1/2 p-2 bg-slate-800/95 hover:bg-slate-700 backdrop-blur-md text-blue-400 border border-slate-700 rounded-full shadow-xl transition-all flex items-center justify-center z-10 hover:scale-105 active:scale-95 hidden"
-            >
-              <i data-lucide="chevron-down" class="w-4 h-4"></i>
-            </button>
-
-            <!-- Chat Input -->
+          <main
+            id="msgerChat"
+            class="msger-chat flex-1 p-4 overflow-y-auto space-y-2 font-sans text-xs sm:text-sm no-scrollbar flex flex-col"
+          >
             <div
-              class="msger-composer p-3 bg-slate-900 border-t border-slate-800 flex items-center gap-2 shrink-0"
+              id="msgerEmptyState"
+              class="h-full flex flex-col items-center justify-center text-center text-slate-500 py-8 m-auto"
             >
-              <button
-                id="msgerVideoUrlBtn"
-                class="hidden"
-                style="display: none"
-              ></button>
-
-              <textarea
-                id="msgerInput"
-                rows="1"
-                placeholder="Nhập tin nhắn..."
-                class="msger-input flex-1 px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-[16px] sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-none"
-              ></textarea>
-              <button
-                id="msgerSendBtn"
-                class="cursor-pointer p-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl transition-all shadow-md shadow-blue-600/20"
-              >
-                <i data-lucide="send" class="w-4 h-4"></i>
-              </button>
+              <i
+                data-lucide="message-circle"
+                class="w-10 h-10 mb-2 opacity-40 text-slate-500"
+                style="stroke-width: 1.5"
+              ></i>
+              <p class="text-xs">Chưa có tin nhắn nào.</p>
+              <p class="text-[11px] text-slate-600 mt-1">
+                Gửi tin nhắn để bắt đầu trò chuyện trong phòng gọi.
+              </p>
             </div>
-          </section>
+            <!-- Chat messages will be appended here -->
+          </main>
+
+          <!-- Floating Down Arrow Button -->
+          <button
+            id="msgerScrollBottomBtn"
+            class="absolute bottom-3 left-1/2 -translate-x-1/2 p-2 bg-slate-800/95 hover:bg-slate-700 backdrop-blur-md text-blue-400 border border-slate-700 rounded-full shadow-xl transition-all flex items-center justify-center z-10 hover:scale-105 active:scale-95 hidden"
+          >
+            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Chat Input -->
+        <div
+          class="msger-composer p-3 bg-slate-900 border-t border-slate-800 flex items-center gap-2 shrink-0"
+        >
+          <button
+            id="msgerVideoUrlBtn"
+            class="cursor-pointer p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl transition-all"
+            style="display: none"
+          >
+            <i class="fab fa-youtube" style="font-size: 16px"></i>
+          </button>
+
+          <textarea
+            id="msgerInput"
+            rows="1"
+            placeholder="Nhập tin nhắn..."
+            class="msger-input flex-1 px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-[17px] sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-none"
+          ></textarea>
+          <button
+            id="msgerSendBtn"
+            class="cursor-pointer p-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl transition-all shadow-md shadow-blue-600/20"
+          >
+            <i data-lucide="send" class="w-4 h-4"></i>
+          </button>
         </div>
       </section>
     </section>
@@ -968,36 +1025,28 @@ access to use this app.
 
     <!-- Start my settings -->
 
-    <section id="mySettings" class="center fadein">
+    <div id="mySettingsBackdrop" style="display: none">
+    <section id="mySettings">
       <header id="mySettingsHeader">
+        <div class="ms-header-title">
+          <i class="fas fa-cog"></i>
+          <span>Cài đặt</span>
+        </div>
         <button id="mySettingsCloseBtn" class="fas fa-times"></button>
       </header>
       <main class="mySettingsMain">
         <div class="tab">
-          <button id="tabRoomBtn" class="fas fa-home tablinks">
-            <p class="tabButtonText">Room</p>
-          </button>
-          <button id="tabVideoBtn" class="fas fa-video tablinks">
-            <p class="tabButtonText">Video</p>
-          </button>
-          <button id="tabAudioBtn" class="fas fa-microphone tablinks">
-            <p class="tabButtonText">Audio</p>
-          </button>
-          <button id="tabRecordingBtn" class="fas fa-record-vinyl tablinks">
-            <p class="tabButtonText">Recording</p>
-          </button>
-          <button id="tabVideoShareBtn" class="fab fa-youtube tablinks">
-            <p class="tabButtonText">Media</p>
+          <button id="tabRoomBtn" class="fas fa-sliders tablinks active">
+            <p class="tabButtonText">Chung</p>
           </button>
           <button id="tabProfileBtn" class="fa-solid fa-user tablinks">
-            <p class="tabButtonText">Profile</p>
+            <p class="tabButtonText">Hồ sơ</p>
           </button>
-
+          <button id="tabDevicesBtn" class="fa-solid fa-headset tablinks">
+            <p class="tabButtonText">Thiết bị</p>
+          </button>
           <button id="tabNetworkBtn" class="fa-solid fa-network-wired tablinks">
-            <p class="tabButtonText">Network</p>
-          </button>
-          <button id="tabLanguagesBtn" class="fas fa-globe tablinks">
-            <p class="tabButtonText">Language</p>
+            <p class="tabButtonText">Mạng</p>
           </button>
         </div>
 
@@ -1008,32 +1057,35 @@ access to use this app.
                 <td>
                   <div class="title">
                     <i class="fa-solid fa-person-shelter"></i>
-                    <p id="myRoomId" class="cp">
-                      xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-                    </p>
+                    <p id="myRoomId">xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</p>
                   </div>
                 </td>
               </tr>
             </table>
 
-            <div id="tabRoomSecurity">
-              <button id="lockRoomBtn" class="orange">
-                <i class="fas fa-lock-open orange"></i>&nbsp;Lock room
-              </button>
-              <button id="unlockRoomBtn" class="red">
-                <i class="fas fa-lock red"></i>&nbsp;Unlock room
-              </button>
-              <br />
-            </div>
-
-            <br />
             <br />
             <table id="mySettingsTable">
+              <tr id="tabRoomSecurity">
+                <td class="w-80">
+                  <div class="title">
+                    <i id="roomLockStatusIcon" class="fas fa-lock-open orange"></i>
+                    <p>Khóa phòng</p>
+                  </div>
+                </td>
+                <td>
+                  <button id="lockRoomBtn" class="room-lock-btn orange">
+                    Khóa
+                  </button>
+                  <button id="unlockRoomBtn" class="room-lock-btn red">
+                    Mở khóa
+                  </button>
+                </td>
+              </tr>
               <tr>
                 <td class="w-80">
                   <div class="title">
                     <i class="fas fa-music"></i>
-                    <p>Sounds</p>
+                    <p>Âm báo</p>
                   </div>
                 </td>
                 <td>
@@ -1045,27 +1097,37 @@ access to use this app.
                   />
                 </td>
               </tr>
-              <tr id="shareOnJoinButton">
+              <tr id="noiseSuppressionBtn">
                 <td class="w-80">
                   <div class="title">
-                    <i class="fas fa-share-alt"></i>
-                    <p>Share</p>
+                    <i class="fas fa-ear-listen"></i>
+                    <p id="labelNoiseSuppression">Khử tiếng ồn</p>
                   </div>
                 </td>
                 <td>
                   <input
-                    id="switchShare"
+                    id="switchNoiseSuppression"
                     class="toggle"
                     type="checkbox"
-                    checked
                   />
                 </td>
               </tr>
-              <tr id="keepButtonsVisibleButton">
+              <tr id="shareOnJoinButton" style="display: none">
+                <td class="w-80">
+                  <div class="title">
+                    <i class="fas fa-share-alt"></i>
+                    <p>Chia sẻ</p>
+                  </div>
+                </td>
+                <td>
+                  <input id="switchShare" class="toggle" type="checkbox" />
+                </td>
+              </tr>
+              <tr id="keepButtonsVisibleButton" style="display: none">
                 <td class="w-80">
                   <div class="title">
                     <i class="fas fa-eye"></i>
-                    <p>Buttons</p>
+                    <p>Giữ hiện nút</p>
                   </div>
                 </td>
                 <td>
@@ -1080,18 +1142,18 @@ access to use this app.
                 <td class="w-80">
                   <div class="title">
                     <i class="fa-solid fa-mobile-screen"></i>
-                    <p>Keep awake</p>
+                    <p>Không tắt màn hình</p>
                   </div>
                 </td>
                 <td>
                   <input id="switchKeepAwake" class="toggle" type="checkbox" />
                 </td>
               </tr>
-              <tr id="pinChatByDefaultRow">
+              <tr id="pinChatByDefaultRow" style="display: none">
                 <td class="w-80">
                   <div class="title">
                     <i class="fas fa-comments"></i>
-                    <p>Pin chat</p>
+                    <p>Ghim khung chat</p>
                   </div>
                 </td>
                 <td>
@@ -1103,159 +1165,194 @@ access to use this app.
                 </td>
               </tr>
             </table>
-            <br />
-            <table id="mySettingsTable">
-              <tr>
-                <td>
-                  <div class="title">
-                    <i class="fas fa-clock"></i>
-                  </div>
-                  <span id="mySessionTime">0s</span>
-                </td>
-              </tr>
-            </table>
           </div>
 
-          <div id="tabVideo" class="tabcontent">
+          <div id="tabProfile" class="tabcontent">
+            <div id="tabRoomPeerName">
+              <div id="myProfileAvatarContainer">
+                <img id="myProfileAvatar" />
+                <div id="myProfileAvatarBtns">
+                  <button id="myProfileAvatarUploadBtn">
+                    <i class="fas fa-image"></i>&nbsp;Đổi ảnh
+                  </button>
+                </div>
+              </div>
+              <br />
+              <div id="myPeerNameSetContainer">
+                <input
+                  id="myPeerNameSet"
+                  type="text"
+                  placeholder="Đổi tên..."
+                  maxlength="254"
+                />
+                <span
+                  id="myPeerNameSuccessIcon"
+                  class="my-peer-name-success-icon"
+                  style="display: none"
+                >
+                  <i class="fas fa-check"></i>
+                </span>
+                <button id="myPeerNameSetBtn">
+                  <i class="fas fa-user-edit"></i>&nbsp;Đổi tên
+                </button>
+              </div>
+            </div>
+            <div class="title" style="display: none">
+              <i class="fa-solid fa-user-shield"></i>
+              <p>Người trình bày:</p>
+              <p id="isPeerPresenter">true</p>
+            </div>
+            <div class="title" style="display: none">
+              <i class="fa-solid fa-circle-info"></i>
+              <p>Thông tin thêm:</p>
+            </div>
+            <div class="extra-info-container" style="display: none">
+              <div id="extraInfo"></div>
+            </div>
+          </div>
+
+          <div id="tabDevices" class="tabcontent">
             <div id="videoSourceDiv">
               <div class="title">
                 <i class="fas fa-video"></i>
-                <p>Video Source</p>
+                <p>Nguồn video</p>
+              </div>
+              <div id="videoSourceDeviceSelector" class="device-selector">
+                <button
+                  type="button"
+                  class="device-selector-btn"
+                  data-dir="prev"
+                  aria-label="Thiết bị trước"
+                >
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="device-selector-label">Mặc định</span>
+                <button
+                  type="button"
+                  class="device-selector-btn"
+                  data-dir="next"
+                  aria-label="Thiết bị sau"
+                >
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
+              <select id="videoSource" style="display: none"></select>
+            </div>
+            <div id="videoQualityDiv" style="display: none">
+              <div class="title">
+                <i class="fas fa-palette"></i>
+                <p>Chất lượng video</p>
               </div>
               <br />
-              <select id="videoSource"></select>
-              <br />
+              <select id="videoQuality">
+                <option value="default">Mặc định</option>
+                <option value="qvga">QVGA</option>
+                <option value="vga">VGA</option>
+                <option value="hd">HD</option>
+                <option value="fhd">FULL HD</option>
+                <option value="2k">2k</option>
+                <option value="4k">4K</option>
+                <option value="6k">6K</option>
+                <option value="8k">8K</option>
+              </select>
             </div>
-            <div class="title">
-              <i class="fas fa-palette"></i>
-              <p>Video Quality</p>
-            </div>
-            <br />
-            <select id="videoQuality">
-              <option value="default">Default</option>
-              <option value="qvga">QVGA</option>
-              <option value="vga">VGA</option>
-              <option value="hd">HD</option>
-              <option value="fhd">FULL HD</option>
-              <option value="2k">2k</option>
-              <option value="4k">4K</option>
-              <option value="6k">6K</option>
-              <option value="8k">8K</option>
-            </select>
-            <div id="videoFitDiv">
+            <div id="videoFitDiv" style="display: none">
               <br />
               <div class="title">
                 <i class="fa-solid fa-film"></i>
-                <p>Video fit</p>
+                <p>Khung hình video</p>
               </div>
               <br />
               <select id="videoObjFitSelect">
-                <option value="fill">Fill</option>
-                <option value="contain">Contain</option>
-                <option value="cover">Cover</option>
-                <option value="scale-down">Scale-down</option>
-                <option value="none">None</option>
+                <option value="fill">Lấp đầy</option>
+                <option value="contain">Vừa khung</option>
+                <option value="cover">Phủ kín</option>
+                <option value="scale-down">Thu nhỏ</option>
+                <option value="none">Không</option>
               </select>
             </div>
-            <div id="videoFpsDiv">
+            <div id="videoFpsDiv" style="display: none">
               <br />
               <div class="title">
                 <i class="fa-solid fa-camera"></i>
-                <p>Camera FPS</p>
+                <p>Khung hình/giây Camera</p>
               </div>
               <br />
               <select id="videoFps">
-                <option value="60">60 - frame-per-second</option>
-                <option value="30">30 - frame-per-second</option>
-                <option value="15">15 - frame-per-second</option>
-                <option value="5">5 - frame-per-second</option>
+                <option value="60">60 khung hình/giây</option>
+                <option value="30">30 khung hình/giây</option>
+                <option value="15">15 khung hình/giây</option>
+                <option value="5">5 khung hình/giây</option>
               </select>
             </div>
-            <div id="screenFpsDiv">
+            <div id="screenFpsDiv" style="display: none">
               <br />
               <div class="title">
                 <i class="fa-solid fa-desktop"></i>
-                <p>Screen FPS</p>
+                <p>Khung hình/giây màn hình</p>
               </div>
               <br />
               <select id="screenFps">
-                <option value="60">60 - frame-per-second</option>
-                <option value="30">30 - frame-per-second</option>
-                <option value="15">15 - frame-per-second</option>
-                <option value="5">5 - frame-per-second</option>
+                <option value="60">60 khung hình/giây</option>
+                <option value="30">30 khung hình/giây</option>
+                <option value="15">15 khung hình/giây</option>
+                <option value="5">5 khung hình/giây</option>
               </select>
             </div>
-          </div>
 
-          <div id="tabAudio" class="tabcontent">
-            <div>
+            <div id="audioSourceDiv">
               <div class="title">
                 <i class="fas fa-microphone"></i>
-                <p>Microphone</p>
+                <p>Micro</p>
               </div>
-              <br />
-              <select id="audioSource"></select>
+              <div id="audioSourceDeviceSelector" class="device-selector">
+                <button
+                  type="button"
+                  class="device-selector-btn"
+                  data-dir="prev"
+                  aria-label="Thiết bị trước"
+                >
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="device-selector-label">Mặc định</span>
+                <button
+                  type="button"
+                  class="device-selector-btn"
+                  data-dir="next"
+                  aria-label="Thiết bị sau"
+                >
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
+              <select id="audioSource" style="display: none"></select>
             </div>
-            <br />
-            <div class="volume-container">
-              <div class="volume-bar"></div>
-              <div class="volume-bar"></div>
-              <div class="volume-bar"></div>
-              <div class="volume-bar"></div>
-              <div class="volume-bar"></div>
-              <div class="volume-bar"></div>
-              <div class="volume-bar"></div>
-              <div class="volume-bar"></div>
-              <div class="volume-bar"></div>
-              <div class="volume-bar"></div>
-            </div>
-            <br />
-            <div id="micOptionsDiv">
-              <table id="mySettingsTable">
-                <tr id="noiseSuppressionBtn">
-                  <td class="w-80">
-                    <div class="title">
-                      <i class="fas fa-ear-listen"></i>
-                      <p id="labelNoiseSuppression">Noise Suppression</p>
-                    </div>
-                  </td>
-                  <td>
-                    <input
-                      id="switchNoiseSuppression"
-                      class="toggle"
-                      type="checkbox"
-                    />
-                  </td>
-                </tr>
-              </table>
-              <br /><br />
-            </div>
+
             <div id="audioOutputDiv">
               <div class="title">
                 <i class="fas fa-headphones"></i>
-                <p>Speaker</p>
+                <p>Loa</p>
               </div>
-              <br />
-              <select id="audioOutput"></select>
-              <button id="speakerTestBtn" class="buttons">
-                <i class="fa-solid fa-circle-play"></i>
-                <p>Test speaker</p>
-              </button>
-              <br /><br /><br /><br /><br />
+              <div id="audioOutputDeviceSelector" class="device-selector">
+                <button
+                  type="button"
+                  class="device-selector-btn"
+                  data-dir="prev"
+                  aria-label="Thiết bị trước"
+                >
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="device-selector-label">Mặc định</span>
+                <button
+                  type="button"
+                  class="device-selector-btn"
+                  data-dir="next"
+                  aria-label="Thiết bị sau"
+                >
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
+              <select id="audioOutput" style="display: none"></select>
             </div>
-            <table id="mySettingsTable">
-              <tr id="pushToTalkDiv">
-                <td class="w-80">
-                  <div class="title">
-                    <i class="fa-solid fa-hand-pointer"></i>
-                    <p>Push to talk</p>
-                  </div>
-                </td>
-                <td>
-                  <input id="switchPushToTalk" class="toggle" type="checkbox" />
-                </td>
-              </tr>
-            </table>
           </div>
 
           <div id="tabRecording" class="tabcontent">
@@ -1265,11 +1362,11 @@ access to use this app.
               <br />
               <button id="pauseRecBtn" class="buttons">
                 <i class="far fa-pause-circle"></i>
-                <p>Pause recording</p>
+                <p>Tạm dừng ghi hình</p>
               </button>
               <button id="resumeRecBtn" class="buttons">
                 <i class="far fa-play-circle"></i>
-                <p>Resume recording</p>
+                <p>Tiếp tục ghi hình</p>
               </button>
             </div>
             <div class="clw" id="lastRecordingInfo"></div>
@@ -1278,7 +1375,7 @@ access to use this app.
           <div id="tabMedia" class="tabcontent">
             <button id="shareMediaAudioVideoBtn" class="buttons">
               <i class="fa-solid fa-circle-play"></i>
-              <p>Share a Video or Audio</p>
+              <p>Chia sẻ Video hoặc Audio</p>
             </button>
           </div>
 
@@ -1289,56 +1386,9 @@ access to use this app.
             </div>
           </div>
 
-          <div id="tabProfile" class="tabcontent">
-            <div id="tabRoomPeerName">
-              <div id="myProfileAvatarContainer">
-                <img id="myProfileAvatar" />
-                <div id="myProfileAvatarBtns">
-                  <button id="myProfileAvatarUploadBtn">
-                    <i class="fas fa-image"></i>&nbsp;Set avatar
-                  </button>
-                  <button id="myProfileAvatarResetBtn" class="hidden">
-                    <i class="fas fa-rotate-left"></i>&nbsp;Reset avatar
-                  </button>
-                </div>
-              </div>
-              <br />
-              <div class="title">
-                <i class="fas fa-user"></i>
-                <p>Name</p>
-              </div>
-              <br /><br />
-              <div id="myPeerNameSetContainer">
-                <input
-                  id="myPeerNameSet"
-                  type="text"
-                  placeholder="Change name..."
-                  maxlength="254"
-                />
-                <button id="myPeerNameSetBtn">
-                  <i class="fas fa-user-edit"></i>&nbsp;Change
-                </button>
-              </div>
-            </div>
-            <br />
-            <div class="title">
-              <i class="fa-solid fa-user-shield"></i>
-              <p>Presenter:</p>
-              <p id="isPeerPresenter">true</p>
-            </div>
-            <br /><br />
-            <div class="title">
-              <i class="fa-solid fa-circle-info"></i>
-              <p>Extra info:</p>
-            </div>
-            <div class="extra-info-container">
-              <div id="extraInfo"></div>
-            </div>
-          </div>
-
           <div id="tabNetwork" class="tabcontent">
             <table id="mySettingsTable">
-              <tr>
+              <tr id="networkIpRow">
                 <td>
                   <div class="title">
                     <i class="fa-solid fa-location-dot"></i>
@@ -1351,7 +1401,7 @@ access to use this app.
                 <td>
                   <div class="title">
                     <i class="fa-solid fa-house-signal"></i>
-                    <p>Host</p>
+                    <p>Máy chủ</p>
                   </div>
                 </td>
                 <td><p id="networkHost">🔴</p></td>
@@ -1377,19 +1427,11 @@ access to use this app.
             </table>
           </div>
 
-          <div id="tabLanguages" class="tabcontent">
-            <div class="title">
-              <i class="fa-solid fa-language"></i>
-              <p>Language</p>
-            </div>
-            <br />
-            <div id="google_translate_element"></div>
-            <br />
-          </div>
           <br />
         </div>
       </main>
     </section>
+    </div>
 
     <!-- End my settings -->
 
@@ -1402,7 +1444,6 @@ access to use this app.
       <br />
       <iframe
         id="videoUrlIframe"
-        title="Video Url Player"
         src=""
         frameborder="0"
         allow="
@@ -1484,6 +1525,245 @@ access to use this app.
       </div>
     </div>
 
+    <!-- Desktop-only floating button (bottom-right) toggling the browser's
+    own full-screen mode - separate from the "Toàn màn hình" item tucked
+    inside the "..." dropdown menu. Shown/hidden via JS (isMobileDevice). -->
+    <button
+      id="fullScreenCornerBtn"
+      class="fullscreen-corner-btn"
+      style="display: none"
+    >
+      <i class="fas fa-expand-alt"></i>
+    </button>
+
+    <!-- In-page PiP: shown in the main stage instead of the video while
+    the floating PiP window (below) is open - mirrors App.tsx's
+    isInPagePip placeholder branch (icon + text + close button). -->
+    <div id="pipStagePlaceholder" class="pip-stage-placeholder">
+      <div class="pip-stage-placeholder-icon">
+        <i
+          id="pipStageIconPip"
+          data-lucide="picture-in-picture-2"
+          class="w-8 h-8 sm:w-10 sm:h-10"
+        ></i>
+        <svg
+          id="pipStageIconScreen"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="w-8 h-8 sm:w-10 sm:h-10"
+          style="display: none"
+        >
+          <rect x="3" y="3" width="18" height="12" rx="2"></rect>
+          <path d="M12 13V6"></path>
+          <path d="m8 9 4-4 4 4"></path>
+          <path d="M2 19h20"></path>
+        </svg>
+      </div>
+      <p id="pipStagePlaceholderTitle" class="pip-stage-placeholder-title">
+        Đang phát trong Hình trong hình
+      </p>
+      <p id="pipStagePlaceholderDesc" class="pip-stage-placeholder-desc">
+        Video đang được hiển thị ở cửa sổ thu nhỏ.
+      </p>
+      <button id="pipStageCloseBtn" class="pip-stage-close-btn">
+        Đóng cửa sổ thu nhỏ
+      </button>
+    </div>
+
+    <!-- In-page Picture-in-Picture floating window (draggable + resizable) -->
+    <div id="pipOverlay" class="pip-overlay" style="display: none">
+      <div class="pip-overlay-topbar no-drag">
+        <div class="pip-overlay-topbar-inner">
+          <button id="pipCloseBtn" class="pip-overlay-btn">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="pip-overlay-video-area">
+        <video
+          id="pipVideo"
+          autoplay
+          playsinline
+          muted
+          disablepictureinpicture
+          class="pip-overlay-video"
+        ></video>
+        <p id="pipVideoOffText" class="pip-camera-off-text">Camera đang tắt</p>
+        <div class="pip-overlay-badges">
+          <span
+            id="pipScreenBadge"
+            class="pip-badge pip-badge-screen"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="w-3 h-3"
+            >
+              <rect x="3" y="3" width="18" height="12" rx="2"></rect>
+              <path d="M12 13V6"></path>
+              <path d="m8 9 4-4 4 4"></path>
+              <path d="M2 19h20"></path>
+            </svg>
+          </span>
+          <span
+            id="pipMicBadge"
+            class="pip-badge pip-badge-mic"
+          >
+            <i data-lucide="mic-off" class="w-3 h-3"></i>
+          </span>
+        </div>
+      </div>
+
+      <div class="pip-overlay-bottombar no-drag">
+        <button id="pipAudioBtn" class="pip-overlay-ctrl-btn">
+          <i data-lucide="mic" class="w-4 h-4"></i>
+        </button>
+        <button id="pipVideoBtn" class="pip-overlay-ctrl-btn">
+          <i data-lucide="video" class="w-4 h-4"></i>
+        </button>
+        <button
+          id="pipScreenBtn"
+          class="pip-overlay-ctrl-btn"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="w-4 h-4"
+          >
+            <rect x="3" y="3" width="18" height="12" rx="2"></rect>
+            <path d="M12 13V6"></path>
+            <path d="m8 9 4-4 4 4"></path>
+            <path d="M2 19h20"></path>
+          </svg>
+        </button>
+        <button
+          id="pipLeaveBtn"
+          class="pip-overlay-ctrl-btn pip-overlay-ctrl-btn-leave"
+        >
+          <i data-lucide="phone-off" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div
+        class="pip-resize-handle pip-resize-se no-drag"
+        data-corner="se"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="21 15 21 21 15 21"></polyline>
+          <line x1="21" y1="21" x2="15" y2="15"></line>
+        </svg>
+      </div>
+      <div
+        class="pip-resize-handle pip-resize-sw no-drag"
+        data-corner="sw"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="3 15 3 21 9 21"></polyline>
+          <line x1="3" y1="21" x2="9" y2="15"></line>
+        </svg>
+      </div>
+      <div
+        class="pip-resize-handle pip-resize-nw no-drag"
+        data-corner="nw"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="3 9 3 3 9 3"></polyline>
+          <line x1="3" y1="3" x2="9" y2="9"></line>
+        </svg>
+      </div>
+    </div>
+
+    <!-- PiP Suggestion Modal - shown right after starting a screen share
+    (mirrors App.tsx's showPipSuggestion) -->
+    <div
+      id="pipSuggestionModal"
+      class="pip-suggestion-backdrop"
+      style="display: none"
+    >
+      <div class="pip-suggestion-card">
+        <div class="pip-suggestion-icon">
+          <i data-lucide="picture-in-picture" class="w-10 h-10"></i>
+        </div>
+        <div class="pip-suggestion-text">
+          <h3 class="pip-suggestion-title">Đang chia sẻ màn hình</h3>
+          <p class="pip-suggestion-desc">
+            Bạn có thể bật hình thu nhỏ để xem video và điều khiển cuộc gọi
+            ngay cả khi chuyển sang tab khác.
+          </p>
+        </div>
+        <div class="pip-suggestion-actions">
+          <button id="pipSuggestionLaterBtn" class="pip-suggestion-btn">
+            Để sau
+          </button>
+          <button
+            id="pipSuggestionOpenBtn"
+            class="pip-suggestion-btn pip-suggestion-btn-primary"
+          >
+            Bật ngay
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generic confirm/warn popup ("PP") - same visual component as the
+    PiP suggestion modal above, reused for: mic/cam permission warning,
+    screen-share start/stop confirm, leave-call confirm. Content/icon/
+    buttons are filled in by showPP() in client.js. -->
+    <div id="ppModal" class="pip-suggestion-backdrop" style="display: none">
+      <div class="pip-suggestion-card">
+        <div class="pip-suggestion-icon" id="ppIconWrap">
+          <i id="ppIcon" data-lucide="triangle-alert" class="w-10 h-10"></i>
+        </div>
+        <div class="pip-suggestion-text">
+          <h3 class="pip-suggestion-title" id="ppTitle"></h3>
+          <p class="pip-suggestion-desc" id="ppDesc"></p>
+        </div>
+        <div class="pip-suggestion-actions">
+          <button id="ppCancelBtn" class="pip-suggestion-btn">Hủy</button>
+          <button
+            id="ppConfirmBtn"
+            class="pip-suggestion-btn pip-suggestion-btn-primary"
+          >
+            Đồng ý
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div id="audioMediaContainer">
       <!-- <div>
                 <audio></audio>
@@ -1502,6 +1782,7 @@ access to use this app.
         data-template-attr-data-chat-type="chatType"
         data-template-attr-data-chat-peer="chatPeer"
         data-template-attr-data-msg-id="messageId"
+        data-template-attr-data-time="messageTimeAttr"
       >
         <div data-template-attr-class="messageBubbleClass">
           <div class="msg-text">
@@ -1537,10 +1818,10 @@ access to use this app.
         <canvas id="qrRoom"></canvas>
       </div>
       <br />
-      <p class="share-room-modal-highlight">Join from your mobile device</p>
+      <p class="share-room-modal-highlight">Vào phòng từ điện thoại của bạn</p>
       <p class="share-room-modal-description">
-        No need for apps, simply capture the QR code with your mobile camera Or
-        Invite someone else to join by sending them the following URL
+        Không cần cài ứng dụng, chỉ cần quét mã QR bằng camera điện thoại. Hoặc
+        mời người khác vào phòng bằng cách gửi họ đường liên kết sau
       </p>
       <p class="share-room-modal-highlight" data-template-text="roomURL"></p>
     </template>
@@ -1551,13 +1832,13 @@ access to use this app.
           id="stickyNoteText"
           class="sticky-note-textarea"
           rows="4"
-          placeholder="Type your note here..."
+          placeholder="Nhập ghi chú của bạn ở đây..."
         >
-Note</textarea>
+Ghi chú</textarea>
         <div class="sticky-note-colors-row">
           <div class="sticky-note-color-group">
             <label for="stickyNoteColor" class="sticky-note-color-label">
-              <i class="fas fa-palette"></i> Background
+              <i class="fas fa-palette"></i> Nền
             </label>
             <input
               id="stickyNoteColor"
@@ -1568,7 +1849,7 @@ Note</textarea>
           </div>
           <div class="sticky-note-color-group">
             <label for="stickyNoteTextColor" class="sticky-note-color-label">
-              <i class="fas fa-font"></i> Text
+              <i class="fas fa-font"></i> Chữ
             </label>
             <input
               id="stickyNoteTextColor"
@@ -1583,10 +1864,10 @@ Note</textarea>
 
     <template id="tpl-kicked-out-modal">
       <h2 class="kicked-out-modal-alert-title">
-        User <span data-template-text="peerName"></span>
+        Người dùng <span data-template-text="peerName"></span>
       </h2>
-      will kick out you after
-      <b class="kicked-out-modal-alert-time"></b> milliseconds.
+      sẽ mời bạn ra khỏi phòng sau
+      <b class="kicked-out-modal-alert-time"></b> mili giây.
     </template>
 
     <template id="tpl-about-modal">
@@ -1604,19 +1885,20 @@ Note</textarea>
     </template>
 
     <template id="tpl-last-recording-info">
-      <br />Last recording info:
+      <br />Thông tin bản ghi gần nhất:
       <span data-template-html="recordingInfo"></span>
     </template>
 
     <template id="tpl-room-busy-message">
-      The room is limited to <span data-template-text="maxUsers"></span> users.
+      Phòng này giới hạn tối đa <span data-template-text="maxUsers"></span>
+      người dùng.
       <br />
-      Please try again later
+      Vui lòng thử lại sau
     </template>
 
     <template id="tpl-username-in-use-message">
-      The Username is already in use. <br />
-      Please try with another one
+      Tên người dùng này đã được sử dụng. <br />
+      Vui lòng thử tên khác
     </template>
 
     <!-- End dynamic room templates -->
@@ -1626,7 +1908,6 @@ Note</textarea>
         
         - https://webrtc.github.io/adapter/adapter-latest.js                (https://github.com/webrtcHacks/adapter)
         - https://github.com/leizongmin/js-xss                              (https://www.npmjs.com/package/xss)
-        - https://www.npmjs.com/package/marked                              (https://github.com/markedjs/marked)
         - https://www.npmjs.com/package/sweetalert2                         (https://github.com/sweetalert2/sweetalert2)
         - https://www.npmjs.com/package/fabric                              (https://github.com/fabricjs/fabric.js)
         - https://www.npmjs.com/package/qrious                              (https://github.com/neocotic/qrious)
@@ -1647,10 +1928,6 @@ Note</textarea>
     <script
       defer
       src="https://cdn.jsdelivr.net/npm/xss/dist/xss.min.js"
-    ></script>
-    <script
-      defer
-      src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"
     ></script>
     <script
       defer
@@ -1710,7 +1987,6 @@ Note</textarea>
     <script defer src="../js/helpers.js"></script>
     <script defer src="../js/common.js"></script>
     <script defer src="../js/buttons.js"></script>
-    <script defer src="../js/translate.js"></script>
     <script defer src="../js/fixWebmDuration.js"></script>
 
     <script defer src="../js/wakeLock.js"></script>
@@ -1743,7 +2019,6 @@ Note</textarea>
           ></span>
           <button
             id="headerCopyBtn"
-            title="Sao chép mã phòng"
             class="p-0.5 hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition-colors ml-0.5 cursor-pointer"
           >
             <i id="headerCopyIcon" data-lucide="copy" class="w-3 h-3"></i>

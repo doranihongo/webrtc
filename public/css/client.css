@@ -42,23 +42,23 @@
   --bottom-btns-margin-bottom: 18px;
   --bottom-btns-flex-direction: row;
 
-  /* dark theme fallback (default) */
-  --body-bg: radial-gradient(#2a2a2e, #121214);
-  --msger-bg: radial-gradient(#2a2a2e, #121214);
-  --msger-private-bg: radial-gradient(#2a2a2e, #121214);
-  --wb-bg: radial-gradient(#2a2a2e, #121214);
-  --navbar-bg: rgba(18, 18, 20, 0.85);
-  --elem-border-color: 1px solid rgba(255, 255, 255, 0.08);
-  --select-bg: #333338;
-  --tab-btn-active: #3d3d42;
+  /* Ocean theme (default) - colors only, same structural roles as before */
+  --body-bg: radial-gradient(var(--ds-bg-elevated), var(--ds-bg-deep));
+  --msger-bg: radial-gradient(var(--ds-bg-elevated), var(--ds-bg-deep));
+  --msger-private-bg: radial-gradient(var(--ds-bg-elevated), var(--ds-bg-deep));
+  --wb-bg: radial-gradient(var(--ds-bg-elevated), var(--ds-bg-deep));
+  --navbar-bg: rgba(var(--ds-bg-1-rgb), 0.85);
+  --elem-border-color: 1px solid rgba(var(--ds-brand-500-rgb), 0.16);
+  --select-bg: #1f3b63;
+  --tab-btn-active: #2c5490;
   --box-shadow: 0px 4px 12px 0px rgba(0, 0, 0, 0.5);
-  --left-msg-bg: #2c2c30;
-  --right-msg-bg: #3a3a40;
-  --private-msg-bg: #252528;
-  --btn-bar-bg-color: #e8e8ec;
-  --btn-bar-color: #121214;
-  --btns-bg-color: rgba(18, 18, 20, 0.75);
-  --dd-color: #e8e8ec;
+  --left-msg-bg: #1e3555;
+  --right-msg-bg: #2c5490;
+  --private-msg-bg: #17294a;
+  --btn-bar-bg-color: var(--ds-text-secondary);
+  --btn-bar-color: var(--ds-bg-1);
+  --btns-bg-color: rgba(var(--ds-bg-1-rgb), 0.75);
+  --dd-color: var(--ds-brand-500);
 
   /* volume detected */
   --volume-up: 0px 8px 16px 0px rgb(249, 253, 0);
@@ -67,7 +67,9 @@
   --vmi-wh: 15vw;
 
   /* https://developer.mozilla.org/it/docs/Web/CSS/object-fit */
-  --video-object-fit: cover;
+  /* Reference always shows the full frame (letterboxed, never
+     cropped/zoomed) - matches VideoPlayer.tsx's default object-contain. */
+  --video-object-fit: contain;
 }
 
 * {
@@ -87,7 +89,20 @@ body {
   margin: auto;
   overflow: hidden;
   background: var(--body-bg);
-  /* background: url('../images/bg.svg'); */
+}
+
+/* Stop Safari's edge-swipe "go back" gesture from firing mid-meeting
+   (people swiping from the left edge by accident and getting bounced
+   back to the loading screen). Touch-device-only: desktop trackpad
+   two-finger-swipe-back should keep working as-is. Paired with the
+   history-trap in initSwipeBackGuard() in client.js for browsers that
+   don't honor overscroll-behavior for this gesture. */
+@media (hover: none) and (pointer: coarse) {
+  html,
+  body {
+    overscroll-behavior-x: none;
+    touch-action: pan-y;
+  }
 }
 
 /*--------------------------------------------------------------
@@ -122,7 +137,7 @@ body {
   background: linear-gradient(
     135deg,
     rgba(28, 28, 32, 0.82),
-    rgba(18, 18, 20, 0.9)
+    rgba(var(--ds-bg-1-rgb), 0.9)
   );
   backdrop-filter: blur(18px) saturate(160%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
@@ -201,7 +216,7 @@ body {
 
 .disconnect-banner-spinner {
   font-size: 15px;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(var(--ds-text-primary-rgb), 0.45);
   flex-shrink: 0;
   transition: opacity 0.3s ease;
 }
@@ -221,40 +236,28 @@ body {
 }
 
 /*--------------------------------------------------------------
-# Google Translate
---------------------------------------------------------------*/
-
-.skiptranslate iframe,
-.goog-te-banner-frame.skiptranslate,
-.VIpgJd-ZVi9od-aZ2wEe-wOHMyf,
-.VIpgJd-ZVi9od-aZ2wEe-OiiCO,
-#goog-gt-tt,
-#goog-gt-tt *,
-#goog-gt-vt,
-#goog-gt-vt * {
-  display: none !important;
-}
-
-#google_translate_element select {
-  background: var(--select-bg) !important;
-  padding: 6px 10px;
-  border: var(--border);
-  border-radius: 8px;
-  color: #fff;
-}
-
-/*--------------------------------------------------------------
 # Loading...
 --------------------------------------------------------------*/
 
-#loadingDiv {
+/* Fully opaque full-screen backdrop - the room behind it (video tiles,
+   control bar) must never show through, not even dimmed. */
+.loading-backdrop {
+  position: fixed;
+  inset: 0;
   z-index: 9999;
-  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ds-bg-2);
+  opacity: 1;
+  transition: opacity 0.4s ease;
+}
+
+#loadingDiv {
+  color: var(--ds-text-primary);
   padding: 30px;
   text-align: center;
   border-radius: 10px;
-  background: var(--btns-bg-color, rgba(0, 0, 0, 0.7));
-  box-shadow: var(--box-shadow);
 }
 #loadingDiv h1 {
   font-size: 60px;
@@ -277,8 +280,8 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 4px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #fff;
+  border: 4px solid rgba(var(--ds-text-primary-rgb), 0.1);
+  border-top-color: var(--ds-text-primary);
   animation: spin 1s linear infinite;
 }
 
@@ -287,8 +290,8 @@ body {
   position: absolute;
   inset: 6px;
   border-radius: 50%;
-  border: 4px solid rgba(255, 255, 255, 0.05);
-  border-top-color: rgba(255, 255, 255, 0.6);
+  border: 4px solid rgba(var(--ds-text-primary-rgb), 0.05);
+  border-top-color: rgba(var(--ds-text-primary-rgb), 0.6);
   animation: spin 1.5s linear reverse infinite;
 }
 
@@ -324,8 +327,32 @@ body {
 # Init User
 --------------------------------------------------------------*/
 
+/* Fully opaque backdrop for the pre-join dialog - the room behind it
+   must never show through. Scoped to this one Swal via customClass.container
+   so other Swal dialogs in the app keep their normal (lighter) backdrop. */
+.init-swal-backdrop {
+  background: var(--ds-bg-2) !important;
+}
+
+/* Swal2's popup is a flex column - reorder its children so the simplified
+   pre-join screen reads: Tﾃ劾 (native Swal input) -> mic/cam icons (our
+   injected html) -> Vﾃo cu盻冂 h盻膏 / Thoﾃ｡t (native Swal actions). */
+.init-modal-size .swal2-input {
+  order: 1;
+}
+.init-modal-size .swal2-validation-message {
+  order: 2;
+}
+.init-modal-size .swal2-html-container {
+  order: 3;
+}
+.init-modal-size .swal2-actions {
+  order: 4;
+}
+
 .init-modal-size {
-  width: 1024px !important;
+  width: 420px !important;
+  max-width: 92vw !important;
   height: auto !important;
 }
 
@@ -360,20 +387,18 @@ body {
 
 .initComands {
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
 }
 
 @media screen and (max-width: 1024px) {
-  .init-modal-size {
-    width: auto !important;
-  }
   .init-user {
     display: block;
   }
   .init-video-container {
     padding: 0px;
-  }
-  .init-modal-size {
-    width: 480px !important;
   }
 }
 
@@ -384,7 +409,7 @@ body {
   padding: 10px;
   background: var(--select-bg) !important;
   color: white;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.12);
   border-radius: 8px;
   box-shadow: none;
   cursor: pointer;
@@ -395,14 +420,14 @@ body {
 }
 
 .init-user select:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(var(--ds-text-primary-rgb), 0.25);
+  background: rgba(var(--ds-text-primary-rgb), 0.08) !important;
 }
 
 .init-user select:focus {
   outline: none;
-  border-color: rgba(70, 120, 249, 0.6);
-  box-shadow: 0 0 0 2px rgba(70, 120, 249, 0.15);
+  border-color: rgba(var(--ds-brand-600-rgb), 0.6);
+  box-shadow: 0 0 0 2px rgba(var(--ds-brand-600-rgb), 0.15);
 }
 
 .init-user button {
@@ -419,6 +444,23 @@ body {
 
 .init-user button:hover {
   background: var(--body-bg);
+}
+
+/* Mic/Cam buttons on the pre-join screen - the shared 0.5px/18%-opacity
+   --border was too faint to read clearly (especially the left edge on
+   iPhone, where a sub-pixel border can round away to almost nothing).
+   Give just these two a thicker, more opaque border and a slightly
+   bigger tap target, on both mobile and desktop. */
+#initAudioBtn,
+#initVideoBtn {
+  box-sizing: border-box;
+  width: 58px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.7rem;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
 }
 
 .fa-phone-slash,
@@ -504,14 +546,14 @@ body {
   font-size: 0.9rem;
   border-radius: 8px;
   background: transparent;
-  color: #fff;
+  color: var(--ds-text-primary);
   transition:
     transform 0.15s ease,
     background 0.2s ease;
 }
 
 #bottomButtons #exitMenu button:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
   transform: translateX(3px) !important;
 }
 
@@ -574,17 +616,17 @@ body {
 #bottomButtons #participantsBtn.is-active {
   background: color-mix(
     in srgb,
-    var(--dd-color, #4678f9) 18%,
+    var(--dd-color, var(--ds-brand-600)) 18%,
     transparent
   ) !important;
-  box-shadow: inset 0 0 0 1px var(--dd-color, #4678f9);
-  color: var(--dd-color, #4678f9) !important;
+  box-shadow: inset 0 0 0 1px var(--dd-color, var(--ds-brand-600));
+  color: var(--dd-color, var(--ds-brand-600)) !important;
 }
 #bottomButtons #chatRoomBtn.is-active:hover,
 #bottomButtons #participantsBtn.is-active:hover {
   background: color-mix(
     in srgb,
-    var(--dd-color, #4678f9) 28%,
+    var(--dd-color, var(--ds-brand-600)) 28%,
     transparent
   ) !important;
 }
@@ -615,7 +657,7 @@ body {
 }
 
 #bottomButtons .dropdown-menu button:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
 }
 
 #bottomButtons .dropdown {
@@ -628,7 +670,7 @@ body {
   left: 0;
   padding: 8px;
   bottom: 45px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.1);
   border-radius: 12px;
   background: var(--body-bg);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
@@ -652,7 +694,7 @@ body {
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(var(--ds-text-primary-rgb), 0.4);
   padding: 10px 16px 4px;
   pointer-events: none;
   user-select: none;
@@ -664,7 +706,7 @@ body {
 
 #bottomButtons #settingsExtraMenu .extra-menu-divider.extra-menu-divider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
   margin: 6px 12px;
 }
 
@@ -719,7 +761,7 @@ body {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  color: #fff;
+  color: var(--ds-text-primary);
   font-weight: 600;
   font-size: 1rem;
   font-weight: 600;
@@ -748,7 +790,7 @@ body {
 #bottomButtons #settingsExtraMenu .device-menu-action-btn {
   background: var(--body-bg);
   border: 1px solid var(--border-color);
-  color: #fff;
+  color: var(--ds-text-primary);
   font-weight: 500;
   gap: 8px;
   transition: all 0.2s ease;
@@ -883,7 +925,7 @@ body {
   justify-content: space-between;
   padding: 16px 20px;
   background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.3));
-  color: #fff;
+  color: #ffffff;
   cursor: move;
   font-weight: 600;
   font-size: 1.05rem;
@@ -908,7 +950,7 @@ body {
   font-size: 1rem;
   line-height: 1;
   background: rgba(255, 255, 255, 0.1) !important;
-  color: #fff;
+  color: #ffffff;
   border-radius: 8px;
   transition: all 0.25s ease;
 }
@@ -972,7 +1014,7 @@ body {
   border-radius: 8px;
   cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #fff;
+  color: #ffffff;
   transition: all 0.25s ease;
 }
 
@@ -991,7 +1033,7 @@ body {
 .left-msg .msg-caption-bubble {
   background: linear-gradient(135deg, var(--left-msg-bg), rgba(0, 0, 0, 0.6));
   border-bottom-left-radius: 4px;
-  color: #fff;
+  color: #ffffff;
   width: var(--msger-bubble-width);
   padding: 12px 16px;
   border-radius: 18px;
@@ -1010,7 +1052,7 @@ body {
   padding: 8px 16px;
   border: none;
   border-radius: 8px;
-  color: #fff;
+  color: var(--ds-text-primary);
   background: rgba(255, 255, 255, 0.1);
   transition: all 0.25s ease;
   font-weight: 500;
@@ -1052,11 +1094,11 @@ body {
 .empty-caption-title {
   font-size: 1.3rem;
   font-weight: 600;
-  color: #e0e0e0;
+  color: #dce6ef;
   margin: 0.5rem 0 0.2rem 0;
 }
 .empty-caption-desc {
-  color: #b0b0b0;
+  color: #a8c0d6;
   max-width: 350px;
   margin: 0 auto;
   font-size: 1rem;
@@ -1081,9 +1123,10 @@ body {
 }
 
 .msger-layout {
-  flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  /* display/flex-direction come from the relative flex-1 overflow-hidden
+     flex flex-col Tailwind classes on the element (ChatPanel.tsx's
+     messages-area wrapper) - a competing "display: grid" here was racing
+     against Tailwind's injected stylesheet by load order. */
   min-height: 0;
 }
 
@@ -1123,7 +1166,7 @@ body {
   padding: 0;
   border: none;
   border-radius: 12px;
-  color: #fff;
+  color: var(--ds-text-primary);
   background: var(--body-bg);
 }
 
@@ -1152,7 +1195,7 @@ body {
   margin: 0;
   font-size: 1.15rem;
   font-weight: 700;
-  color: #f1f6f7;
+  color: var(--ds-text-secondary);
 }
 
 .msger-sidebar-label {
@@ -1160,7 +1203,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(214, 234, 238, 0.58);
+  color: rgba(var(--ds-text-primary-rgb), 0.58);
 }
 
 .msger-sidebar-section {
@@ -1192,7 +1235,7 @@ body {
   border-radius: 16px;
   font-size: 0.85rem;
   line-height: 1.5;
-  color: rgba(214, 234, 238, 0.5);
+  color: rgba(var(--ds-text-primary-rgb), 0.5);
   background: var(--body-bg);
 }
 
@@ -1220,7 +1263,7 @@ body {
   border: var(--border);
   border-radius: 18px;
   background: var(--body-bg);
-  color: #edf5f6;
+  color: var(--ds-text-secondary);
   text-align: left;
 }
 
@@ -1229,7 +1272,7 @@ body {
   background: linear-gradient(
     135deg,
     var(--right-msg-bg),
-    rgba(255, 255, 255, 0.08)
+    rgba(var(--ds-text-primary-rgb), 0.08)
   );
   border-color: var(--right-msg-bg);
   transform: translateY(-1px);
@@ -1245,7 +1288,7 @@ body {
   align-items: center;
   justify-content: center;
   background: var(--left-msg-bg);
-  color: #dff2f5;
+  color: var(--ds-text-secondary);
 }
 
 .msger-chat-avatar {
@@ -1264,7 +1307,7 @@ body {
   display: block;
   font-size: 0.96rem;
   font-weight: 600;
-  color: #f4fbfc;
+  color: var(--ds-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1274,7 +1317,7 @@ body {
   display: block;
   font-size: 0.8rem;
   line-height: 1.4;
-  color: rgba(214, 234, 238, 0.7);
+  color: rgba(var(--ds-text-primary-rgb), 0.7);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1408,7 +1451,7 @@ body {
   min-width: 28px;
   height: 28px;
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--ds-text-primary-rgb), 0.06);
   color: rgba(232, 247, 249, 0.92);
 }
 
@@ -1419,7 +1462,7 @@ body {
   font-size: 0.88rem;
   font-weight: 600;
   line-height: 1.25;
-  color: #fff;
+  color: var(--ds-text-primary);
 }
 
 .msger-participant-action-danger .msger-participant-action-icon {
@@ -1449,7 +1492,7 @@ body {
   margin: 0;
   text-align: right;
   font-size: 0.9rem;
-  color: rgba(214, 234, 238, 0.74);
+  color: rgba(var(--ds-text-primary-rgb), 0.74);
 }
 
 /*--------------------------------------------------------------
@@ -1465,13 +1508,13 @@ body {
   gap: 12px;
   padding: 18px 22px;
   background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.3));
-  color: #fff;
+  color: var(--ds-text-primary);
   cursor: move;
   font-weight: 600;
   font-size: 1.05rem;
   border-top-left-radius: 20px;
   border-top-right-radius: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(var(--ds-text-primary-rgb), 0.1);
   backdrop-filter: blur(10px);
 }
 
@@ -1513,7 +1556,7 @@ body {
   font-size: 1rem;
   line-height: 1;
   background: var(--body-bg);
-  color: #fff;
+  color: var(--ds-text-primary);
   border-radius: 12px;
   transition: all 0.25s ease;
 }
@@ -1545,7 +1588,7 @@ body {
 }
 
 .msger-header-participants-btn:hover {
-  color: #fff !important;
+  color: var(--ds-text-primary) !important;
   background: color-mix(in srgb, var(--dd-color) 35%, transparent) !important;
   transform: translateY(-1px);
 }
@@ -1564,14 +1607,12 @@ body {
 --------------------------------------------------------------*/
 
 .msger-chat {
-  flex: 1;
-  overflow-y: auto;
+  /* padding/font-size/line-height come from the p-4 text-xs sm:text-sm
+     Tailwind utility classes on the same element (ChatPanel.tsx parity) -
+     don't fight them here. */
   position: relative;
-  padding: 24px 24px 20px;
   background: transparent;
   max-width: 100%;
-  font-size: 1rem;
-  line-height: 1.6;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.4) rgba(0, 0, 0, 0.1);
 }
@@ -1598,11 +1639,12 @@ body {
 }
 
 .msg {
+  /* flex-direction/align-items/font-size/spacing all come from the
+     flex flex-col items-start|items-end + space-y-2 + parent
+     text-xs sm:text-sm Tailwind classes (ChatPanel.tsx parity) - a
+     leftover gap/font-size/margin here would double up the spacing
+     and lock the font size to one value regardless of breakpoint. */
   display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  font-size: 0.85rem;
-  margin-bottom: 12px;
   animation: fadeIn 0.3s ease;
 }
 
@@ -1630,7 +1672,7 @@ body {
 .left-msg .msg-bubble {
   background: linear-gradient(135deg, var(--left-msg-bg), rgba(0, 0, 0, 0.25));
   border-bottom-left-radius: 8px;
-  color: #fff;
+  color: var(--ds-text-primary);
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
 }
 
@@ -1641,7 +1683,7 @@ body {
     rgba(0, 0, 0, 0.25)
   );
   border-bottom-left-radius: 8px;
-  color: #fff;
+  color: var(--ds-text-primary);
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
 }
 
@@ -1658,7 +1700,7 @@ body {
 .right-msg .msg-bubble {
   background: linear-gradient(135deg, var(--right-msg-bg), rgba(0, 0, 0, 0.25));
   border-bottom-right-radius: 8px;
-  color: #fff;
+  color: var(--ds-text-primary);
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
 }
 
@@ -1669,7 +1711,7 @@ body {
     rgba(0, 0, 0, 0.25)
   );
   border-bottom-right-radius: 8px;
-  color: #fff;
+  color: var(--ds-text-primary);
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
 }
 
@@ -1686,7 +1728,7 @@ body {
   background-position: center;
   background-size: cover;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.14);
+  border: 2px solid rgba(var(--ds-text-primary-rgb), 0.14);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
 }
 
@@ -1694,7 +1736,7 @@ body {
   width: 42px;
   height: 42px;
   border-radius: 14px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.1);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
 }
 
@@ -1724,7 +1766,7 @@ body {
 .msg-info-name {
   font-weight: 600;
   font-size: 0.88rem;
-  color: #f6fbfc;
+  color: var(--ds-text-secondary);
 }
 
 .msg-info-time {
@@ -1742,7 +1784,7 @@ body {
 .msg-text hr {
   margin: 10px 0 8px;
   border: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(var(--ds-text-primary-rgb), 0.12);
 }
 
 .msg-actions {
@@ -1778,7 +1820,7 @@ body {
   padding: 6px;
   border-radius: 12px;
   border: var(--border);
-  background: rgba(18, 18, 20, 0.95);
+  background: rgba(var(--ds-bg-1-rgb), 0.95);
   box-shadow: 0 14px 24px rgba(0, 0, 0, 0.22);
 }
 
@@ -1790,13 +1832,13 @@ body {
   padding: 0;
   font-size: 18px;
   line-height: 1;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(var(--ds-text-primary-rgb), 0.12);
   cursor: pointer;
 }
 
 .reaction-emoji-btn:hover {
   transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(var(--ds-text-primary-rgb), 0.22);
 }
 
 .reaction-emoji-btn:focus {
@@ -1824,8 +1866,8 @@ body {
   height: 24px;
   padding: 1px 5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(var(--ds-text-primary-rgb), 0.12);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.2);
   font-size: 11px;
   line-height: 1.2;
   cursor: pointer;
@@ -1834,8 +1876,8 @@ body {
 }
 
 .reaction-badge:hover {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(var(--ds-text-primary-rgb), 0.18);
+  border-color: rgba(var(--ds-text-primary-rgb), 0.32);
   transform: translateY(-1px);
 }
 
@@ -1868,28 +1910,8 @@ body {
   opacity: 1;
 }
 
-.reaction-badge:hover::after {
-  content: attr(data-peers);
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
-  max-width: 280px;
-  width: max-content;
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.4;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.95);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-  z-index: 1000;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-}
+/* Hover tooltip listing reactor names removed per no-tooltips-anywhere
+   request (was .reaction-badge:hover::after using content:attr(data-peers)) */
 
 /* Mobile optimizations for emoji reactions */
 @media (max-width: 768px) {
@@ -1920,12 +1942,12 @@ body {
 @media (max-width: 768px) and (hover: none) {
   .reaction-emoji-btn:hover {
     transform: none;
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(var(--ds-text-primary-rgb), 0.12);
   }
 
   .reaction-emoji-btn:active {
     transform: scale(1.15) translateY(-3px);
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(var(--ds-text-primary-rgb), 0.25);
   }
 
   .reaction-badge:hover {
@@ -1980,12 +2002,12 @@ body {
 .msger-copy-txt {
   border: none;
   border-radius: 8px;
-  color: #fff;
+  color: var(--ds-text-primary);
   background: transparent;
 }
 
 a {
-  color: #fff;
+  color: var(--ds-text-primary);
 }
 a:hover {
   color: var(--hover-color);
@@ -1993,7 +2015,7 @@ a:hover {
 }
 
 #chat-msg-a {
-  color: #fff;
+  color: var(--ds-text-primary);
 }
 
 button {
@@ -2023,19 +2045,13 @@ button {
 }
 
 .msger-input {
-  flex: 1;
-  min-height: 52px;
+  /* padding/font-size/colors/background/border/radius all come from
+     the Tailwind utility classes on the element (ChatPanel.tsx parity) -
+     only behavior (resize, growth cap, scrollbar) stays here. */
   max-height: 160px;
-  padding: 14px 18px;
   resize: none;
-  color: #fff;
-  font-size: 15px !important;
-  line-height: 1.45;
-  background: var(--body-bg);
-  border-radius: 18px;
-  border: var(--border);
   scrollbar-width: thin;
-  scrollbar-color: #404040 transparent;
+  scrollbar-color: var(--ds-brand-600) transparent;
 }
 
 .msger-input::-webkit-scrollbar {
@@ -2047,7 +2063,7 @@ button {
 }
 
 .msger-input::-webkit-scrollbar-thumb {
-  background: #404040;
+  background: var(--ds-brand-600);
 }
 
 /*--------------------------------------------------------------
@@ -2072,7 +2088,7 @@ button {
   border: none;
   border-radius: 12px;
   font-size: 0.96rem;
-  color: #fff;
+  color: var(--ds-text-primary);
   background: var(--body-bg);
   transition: background 0.23s;
 }
@@ -2085,17 +2101,14 @@ button {
   cursor: pointer;
 }
 
-#msgerSendBtn {
-  margin-left: auto;
-  background: linear-gradient(135deg, var(--right-msg-bg), rgba(0, 0, 0, 0.2));
-  box-shadow: 0 14px 24px rgba(3, 74, 76, 0.28);
-}
+/* Send button styling (solid blue, no gradient/custom shadow) now
+   comes entirely from the bg-blue-600 hover:bg-blue-500 shadow-md
+   Tailwind classes on the element - matches ChatPanel.tsx's button. */
 
 .msger-composer {
+  /* padding/background/border-top come from the p-3 bg-slate-900
+     border-t border-slate-800 Tailwind classes (ChatPanel.tsx parity). */
   position: relative;
-  padding: 16px 22px 22px;
-  background: rgba(0, 0, 0, 0.2);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /*--------------------------------------------------------------
@@ -2118,7 +2131,7 @@ button {
   width: 48px;
   height: 48px;
   border-radius: 50px !important;
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(var(--ds-text-primary-rgb), 0.2);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -2136,9 +2149,9 @@ button {
   padding: 6px 8px;
   font-size: 14px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.15);
   background: rgba(0, 0, 0, 0.18);
-  color: #fff;
+  color: var(--ds-text-primary);
   resize: none;
   height: 28px;
   margin-right: 2px;
@@ -2146,7 +2159,7 @@ button {
 
 .msger-peer-inputwrap .msger-input:focus {
   outline: none;
-  border-color: #66beff;
+  border-color: var(--ds-brand-500);
 }
 
 .msger-peer-inputarea .dropdown-menu-custom {
@@ -2169,7 +2182,7 @@ button {
   width: 240px;
   min-width: 200px;
   background: var(--body-bg);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.08);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(12px);
@@ -2199,7 +2212,7 @@ button {
 .msger-peer-inputarea .msgPrivate {
   background: none;
   border: none;
-  color: #fff;
+  color: var(--ds-text-primary);
   font-size: 1em;
   cursor: pointer;
 }
@@ -2234,12 +2247,12 @@ button {
 .empty-chat-title {
   font-size: clamp(1rem, 2.4vw, 1.3rem);
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--ds-text-secondary);
   margin: 0.5rem 0 0.2rem 0;
   line-height: 1.2;
 }
 .empty-chat-desc {
-  color: #b0b0b0;
+  color: var(--ds-text-muted);
   max-width: min(350px, 100%);
   margin: 0 auto;
   font-size: clamp(0.85rem, 1.9vw, 1rem);
@@ -2299,7 +2312,7 @@ button {
   backdrop-filter: none;
   transition: all 0.25s ease;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  scrollbar-color: rgba(var(--ds-text-primary-rgb), 0.16) transparent;
 }
 
 #msgerCPList::-webkit-scrollbar {
@@ -2311,12 +2324,12 @@ button {
 }
 
 #msgerCPList::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(var(--ds-text-primary-rgb), 0.16);
   border-radius: 999px;
 }
 
 #msgerCPList::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(var(--ds-text-primary-rgb), 0.28);
 }
 
 #msgerCPList:hover {
@@ -2344,7 +2357,7 @@ button {
   margin: 0;
   font-size: 0.95rem;
   background-color: transparent;
-  color: #ffffff;
+  color: var(--ds-text-primary);
   border: none;
   border-radius: 0;
   box-sizing: border-box;
@@ -2400,7 +2413,7 @@ button {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: rgba(214, 234, 238, 0.76);
+  color: rgba(var(--ds-text-primary-rgb), 0.76);
 }
 
 .msger-participants-list {
@@ -2429,7 +2442,7 @@ button {
   min-width: 0;
   font-size: 0.94rem;
   font-weight: 600;
-  color: #edf5f6;
+  color: var(--ds-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2496,7 +2509,7 @@ button {
   border-radius: 10px;
   font-size: 0.88rem;
   line-height: 1.35;
-  color: #fff;
+  color: var(--ds-text-primary);
   background: transparent;
 }
 
@@ -2507,7 +2520,7 @@ button {
 }
 
 .msger-participant-item .dropdown-menu-custom-list li button:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
 }
 
 /*--------------------------------------------------------------
@@ -2540,11 +2553,11 @@ button {
 .empty-participants-title {
   font-size: 1.3rem;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--ds-text-secondary);
   margin: 0.5rem 0 0.2rem 0;
 }
 .empty-participants-desc {
-  color: #b0b0b0;
+  color: var(--ds-text-muted);
   max-width: 350px;
   margin: 0 auto;
   font-size: 1rem;
@@ -2681,7 +2694,7 @@ button {
 .room-emoji-title {
   font-weight: bold;
   font-size: 1.05rem;
-  color: #fff;
+  color: var(--ds-text-primary);
 }
 
 .room-emoji-close-btn {
@@ -2692,7 +2705,7 @@ button {
   background: none;
   border: none;
   cursor: pointer;
-  color: #fff;
+  color: var(--ds-text-primary);
 }
 
 .room-emoji-close-btn:hover {
@@ -2710,7 +2723,7 @@ button {
 .room-emoji-tab {
   margin-top: 10px;
   background: none;
-  color: #fff;
+  color: var(--ds-text-primary);
   border: none;
   border-radius: 8px;
   padding: 3px 14px;
@@ -2719,7 +2732,7 @@ button {
   transition: background 0.2s;
 }
 .room-emoji-tab.active {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
 }
 
 .room-emoji-mart {
@@ -2756,10 +2769,10 @@ button {
   transition:
     background 0.15s,
     transform 0.15s;
-  color: #fff;
+  color: var(--ds-text-primary);
 }
 .room-emoji-btn:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(var(--ds-text-primary-rgb), 0.18);
   transform: scale(1.15);
 }
 
@@ -2777,9 +2790,9 @@ button {
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  color: #fff;
-  background: rgba(15, 23, 42, 0.34);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--ds-text-primary);
+  background: rgba(var(--ds-bg-deep-rgb), 0.34);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.18);
   border-radius: 999px;
   box-shadow: 0 22px 44px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(8px);
@@ -2876,7 +2889,7 @@ button {
 
 .share-room-modal-description {
   background: transparent;
-  color: #fff;
+  color: var(--ds-text-primary);
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -2896,7 +2909,7 @@ button {
 
 #qrText {
   margin-top: 10px;
-  color: #fff;
+  color: var(--ds-text-primary);
   font-size: 16px;
   font-weight: bold;
   text-align: center;
@@ -2917,44 +2930,53 @@ button {
 # My settings
 --------------------------------------------------------------*/
 
-#mySettings {
-  z-index: 16;
-  position: absolute;
+/* Full-screen dimmed backdrop - locks the background: blocks clicks and
+   dims everything behind the settings panel, same pattern as #msgerDraggable.
+   z-index only needs to clear the Tailwind control bar/header (z-40) - it
+   must NOT go above SweetAlert2 dialogs (default z-index:1060) or the PP
+   confirm popup (.pip-suggestion-backdrop, z-index:100), since actions
+   inside Settings (khﾃｳa phﾃｲng, ﾄ黛ｻ品 蘯｣nh ﾄ黛ｺ｡i di盻㌻, ...) open those on top of
+   it and they need to stay clickable, not end up hidden behind the panel. */
+#mySettingsBackdrop {
+  z-index: 50;
+  position: fixed;
+  inset: 0;
   display: none;
-  margin: auto;
-  padding: 10px;
-  width: 50%;
-  background: var(--body-bg);
-  box-shadow: var(--box-shadow);
-  border: var(--border);
-  border-radius: 16px;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(var(--ds-bg-2-rgb), 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+#mySettings {
+  display: flex;
+  flex-direction: column;
+  width: 620px;
+  max-width: 100%;
+  height: 440px;
+  max-height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--ds-bg-deep);
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--ds-border);
+  border-radius: 24px;
   overflow: hidden;
 }
 
 .mySettingsMain {
   display: flex;
+  flex-direction: row;
   width: 100%;
-}
-
-@media screen and (max-width: 1030px) {
-  #mySettings {
-    width: 75%;
-  }
-}
-
-@media screen and (max-width: 830px) {
-  #mySettings {
-    width: 80%;
-  }
-  .mySettingsMain {
-    flex-direction: row;
-  }
+  flex: 1;
+  min-height: 0;
 }
 
 @media screen and (max-width: 500px) {
-  #mySettings {
-    width: 90%;
-  }
   #bottomButtons {
     gap: 0.3rem;
     padding: 3px;
@@ -2998,33 +3020,59 @@ button {
 #mySettingsHeader {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  cursor: move;
-  border-top-left-radius: 20px;
-  border-top-right-radius: 20px;
-  /* border-bottom: 1px solid rgba(255, 255, 255, 0.1); */
-  backdrop-filter: blur(10px);
+  justify-content: space-between;
+  gap: 10px;
+  padding: 18px 20px;
+  flex: none;
+  border-bottom: 1px solid var(--ds-bg-panel);
+}
+
+.ms-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ds-text-primary);
+}
+
+.ms-header-title i {
+  color: var(--ds-brand-500);
+  font-size: 1rem;
 }
 
 #mySettings i,
 #mySettings p {
   display: inline-flex;
   margin: auto;
-  color: #fff;
+  color: var(--ds-text-secondary);
   padding: 5px;
   background: transparent;
 }
 
+#mySettings .title p {
+  color: var(--ds-text-muted);
+  padding: 0;
+  margin: 0;
+}
+
+#mySettings .title i {
+  color: var(--ds-brand-500);
+  padding: 0;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 #mySettings select {
   display: block;
-  padding: 10px;
+  padding: 10px 12px;
   min-width: 150px;
   max-width: 310px;
   margin-top: 10px;
-  background: var(--select-bg) !important;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
+  background: rgba(var(--ds-bg-panel-rgb), 0.8) !important;
+  color: var(--ds-text-primary);
+  border: 1px solid var(--ds-border);
+  border-radius: 12px;
   box-shadow: none;
   cursor: pointer;
   transition:
@@ -3034,36 +3082,100 @@ button {
 }
 
 #mySettings select:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: var(--ds-border-strong);
+  background: var(--ds-bg-panel) !important;
 }
 
 #mySettings select:focus {
   outline: none;
-  border-color: rgba(70, 120, 249, 0.6);
-  box-shadow: 0 0 0 2px rgba(70, 120, 249, 0.15);
+  border-color: var(--ds-brand-600);
+  box-shadow: 0 0 0 2px rgba(var(--ds-brand-600-rgb), 0.2);
 }
 
 #mySettingsCloseBtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   padding: 0;
-  font-size: 1rem;
+  font-size: 0.95rem;
   line-height: 1;
-  color: #fff;
+  color: var(--ds-text-muted);
   border: none;
-  border-radius: 12px;
-  float: right;
-  background: var(--body-bg);
-  transition: all 0.25s ease;
+  border-radius: 10px;
+  background: transparent;
+  transition: all 0.2s ease;
 }
 
 #mySettingsCloseBtn:hover {
-  background: var(--right-msg-bg);
-  transform: translateY(-1px);
+  background: var(--ds-bg-panel);
+  color: var(--ds-text-primary);
+}
+
+/*--------------------------------------------------------------
+# Device selector (mic/speaker/camera picker: name + prev/next)
+--------------------------------------------------------------*/
+
+.device-selector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 10px;
+  margin-bottom: 22px;
+  padding: 4px;
+  background: rgba(var(--ds-bg-panel-rgb), 0.8);
+  border: 1px solid var(--ds-border);
+  border-radius: 12px;
+  max-width: 310px;
+}
+
+#tabDevices > div:last-child .device-selector {
+  margin-bottom: 0;
+}
+
+/* #mySettings prefix needed to beat ".tabcontent button" (width:100%, margin-top, text-align) */
+#mySettings .device-selector-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-top: 0;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ds-text-tertiary);
+  font-size: 0.85rem;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.device-selector-btn:hover:not(:disabled) {
+  background: var(--ds-border);
+  color: var(--ds-text-primary);
+}
+
+.device-selector-btn:disabled {
+  color: var(--ds-border-strong);
+  cursor: not-allowed;
+}
+
+.device-selector-label {
+  flex: 1;
+  min-width: 0;
+  padding: 0 6px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--ds-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .form-check-input {
@@ -3071,11 +3183,15 @@ button {
 }
 
 .title {
-  display: inline-table;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: auto;
-  color: white;
-  font-size: 0.9rem;
-  /* font-weight: bold; */
+  color: var(--ds-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .inline-check-box {
@@ -3108,9 +3224,9 @@ button {
   justify-content: center;
   gap: 6px;
   padding: 10px 4px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(var(--ds-text-primary-rgb), 0.1);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--ds-text-primary-rgb), 0.05);
   cursor: pointer;
   transition:
     border-color 0.25s ease,
@@ -3125,34 +3241,34 @@ button {
 
 .theme-card i {
   font-size: 1.2rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(var(--ds-text-primary-rgb), 0.7);
   transition: color 0.25s ease;
 }
 
 .theme-card span {
   font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(var(--ds-text-primary-rgb), 0.6);
   text-transform: capitalize;
 }
 
 .theme-card:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(var(--ds-text-primary-rgb), 0.1);
+  border-color: rgba(var(--ds-text-primary-rgb), 0.3);
   transform: translateY(-2px);
 }
 
 .theme-card.active {
-  border-color: var(--dd-color, #66beff);
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 0 12px rgba(102, 190, 255, 0.2);
+  border-color: var(--dd-color, var(--ds-brand-500));
+  background: rgba(var(--ds-text-primary-rgb), 0.1);
+  box-shadow: 0 0 12px rgba(var(--ds-brand-500-rgb), 0.2);
 }
 
 .theme-card.active i {
-  color: var(--dd-color, #66beff);
+  color: var(--dd-color, var(--ds-brand-500));
 }
 
 .theme-card.active span {
-  color: #ffffff;
+  color: var(--ds-text-primary);
 }
 
 .theme-card.disabled {
@@ -3236,7 +3352,7 @@ button {
   margin-top: 10px;
   margin-bottom: 20px;
   width: 130px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.12);
   border-radius: 8px;
   background: var(--select-bg);
   color: white;
@@ -3248,14 +3364,14 @@ button {
 }
 
 #themeColorPicker:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(var(--ds-text-primary-rgb), 0.25);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
 }
 
 #themeColorPicker:focus {
   outline: none;
-  border-color: rgba(70, 120, 249, 0.6);
-  box-shadow: 0 0 0 2px rgba(70, 120, 249, 0.15);
+  border-color: rgba(var(--ds-brand-600-rgb), 0.6);
+  box-shadow: 0 0 0 2px rgba(var(--ds-brand-600-rgb), 0.15);
 }
 
 #keepCustomTheme {
@@ -3263,23 +3379,33 @@ button {
 }
 
 .buttons {
-  padding: 10px;
-  float: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
   text-align: left;
-  color: #fff;
+  color: var(--ds-text-secondary);
   width: auto !important;
-  font-size: 0.9rem;
-  border: var(--border);
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: 1px solid var(--ds-border);
   border-radius: 10px;
-  background: var(--select-bg);
+  background: rgba(var(--ds-bg-panel-rgb), 0.8);
   outline: none;
   cursor: pointer;
-  transition: 0.3s;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.buttons i,
+.buttons p {
+  color: inherit;
+  padding: 0;
+  margin: 0;
 }
 
 .buttons:hover {
-  background-color: var(--body-bg) !important;
-  transform: translateY(-3px) !important;
+  background-color: var(--ds-bg-panel) !important;
+  border-color: var(--ds-border-strong);
 }
 
 .extra-info-container {
@@ -3316,7 +3442,7 @@ button {
   display: flex;
   align-items: center;
   gap: 7px;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(var(--ds-text-primary-rgb), 0.55);
   white-space: nowrap;
   min-width: 70px;
 }
@@ -3330,7 +3456,7 @@ button {
   font-size: 0.85rem;
   line-height: 1;
   flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(var(--ds-text-primary-rgb), 0.4);
 }
 
 .extra-info-icon {
@@ -3341,7 +3467,7 @@ button {
   height: 18px;
   line-height: 1;
   flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(var(--ds-text-primary-rgb), 0.4);
 }
 
 .extra-info-values {
@@ -3357,7 +3483,7 @@ button {
   border-radius: 20px;
   background: transparent;
   border: var(--border);
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(var(--ds-text-primary-rgb), 0.85);
   font-size: 0.78rem;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -3374,13 +3500,23 @@ button {
   border: var(--border);
   border-radius: 8px;
   box-sizing: border-box;
-  color: #fff;
+  color: var(--ds-text-primary);
   background-color: rgba(0, 0, 0, 0.2);
 }
 
-#tabRoomSecurity button {
-  width: 100%;
-  margin-bottom: 5px;
+/* #lockRoomBtn/#unlockRoomBtn IDs needed to beat ".tabcontent button"
+   (width:100%, text-align:left) which otherwise pushes the label to the
+   left edge of the button instead of centering it */
+#lockRoomBtn,
+#unlockRoomBtn {
+  width: auto;
+  text-align: center;
+}
+
+.room-lock-btn {
+  width: auto;
+  margin: 0;
+  white-space: nowrap;
 }
 
 #myProfileAvatarContainer {
@@ -3400,7 +3536,9 @@ button {
   margin-top: 10px;
   width: 64px;
   height: 64px;
-  border-radius: 50px;
+  border-radius: 50%;
+  border: 2px solid var(--ds-brand-500);
+  box-shadow: 0 0 0 3px rgba(var(--ds-brand-500-rgb), 0.2), 0 0 14px rgba(var(--ds-brand-500-rgb), 0.45);
 }
 
 #captionEveryoneStopBtn {
@@ -3409,7 +3547,7 @@ button {
   font-size: 0.9rem;
   border: var(--border);
   border-radius: 8px;
-  color: #fff;
+  color: var(--ds-text-primary);
   background-color: transparent;
 }
 
@@ -3428,12 +3566,13 @@ button {
 #roomSendEmailBtn,
 #lockRoomBtn,
 #unlockRoomBtn {
-  padding: 10px;
-  font-size: 0.9rem;
-  border: var(--border);
-  border-radius: 8px;
-  color: #fff;
-  background-color: transparent;
+  padding: 9px 14px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: 1px solid var(--ds-border);
+  border-radius: 10px;
+  color: var(--ds-text-secondary);
+  background-color: rgba(var(--ds-bg-panel-rgb), 0.8);
 }
 
 #myPeerNameSetBtn:hover,
@@ -3442,9 +3581,9 @@ button {
 #roomSendEmailBtn:hover,
 #lockRoomBtn:hover,
 #unlockRoomBtn:hover {
-  background: var(--body-bg);
-  transform: translateY(-3px);
-  transition: all 0.3s ease-in-out;
+  background: var(--ds-bg-panel);
+  border-color: var(--ds-border-strong);
+  transition: all 0.2s ease-in-out;
 }
 
 #recImage {
@@ -3457,7 +3596,7 @@ button {
 }
 
 #recImage:hover {
-  box-shadow: 0px 4px 8px 0px rgba(255, 255, 255, 0.2);
+  box-shadow: 0px 4px 8px 0px rgba(var(--ds-text-primary-rgb), 0.2);
   transform: scale(0.95);
   transition: all 0.3s ease-in-out;
 }
@@ -3493,6 +3632,27 @@ button {
   gap: 8px;
 }
 
+/* Confirms a successful rename - fades in next to the input, then back
+   out after a few seconds (see updateMyPeerName() in client.js). */
+.my-peer-name-success-icon {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  font-size: 0.8rem;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.my-peer-name-success-icon.visible {
+  opacity: 1;
+}
+
 #myPeerNameSetBtn {
   display: inline-flex;
   align-items: center;
@@ -3510,22 +3670,58 @@ button {
   transform: none;
 }
 
+/* Mobile: the input + "Đổi tên" button no longer fit on one row without
+   the button getting squeezed/clipped past the settings panel edge -
+   force the input onto its own full-width row (still bounded by
+   #myPeerNameSetContainer's own padding, so it never overflows the
+   panel) and let the button wrap onto the row below it. */
+@media (max-width: 640px) {
+  #myPeerNameSetContainer {
+    flex-wrap: wrap;
+    position: relative;
+  }
+  #myPeerNameSet {
+    flex: 1 1 100%;
+    /* room so typed text never runs under the checkmark badge */
+    padding-right: 40px;
+  }
+  /* Keep the success checkmark next to the name input (its right edge),
+     not next to the button that wrapped onto the row below it. */
+  .my-peer-name-success-icon {
+    position: absolute;
+    top: 9px;
+    right: 10px;
+  }
+}
+
 /*--------------------------------------------------------------
 # Settings Table
 --------------------------------------------------------------*/
 
 #mySettingsTable {
   width: 100%;
-  color: #fff;
-  table-layout: auto;
+  color: var(--ds-text-secondary);
+  /* fixed: column widths come only from the rules below, never recomputed
+     from row content - keeps every row's right-hand control column
+     (toggle switches, the Khﾃｳa/M盻・khﾃｳa button) pixel-aligned even when a
+     row's content changes width (e.g. lock state) or a row is hidden/shown */
+  table-layout: fixed;
   border-collapse: collapse;
-  border-radius: 10px;
-  background: var(--body-bg);
+  border-radius: 12px;
+  background: transparent;
+}
+
+#mySettingsTable tr {
+  border-bottom: 1px solid var(--ds-bg-panel);
+}
+
+#mySettingsTable tr:last-child {
+  border-bottom: none;
 }
 
 #mySettingsTable td,
 #mySettingsTable th {
-  padding: 10px;
+  padding: 12px 4px;
   text-align: left;
 }
 
@@ -3534,15 +3730,11 @@ button {
 }
 
 #mySettingsTable td:last-child {
-  width: 140px;
+  width: 100px;
   justify-content: center;
   align-items: center;
+  text-align: right;
 }
-
-/* Optional alternating row background */
-/* #mySettingsTable tr:nth-child(even) {
-    background: var(--select-bg);
-} */
 
 #mySettingsTable i {
   border: none;
@@ -3563,7 +3755,7 @@ button {
   margin: 20px 0;
   font-size: 16px;
   text-align: left;
-  color: #fff;
+  color: var(--ds-text-primary);
   border-radius: 10px;
   background: var(--body-bg);
 }
@@ -3577,7 +3769,7 @@ button {
   font-weight: bold;
 }
 #shortcutsTable td i {
-  color: #007bff;
+  color: var(--ds-brand-600);
 }
 #shortcutsTable tr:nth-child(even) {
   background: var(--body-bg);
@@ -3588,83 +3780,118 @@ button {
 --------------------------------------------------------------*/
 
 .tab {
-  padding: 0px 10px 10px 0; /* top right bottom left */
-  overflow: hidden;
-  width: 35%;
-  background-color: var(--body-bg);
-  min-height: 480px;
   display: flex;
   flex-direction: column;
-  border-right: var(--border);
+  align-items: stretch;
+  gap: 4px;
+  padding: 16px 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: 190px;
+  background-color: rgba(var(--ds-bg-deep-rgb), 0.5);
+  border-right: 1px solid var(--ds-bg-panel);
+  flex: none;
 }
 
 .tabActions {
   position: relative;
-  padding: 0px 20px 0px 0px; /* top right bottom left */
-  width: 65%;
-  max-height: 540px;
+  padding: 20px 24px;
+  width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-@media screen and (max-width: 830px) {
-  .tab {
-    display: flex;
-    flex-direction: column;
-    width: auto;
-    min-width: 50px;
-    min-height: auto;
-  }
-  .tab button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-  }
-  .tabActions {
-    width: 100%;
-    border-radius: 10px;
-  }
-  .tabButtonText {
-    display: none !important;
-  }
-}
-
 /* Style the buttons inside the tab */
 .tab button {
-  margin: 3px;
-  padding: 11px;
-  float: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  width: 100%;
+  margin: 0;
+  padding: 11px 12px;
   text-align: left;
-  color: #fff;
-  font-size: 1rem;
-  border: var(--border);
+  color: var(--ds-text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: none;
+  border-left: 2px solid transparent;
   border-radius: 8px;
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: transparent;
   outline: none;
   cursor: pointer;
-  transition: 0.3s;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
 
-/* Change background color of buttons on hover */
+/* Change text color of buttons on hover */
 .tab button:hover {
-  background: var(--body-bg);
-  transform: translateY(-3px);
+  color: var(--ds-text-tertiary);
+  background: rgba(var(--ds-border-rgb), 0.5);
+  transform: none;
 }
 
 /* Create an active/current tablink class */
 .tab button.active {
-  background-color: var(--tab-btn-active);
+  color: var(--ds-brand-500);
+  border-left-color: var(--ds-brand-600);
+  background-color: rgba(var(--ds-brand-600-rgb), 0.12);
+}
+
+#mySettings .tab button p {
+  color: inherit;
+  padding: 0;
+  margin: 0;
+}
+
+/* Narrow screens: collapse the sidebar back into a horizontal top bar */
+@media screen and (max-width: 640px) {
+  .mySettingsMain {
+    flex-direction: column;
+  }
+
+  .tab {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+    padding: 8px 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: none;
+    border-bottom: 1px solid var(--ds-bg-panel);
+  }
+
+  .tab button {
+    width: auto;
+    padding: 10px 4px;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+  }
+
+  /* Save space: drop the tab icon on mobile, keep just the label */
+  .tab button::before {
+    display: none;
+  }
+
+  .tab button.active {
+    border-left-color: transparent;
+    border-bottom-color: var(--ds-brand-600);
+    background-color: transparent;
+  }
 }
 
 /* Style the tab content */
 .tabcontent {
   display: none;
-  padding: 6px 12px;
+  padding: 6px 0;
   width: 100%;
-  min-height: 480px;
+  min-height: 0;
   border-top: none;
-  background-color: var(--body-bg);
+  background-color: transparent;
 }
 
 .tabcontent button {
@@ -3699,7 +3926,7 @@ button {
   flex: 1;
   height: 5px;
   margin: 0 2px;
-  background-color: #ddd;
+  background-color: var(--ds-border-strong);
   border-radius: 8px;
   transition: all 0.3s ease;
 }
@@ -3732,7 +3959,7 @@ button {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #ccc;
+  background-color: var(--ds-border-strong);
   -webkit-transition: 0.4s;
   transition: 0.4s;
 }
@@ -3777,7 +4004,7 @@ input:checked + .slider:before {
 --------------------------------------------------------------*/
 
 .swal2-popup {
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(var(--ds-brand-500-rgb), 0.18) !important;
   border-radius: 20px !important;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
   backdrop-filter: blur(12px);
@@ -3791,12 +4018,27 @@ input:checked + .slider:before {
   box-shadow: none !important;
 }
 
+/* Ocean-themed default confirm button, !important to beat SweetAlert2's
+   own built-in default (a purple, off-palette blue). Safe to force site-
+   wide: nothing in client.js ever sets a custom confirmButtonColor.
+   Cancel/deny are intentionally left at SweetAlert2's own default gray -
+   a couple of dialogs set an explicit red/green cancelButtonColor/
+   denyButtonColor for a destructive/alternate action, and those inline
+   colors must keep winning. */
+.swal2-styled.swal2-confirm {
+  background-color: var(--ds-brand-700) !important;
+  color: var(--ds-cta-text) !important;
+}
+.swal2-styled.swal2-confirm:hover {
+  background-color: var(--ds-brand-600) !important;
+}
+
 .swal2-validation-message,
 .swal2-title,
 .swal2-content,
 .swal2-input {
   text-align: center;
-  color: white !important;
+  color: var(--ds-text-primary) !important;
   background-color: transparent !important;
 }
 
@@ -3807,7 +4049,7 @@ input:checked + .slider:before {
 }
 
 .swal2-file {
-  color: white !important;
+  color: var(--ds-text-primary) !important;
   background-color: transparent !important;
   border-radius: 12px !important;
 }
@@ -3817,7 +4059,7 @@ input:checked + .slider:before {
 }
 
 .swal2-html-container {
-  color: rgb(195, 195, 195) !important;
+  color: var(--ds-text-tertiary) !important;
   background-color: transparent !important;
 }
 
@@ -3838,12 +4080,12 @@ input:checked + .slider:before {
   gap: 10px;
   width: 100%;
   padding: 24px 20px;
-  border: 1px dashed rgba(255, 255, 255, 0.28);
+  border: 1px dashed rgba(var(--ds-text-primary-rgb), 0.28);
   border-radius: 20px;
   background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 55%),
-    rgba(255, 255, 255, 0.04);
-  color: #fff;
+    radial-gradient(circle at top, rgba(var(--ds-text-primary-rgb), 0.08), transparent 55%),
+    rgba(var(--ds-text-primary-rgb), 0.04);
+  color: var(--ds-text-primary);
   cursor: pointer;
   transition:
     border-color 0.18s ease,
@@ -3853,21 +4095,21 @@ input:checked + .slider:before {
 
 .mirotalk-file-dropzone:hover,
 .mirotalk-file-dropzone.is-dragover {
-  border-color: var(--dd-color, #e8e8ec);
+  border-color: var(--dd-color, var(--ds-text-secondary));
   background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 52%),
-    color-mix(in srgb, var(--dd-color, #e8e8ec) 14%, transparent);
+    radial-gradient(circle at top, rgba(var(--ds-text-primary-rgb), 0.08), transparent 52%),
+    color-mix(in srgb, var(--dd-color, var(--ds-text-secondary)) 14%, transparent);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 0 0 1px rgba(var(--ds-text-primary-rgb), 0.2),
     0 18px 36px rgba(0, 0, 0, 0.2);
 }
 
 .mirotalk-file-dropzone.has-file {
   border-style: solid;
-  border-color: rgba(102, 190, 255, 0.5);
+  border-color: rgba(var(--ds-brand-500-rgb), 0.5);
   background:
-    radial-gradient(circle at top, rgba(102, 190, 255, 0.14), transparent 55%),
-    rgba(255, 255, 255, 0.05);
+    radial-gradient(circle at top, rgba(var(--ds-brand-500-rgb), 0.14), transparent 55%),
+    rgba(var(--ds-text-primary-rgb), 0.05);
 }
 
 .mirotalk-file-dropzone-icon {
@@ -3877,7 +4119,7 @@ input:checked + .slider:before {
   width: 64px;
   height: 64px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
   font-size: 1.5rem;
 }
 
@@ -3888,7 +4130,7 @@ input:checked + .slider:before {
 
 .mirotalk-file-dropzone-subtitle,
 .mirotalk-file-dropzone-helper {
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(var(--ds-text-primary-rgb), 0.72);
 }
 
 .mirotalk-file-dropzone-subtitle {
@@ -3903,8 +4145,8 @@ input:checked + .slider:before {
   margin-top: 4px;
   padding: 10px 16px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: rgba(var(--ds-text-primary-rgb), 0.1);
+  color: var(--ds-text-primary);
   font-size: 0.9rem;
   font-weight: 600;
 }
@@ -3914,9 +4156,9 @@ input:checked + .slider:before {
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.08);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--ds-text-primary-rgb), 0.05);
   text-align: left;
 }
 
@@ -3927,8 +4169,8 @@ input:checked + .slider:before {
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--dd-color, #e8e8ec) 20%, transparent);
-  color: #fff;
+  background: color-mix(in srgb, var(--dd-color, var(--ds-text-secondary)) 20%, transparent);
+  color: var(--ds-text-primary);
   flex: 0 0 auto;
 }
 
@@ -3946,13 +4188,13 @@ input:checked + .slider:before {
 }
 
 .mirotalk-file-preview-meta strong {
-  color: #fff;
+  color: var(--ds-text-primary);
   font-size: 0.95rem;
 }
 
 .mirotalk-file-preview-meta span {
   margin-top: 4px;
-  color: rgba(255, 255, 255, 0.68);
+  color: rgba(var(--ds-text-primary-rgb), 0.68);
   font-size: 0.82rem;
 }
 
@@ -3960,14 +4202,14 @@ input:checked + .slider:before {
   border: none;
   border-radius: 12px;
   padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
+  color: var(--ds-text-primary);
   cursor: pointer;
   transition: background 0.18s ease;
 }
 
 .mirotalk-file-preview-remove:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(var(--ds-text-primary-rgb), 0.16);
 }
 
 @media (max-width: 640px) {
@@ -3997,17 +4239,17 @@ input:checked + .slider:before {
 }
 
 .swal2-timer-progress-bar {
-  background-color: #1d8ecd !important;
+  background-color: var(--ds-brand-500) !important;
 }
 
 .swal2-input:-webkit-autofill,
 .swal2-input:-webkit-autofill:hover,
 .swal2-input:-webkit-autofill:focus,
 .swal2-input:-webkit-autofill:active {
-  -webkit-box-shadow: 0 0 0 1000px #000000 inset !important;
-  -webkit-text-fill-color: #fff !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--ds-bg-1) inset !important;
+  -webkit-text-fill-color: var(--ds-text-primary) !important;
   transition: background-color 5000s ease-in-out 0s;
-  caret-color: #fff;
+  caret-color: var(--ds-brand-500);
 }
 
 .img-about {
@@ -4116,7 +4358,7 @@ input:checked + .slider:before {
   width: min(92vw, 440px);
   min-width: 320px;
   margin: auto;
-  color: #fff;
+  color: var(--ds-text-primary);
   font-size: 1rem;
   background: transparent;
   box-shadow: none;
@@ -4124,8 +4366,8 @@ input:checked + .slider:before {
 }
 
 #sendFileDiv {
-  --file-transfer-accent: #6fb4ff;
-  --file-transfer-accent-soft: rgba(111, 180, 255, 0.18);
+  --file-transfer-accent: var(--ds-brand-500);
+  --file-transfer-accent-soft: rgba(var(--ds-brand-500-rgb), 0.18);
 }
 
 #receiveFileDiv {
@@ -4139,7 +4381,7 @@ input:checked + .slider:before {
   flex-direction: column;
   gap: 18px;
   padding: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.08);
   border-radius: 24px;
   background: var(--body-bg);
   backdrop-filter: blur(18px);
@@ -4170,11 +4412,11 @@ input:checked + .slider:before {
   border-radius: 22px;
   background: linear-gradient(
     145deg,
-    rgba(255, 255, 255, 0.12),
+    rgba(var(--ds-text-primary-rgb), 0.12),
     var(--file-transfer-accent-soft)
   );
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.08);
+  box-shadow: inset 0 1px 0 rgba(var(--ds-text-primary-rgb), 0.08);
 }
 
 .file-transfer-image {
@@ -4214,7 +4456,7 @@ input:checked + .slider:before {
   margin: 8px 0 0;
   font-size: 0.95rem;
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.76);
+  color: rgba(var(--ds-text-primary-rgb), 0.76);
 }
 
 .file-transfer-meta {
@@ -4224,13 +4466,13 @@ input:checked + .slider:before {
   padding: 16px 18px;
   border-radius: 18px;
   background: rgba(0, 0, 0, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.06);
 }
 
 .file-transfer-info {
   white-space: pre-line;
   line-height: 1.55;
-  color: rgba(255, 255, 255, 0.88);
+  color: rgba(var(--ds-text-primary-rgb), 0.88);
   word-break: break-word;
 }
 
@@ -4252,12 +4494,12 @@ input:checked + .slider:before {
   overflow: hidden;
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
 }
 
 #sendProgress::-webkit-progress-bar,
 #receiveProgress::-webkit-progress-bar {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
   border-radius: 999px;
 }
 
@@ -4297,12 +4539,12 @@ input:checked + .slider:before {
   min-height: 46px;
   margin-top: 0;
   padding: 0 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.08);
   border-radius: 14px;
   font-size: 0.96rem;
   font-weight: 600;
-  color: #fff;
-  background-color: rgba(255, 255, 255, 0.04);
+  color: var(--ds-text-primary);
+  background-color: rgba(var(--ds-text-primary-rgb), 0.04);
   transition:
     transform 0.23s ease,
     background 0.23s ease,
@@ -4318,7 +4560,7 @@ input:checked + .slider:before {
 }
 
 #receiveHideBtn {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--ds-text-primary-rgb), 0.04);
 }
 
 #sendAbortBtn i,
@@ -4343,8 +4585,8 @@ input:checked + .slider:before {
 
 #receiveHideBtn:hover {
   color: var(--file-transfer-accent);
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
+  border-color: rgba(var(--ds-text-primary-rgb), 0.12);
 }
 
 @media (max-width: 640px) {
@@ -4400,7 +4642,7 @@ input:checked + .slider:before {
   justify-content: center;
   align-items: center;
   height: 200px;
-  border: 2px dashed #ccc;
+  border: 2px dashed var(--ds-border-strong);
   padding: 20px;
   text-align: center;
 }
@@ -4444,7 +4686,7 @@ input:checked + .slider:before {
   margin-top: 10px;
   margin-left: 10px;
   border: none;
-  color: #fff;
+  color: var(--ds-text-primary);
   background: black;
 }
 
@@ -4477,7 +4719,7 @@ input:checked + .slider:before {
 }
 
 #about a {
-  color: #fff;
+  color: var(--ds-text-primary);
   text-decoration: none;
 }
 
@@ -4497,8 +4739,8 @@ input:checked + .slider:before {
   height: 40px;
   font-size: 1.2rem;
   border-radius: 8px;
-  color: #ffffff;
-  background: linear-gradient(65deg, #376df9 0, #ff5fa0 100%);
+  color: var(--ds-cta-text);
+  background: linear-gradient(65deg, var(--ds-cta-1) 0%, var(--ds-cta-3) 100%);
   transition: background 0.23s;
   cursor: pointer;
 }
@@ -4507,7 +4749,7 @@ input:checked + .slider:before {
   font-weight: bold;
   filter: brightness(1.1) saturate(1.2);
   transform: scale(1.05);
-  box-shadow: 0 6px 20px rgba(255, 0, 166, 0.4);
+  box-shadow: 0 6px 20px rgba(var(--ds-cta-glow-rgb), 0.4);
 }
 
 /*--------------------------------------------------------------
@@ -4548,10 +4790,10 @@ input:checked + .slider:before {
 #recognitionDialect,
 #recognitionLanguage {
   background: var(--select-bg);
-  color: #ffffff;
+  color: var(--ds-text-primary);
   font-size: small;
   max-width: 135px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.12);
   border-radius: 8px;
   padding: 6px 10px;
   transition:
@@ -4562,15 +4804,15 @@ input:checked + .slider:before {
 
 #recognitionDialect:hover,
 #recognitionLanguage:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(var(--ds-text-primary-rgb), 0.25);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
 }
 
 #recognitionDialect:focus,
 #recognitionLanguage:focus {
   outline: none;
-  border-color: rgba(70, 120, 249, 0.6);
-  box-shadow: 0 0 0 2px rgba(70, 120, 249, 0.15);
+  border-color: rgba(var(--ds-brand-600-rgb), 0.6);
+  box-shadow: 0 0 0 2px rgba(var(--ds-brand-600-rgb), 0.15);
 }
 
 /*--------------------------------------------------------------
@@ -4597,9 +4839,9 @@ select {
   font-size: 0.9rem;
   padding: 0 10px;
   box-shadow: none;
-  color: #fff;
+  color: var(--ds-text-primary);
   background: var(--select-bg);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.12);
   border-radius: 8px;
   cursor: pointer;
   transition:
@@ -4609,19 +4851,19 @@ select {
 }
 
 select:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(var(--ds-text-primary-rgb), 0.25);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
 }
 
 select:focus {
   outline: none;
-  border-color: rgba(70, 120, 249, 0.6);
-  box-shadow: 0 0 0 2px rgba(70, 120, 249, 0.15);
+  border-color: rgba(var(--ds-brand-600-rgb), 0.6);
+  box-shadow: 0 0 0 2px rgba(var(--ds-brand-600-rgb), 0.15);
 }
 
 select option {
   background: var(--select-bg);
-  color: #fff;
+  color: var(--ds-text-primary);
 }
 
 hr {
@@ -4630,9 +4872,9 @@ hr {
   height: 1px;
   background: linear-gradient(
     90deg,
-    rgba(214, 234, 238, 0.03),
-    rgba(214, 234, 238, 0.14),
-    rgba(214, 234, 238, 0.03)
+    rgba(var(--ds-text-primary-rgb), 0.03),
+    rgba(var(--ds-text-primary-rgb), 0.14),
+    rgba(var(--ds-text-primary-rgb), 0.03)
   );
   margin-top: 15px;
   margin-bottom: 15px;
@@ -4682,7 +4924,7 @@ hr {
 }
 
 .clw {
-  color: #ffffff;
+  color: var(--ds-text-primary);
 }
 
 .mic-input-range {
@@ -4706,9 +4948,9 @@ hr {
   border-radius: 50px;
   overflow: hidden;
   outline: none;
-  border: var(--border);
+  border: 1px solid var(--ds-border);
   cursor: pointer;
-  background-color: #000000;
+  background-color: var(--ds-bg-panel);
   transition: background-color ease 0.3s;
 }
 
@@ -4736,7 +4978,8 @@ hr {
 }
 
 .toggle:checked {
-  background-color: green;
+  background-color: var(--ds-brand-600);
+  border-color: var(--ds-brand-600);
 }
 
 .toggle:checked:before {
@@ -4750,8 +4993,8 @@ hr {
 /* Styles for the dropdown button */
 .dropdown-toggle {
   /* padding: 10px 20px; */
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--ds-text-primary);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.1);
   border-radius: 8px;
   background-color: var(--body-bg);
   cursor: pointer;
@@ -4761,8 +5004,8 @@ hr {
 }
 
 .dropdown-toggle:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(var(--ds-text-primary-rgb), 0.25);
+  background: rgba(var(--ds-text-primary-rgb), 0.06);
 }
 
 /* Styles for the dropdown menu container */
@@ -4777,7 +5020,7 @@ hr {
 --------------------------------------------------------------*/
 
 /* .fas.fa-bars {
-    color: #66beff !important;
+    color: var(--ds-brand-500) !important;
 } */
 
 /* General container for the dropdown */
@@ -4788,8 +5031,8 @@ hr {
 
 /* Style the button that triggers the dropdown */
 .dropdown-toggle-custom {
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--ds-text-primary);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.1);
   border-radius: 8px;
   background: var(--body-bg);
   cursor: pointer;
@@ -4799,15 +5042,15 @@ hr {
 }
 
 .dropdown-toggle-custom:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(var(--ds-text-primary-rgb), 0.25);
+  background: rgba(var(--ds-text-primary-rgb), 0.06);
 }
 
 /* Dropdown menu */
 .app-dropdown-menu {
   margin: 0;
   list-style: none;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.08);
   border-radius: 12px;
   background: var(--body-bg);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
@@ -4829,7 +5072,7 @@ hr {
   text-align: left;
   border: none !important;
   background: none;
-  color: #fff;
+  color: var(--ds-text-primary);
   cursor: pointer;
   border-radius: 10px;
   font-size: 0.88rem;
@@ -4838,7 +5081,7 @@ hr {
 }
 
 .app-dropdown-action:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
 }
 
 .dropdown-menu-custom {
@@ -4867,9 +5110,9 @@ hr {
   list-style: none;
   background: linear-gradient(
     90deg,
-    rgba(214, 234, 238, 0.04),
-    rgba(214, 234, 238, 0.12),
-    rgba(214, 234, 238, 0.04)
+    rgba(var(--ds-text-primary-rgb), 0.04),
+    rgba(var(--ds-text-primary-rgb), 0.12),
+    rgba(var(--ds-text-primary-rgb), 0.04)
   );
 }
 
@@ -4892,7 +5135,7 @@ hr {
 #msgerDropDownContent hr {
   margin: 6px 6px;
   border: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(var(--ds-text-primary-rgb), 0.08);
 }
 
 .msger-room-actions-menu {
@@ -4944,7 +5187,7 @@ hr {
 
 #msgerDropDownContent .msger-menu-action:hover,
 #captionDropDownContent .msger-menu-action:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
 }
 
 #msgerDropDownContent .msger-menu-action-icon,
@@ -4959,7 +5202,7 @@ hr {
   min-width: 28px;
   height: 28px;
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--ds-text-primary-rgb), 0.06);
   transform: translateY(-50%);
 }
 
@@ -5015,7 +5258,7 @@ hr {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  color: #ffffff;
+  color: var(--ds-text-primary);
   gap: 10px;
 }
 
@@ -5027,7 +5270,7 @@ hr {
   min-width: 28px;
   height: 28px;
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--ds-text-primary-rgb), 0.06);
   font-size: 0.86rem;
   line-height: 1;
   color: rgba(232, 247, 249, 0.92);
@@ -5038,7 +5281,7 @@ hr {
   font-size: 0.88rem;
   font-weight: 600;
   line-height: 1.25;
-  color: #ffffff;
+  color: var(--ds-text-primary);
 }
 
 #captionDropDownContent {
@@ -5052,7 +5295,7 @@ hr {
 #captionDropDownContent hr {
   margin: 6px 6px;
   border: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(var(--ds-text-primary-rgb), 0.08);
 }
 
 #captionDropDownContent .msger-menu-action-row + .msger-menu-action-row {
@@ -5085,7 +5328,7 @@ hr {
   width: 100%;
   padding: 10px 20px;
   margin: 5px;
-  color: #fff;
+  color: var(--ds-text-primary);
   border: var(--border);
   border-radius: 8px;
   background: var(--body-bg);
@@ -5105,7 +5348,7 @@ hr {
 html,
 body {
   scrollbar-width: thin;
-  scrollbar-color: #2f2f2f #1a1b1f;
+  scrollbar-color: var(--ds-brand-700) var(--ds-bg-1);
 }
 
 ::-webkit-scrollbar {
@@ -5123,7 +5366,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1b1f;
+  background: var(--ds-bg-1);
 }
 
 /*--------------------------------------------------------------
@@ -5131,7 +5374,7 @@ body {
 --------------------------------------------------------------*/
 
 /* strong {
-    color: #007bff;
+    color: var(--ds-brand-600);
 } */
 
 .w-80 {
@@ -5195,8 +5438,8 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(var(--ds-text-primary-rgb), 0.06);
+  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.06);
   border-radius: 16px;
   padding: 12px 18px;
   backdrop-filter: blur(8px);
@@ -5206,7 +5449,7 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(var(--ds-text-primary-rgb), 0.5);
   animation: typingBounce 1.4s infinite ease-in-out both;
 }
 
@@ -5236,7 +5479,7 @@ body {
 }
 
 /*--------------------------------------------------------------
-# Slide-in from right — shared panel pin animation
+# Slide-in from right 窶・shared panel pin animation
 --------------------------------------------------------------*/
 @keyframes slideInFromRight {
   from {
@@ -5291,7 +5534,7 @@ z-index
   right: 0;
   z-index: 40;
   padding: 8px 16px;
-  background: linear-gradient(to bottom, rgba(2, 6, 23, 0.9), transparent);
+  background: linear-gradient(to bottom, rgba(var(--ds-bg-2-rgb), 0.9), transparent);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   display: flex;
@@ -5315,8 +5558,8 @@ z-index
 }
 
 .header-badge {
-  background-color: rgba(15, 23, 42, 0.9);
-  border: 1px solid #1e293b;
+  background-color: rgba(var(--ds-bg-deep-rgb), 0.9);
+  border: 1px solid var(--ds-bg-panel);
   padding: 4px 10px;
   border-radius: 8px;
   display: flex;
@@ -5329,20 +5572,20 @@ z-index
 }
 
 .text-blue-400 {
-  color: #60a5fa;
+  color: var(--ds-brand-500);
 }
 .text-slate-400 {
-  color: #94a3b8;
+  color: var(--ds-text-muted);
 }
 
 .label-text {
-  color: #94a3b8;
+  color: var(--ds-text-muted);
   font-size: 11px;
   font-weight: 400;
 }
 
 .room-id-text {
-  color: #60a5fa;
+  color: var(--ds-brand-500);
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", monospace;
@@ -5356,7 +5599,7 @@ z-index
   background: transparent !important;
   border: none !important;
   padding: 2px !important;
-  color: #94a3b8;
+  color: var(--ds-text-muted);
   cursor: pointer;
   border-radius: 4px;
   display: flex;
@@ -5372,8 +5615,8 @@ z-index
 }
 
 .header-copy-btn:hover {
-  color: #e2e8f0 !important;
-  background-color: #1e293b !important;
+  color: var(--ds-text-secondary) !important;
+  background-color: var(--ds-bg-panel) !important;
   transform: none !important;
 }
 
@@ -5383,7 +5626,7 @@ z-index
 
 .timer-text,
 .timer-text * {
-  color: #cbd5e1 !important;
+  color: var(--ds-text-tertiary) !important;
   font-family:
     "Montserrat",
     -apple-system,
@@ -5449,12 +5692,12 @@ section#msgerDraggable:nth-of-type(1)
   > div:nth-of-type(1)
   > section:nth-of-type(1)
   > main#msgerChat:nth-of-type(1) {
-  background-color: #161535 !important;
+  background-color: var(--ds-bg-deep) !important;
 }
 section#msgerDraggable:nth-of-type(1)
   > section#msger:nth-of-type(1)
   > header#msgerHeader:nth-of-type(1) {
-  background-color: #25375b !important;
+  background-color: var(--ds-bg-panel) !important;
 }
 section#msgerDraggable:nth-of-type(1)
   > section#msger:nth-of-type(1)
@@ -5462,8 +5705,8 @@ section#msgerDraggable:nth-of-type(1)
   > section:nth-of-type(1)
   > div:nth-of-type(1)
   > button#msgerSendBtn:nth-of-type(2) {
-  background-color: #0016ff !important;
-  border-color: #ffffff !important;
+  background-color: var(--ds-brand-700) !important;
+  border-color: var(--ds-text-primary) !important;
 }
 section#msgerDraggable:nth-of-type(1)
   > section#msger:nth-of-type(1)
@@ -5478,6 +5721,6 @@ section#msgerDraggable:nth-of-type(1)
   > div:nth-of-type(1)
   > section:nth-of-type(1)
   > div:nth-of-type(1) {
-  background-color: #1d2651 !important;
-  border-color: #000000 !important;
+  background-color: var(--ds-bg-panel) !important;
+  border-color: var(--ds-bg-2) !important;
 }

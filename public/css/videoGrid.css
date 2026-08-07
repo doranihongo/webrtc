@@ -2,18 +2,60 @@
 # Video grid
 --------------------------------------------------------------*/
 
+/* Stage spacing - mirrors the reference App.tsx's responsive Tailwind
+   padding exactly (verified against its compiled CSS output):
+     pt-10 sm:pt-11 max-lg:landscape:pt-1
+     pb-[96px] sm:pb-20 max-lg:landscape:pb-16   (controls visible)
+     pb-6      sm:pb-20 max-lg:landscape:pb-2    (controls hidden)
+     px-2 sm:px-6 max-lg:landscape:px-2
+   CallHeader/ControlBar are `fixed` there and reserve this space purely
+   via padding on their flex-col wrapper, never participating in layout.
+   #videoMediaContainer uses absolute positioning instead, so it must
+   reserve the identical gaps itself via top/left/width/height - these
+   custom properties are the px-converted (1 spacing unit = 4px) source
+   of truth for that, shared with the #msgerDraggable.msger-pinned
+   override in client.html so the two never drift apart. */
+:root {
+  --stage-top: 40px; /* pt-10 */
+  --stage-side: 8px; /* px-2 */
+  --stage-pb: 96px; /* pb-[96px] (controls visible / no peer yet) */
+}
+
+@media (min-width: 640px) {
+  :root {
+    --stage-top: 44px; /* sm:pt-11 */
+    --stage-side: 24px; /* sm:px-6 */
+    --stage-pb: 80px; /* sm:pb-20 - constant regardless of controls */
+  }
+}
+
+/* max-lg:landscape (mobile/tablet landscape, width < 1024px) - wins over
+   the sm: rule above exactly like the reference, whose compiled Tailwind
+   output places this media block after the sm: one so it takes priority
+   whenever both conditions are true. CallHeader itself is fully hidden
+   here (`max-lg:landscape:hidden`), hence the near-zero top gap. */
+@media (max-width: 1023.98px) and (orientation: landscape) {
+  :root {
+    --stage-top: 4px; /* max-lg:landscape:pt-1 */
+    --stage-side: 8px; /* max-lg:landscape:px-2 */
+    --stage-pb: 64px; /* max-lg:landscape:pb-16 */
+  }
+}
+
 #videoMediaContainer {
   z-index: 2;
   position: absolute;
-  top: 50px;
-  width: calc(100% - 32px);
-  left: 16px;
-  height: calc(100% - 130px);
+  top: var(--stage-top);
+  width: calc(100% - (var(--stage-side) * 2));
+  left: var(--stage-side);
+  height: calc(100% - var(--stage-top) - var(--stage-pb));
   border-radius: 12px;
   opacity: 1;
   overflow: hidden;
   transition:
     top 500ms,
+    left 500ms,
+    width 500ms,
     height 500ms,
     opacity 500ms;
   display: flex;
@@ -22,9 +64,391 @@
   align-items: center;
 }
 
+/* Reclaim space when the header/control bar auto-hide on idle (mobile).
+   Reference (App.tsx) only ever shrinks the BOTTOM padding when controls
+   hide (`pb-[96px]` -> `pb-6`) since its CallHeader is `fixed` and never
+   participates in the reserved layout gap there. This app's top header
+   isn't a bare overlay the same way, so on explicit request the stage
+   also reclaims the TOP gap on mobile when the header hides - shrinking
+   --stage-top in step with --stage-pb (both mobile/portrait and
+   landscape). The sm: (>=640px, tablet-ish) tier keeps both unchanged,
+   matching the reference there. */
 #videoMediaContainer.expanded {
+  --stage-top: 8px;
+  --stage-pb: 24px; /* pb-6 */
+}
+@media (min-width: 640px) {
+  #videoMediaContainer.expanded {
+    --stage-top: 44px; /* sm: unchanged from the visible state */
+    --stage-pb: 80px; /* sm:pb-20 - unchanged from the visible state */
+  }
+}
+@media (max-width: 1023.98px) and (orientation: landscape) {
+  #videoMediaContainer.expanded {
+    --stage-top: 8px; /* small gap, matches --stage-pb below instead of 0 */
+    --stage-pb: 8px; /* max-lg:landscape:pb-2 */
+  }
+}
+
+/*--------------------------------------------------------------
+# Solo self-view (1-to-1 call): my tile floats as a small
+# draggable thumbnail that snaps to whichever corner it's dropped
+# near (or hides into a small "eye" pill if dragged mostly out of
+# the stage), the other participant fills the main stage - mirrors
+# FloatingLocalVideo.tsx exactly.
+--------------------------------------------------------------*/
+
+/* While solo mode is active, my separate screen-share tile (if any)
+   has no equivalent in the reference (I never preview my own shared
+   screen) - keep it out of the layout so the remote tile stays full-size. */
+#videoMediaContainer.solo-active > #myScreenWrap {
+  display: none !important;
+}
+
+#myVideoWrap.solo-self {
+  position: absolute;
+  /* .Camera/.Screen force width/height: 100% !important for the grid -
+     must out-rank that here or the thumbnail renders full-size. */
+  width: 144px !important;
+  aspect-ratio: 16 / 9;
+  height: auto !important;
+  max-width: 144px;
+  max-height: none !important;
+  flex: none !important;
+  z-index: 30;
+  border-radius: 14px;
+  border: 2px solid rgba(36, 64, 107, 0.9);
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.2);
+  cursor: grab;
+  touch-action: none;
+  transition:
+    transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 0.2s ease,
+    top 0.3s,
+    left 0.3s,
+    right 0.3s,
+    bottom 0.3s;
+}
+
+/* No position transition while the pointer is actively dragging it -
+   the live translate3d(...) below handles motion instead. */
+#myVideoWrap.solo-self.solo-dragging {
+  transition: border-color 0.2s ease;
+}
+
+#myVideoWrap.solo-self:hover {
+  border-color: rgba(59, 138, 196, 0.9);
+}
+
+#myVideoWrap.solo-self:active {
+  cursor: grabbing;
+}
+
+@media (min-width: 640px) {
+  #myVideoWrap.solo-self {
+    width: 176px !important;
+    max-width: 176px;
+    border-radius: 16px;
+  }
+}
+
+@media (min-width: 768px) {
+  #myVideoWrap.solo-self {
+    width: 224px !important;
+    max-width: 224px;
+  }
+}
+
+/* 4 snap corners - 10px on mobile, 12px from sm+ (matches the
+   reference's top/left/right/bottom-2.5 sm:3 spacing) */
+#myVideoWrap.solo-self.corner-top-left {
   top: 10px;
-  height: calc(100% - 20px);
+  left: 10px;
+  right: auto;
+  bottom: auto;
+}
+#myVideoWrap.solo-self.corner-top-right {
+  top: 10px;
+  right: 10px;
+  left: auto;
+  bottom: auto;
+}
+#myVideoWrap.solo-self.corner-bottom-left {
+  bottom: 10px;
+  left: 10px;
+  right: auto;
+  top: auto;
+}
+#myVideoWrap.solo-self.corner-bottom-right {
+  bottom: 10px;
+  right: 10px;
+  left: auto;
+  top: auto;
+}
+@media (min-width: 640px) {
+  #myVideoWrap.solo-self.corner-top-left {
+    top: 12px;
+    left: 12px;
+  }
+  #myVideoWrap.solo-self.corner-top-right {
+    top: 12px;
+    right: 12px;
+  }
+  #myVideoWrap.solo-self.corner-bottom-left {
+    bottom: 12px;
+    left: 12px;
+  }
+  #myVideoWrap.solo-self.corner-bottom-right {
+    bottom: 12px;
+    right: 12px;
+  }
+}
+
+/* No name pill on the floating thumbnail, same as the reference */
+#myVideoWrap.solo-self .videoPeerName {
+  display: none;
+}
+
+/* The old always-on-top per-tile navbar has no place here - only the
+   eye-off button and the mic badge (built separately) are shown. */
+#myVideoWrap.solo-self .navbar {
+  display: none !important;
+}
+
+/* Compact camera-off placeholder (small generic user icon, no name/
+   letter) - replaces the big avatar+name+caption used on the main
+   stage, matching VideoPlayer.tsx's compactAvatar/hideNameTag mode. */
+#myVideoWrap.solo-self .videoAvatarImage {
+  display: none !important;
+}
+.solo-compact-avatar {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+#myVideoWrap.solo-self.solo-cam-off .solo-compact-avatar {
+  display: flex;
+}
+.solo-compact-avatar-ring {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 9999px;
+  border: 1px solid rgba(36, 64, 107, 0.5);
+  background: rgba(11, 26, 46, 0.6);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+.solo-compact-avatar-circle {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: rgba(22, 50, 79, 0.9);
+  border: 1px solid rgba(36, 64, 107, 0.8);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.85);
+}
+.solo-compact-avatar-circle svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.75;
+}
+.solo-compact-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  object-fit: cover;
+  pointer-events: none;
+}
+@media (min-width: 640px) {
+  .solo-compact-avatar-circle {
+    width: 44px;
+    height: 44px;
+  }
+  .solo-compact-avatar-circle svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* Mic-off status badge, top-right of the thumbnail - only visible
+   while muted, independent of hover/fade (mirrors the rose chip in
+   VideoPlayer.tsx's status-badges-overlay, hideNameTag mode).
+   Hidden by default: ensureSoloWidgets() builds this unconditionally
+   (even outside solo-self mode), so without this base rule it shows
+   up unstyled/oversized on the main stage tile. */
+.solo-status-badges {
+  display: none;
+}
+#myVideoWrap.solo-self .solo-status-badges {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#myVideoWrap.solo-self .solo-status-badges .solo-mic-off-badge {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  background: rgba(225, 29, 72, 0.9);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+#myVideoWrap.solo-self .solo-status-badges .solo-mic-off-badge svg {
+  width: 10px;
+  height: 10px;
+}
+@media (min-width: 640px) {
+  #myVideoWrap.solo-self .solo-status-badges {
+    top: 6px;
+    right: 6px;
+  }
+  #myVideoWrap.solo-self .solo-status-badges .solo-mic-off-badge svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+#myVideoWrap.solo-self.solo-audio-off .solo-status-badges .solo-mic-off-badge {
+  display: flex;
+}
+
+/* Hide-camera toggle (eye-off), top-left of the thumbnail - dim by
+   default, full opacity on hover (reference: opacity-30 hover:opacity-100).
+   Hidden by default: ensureSoloWidgets() builds this unconditionally
+   (even outside solo-self mode), so without this base rule the raw
+   button + unsized SVG shows up as a big black shape on the main
+   stage tile when alone in the room (solo-self mode never turns on). */
+.solo-eye-btn {
+  display: none;
+}
+#myVideoWrap.solo-self .solo-eye-btn {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(8, 21, 39, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(36, 64, 107, 0.6);
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+#myVideoWrap.solo-self .solo-eye-btn svg {
+  width: 16px;
+  height: 16px;
+}
+@media (min-width: 640px) {
+  #myVideoWrap.solo-self .solo-eye-btn {
+    top: 8px;
+    left: 8px;
+    padding: 8px;
+  }
+  #myVideoWrap.solo-self .solo-eye-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+#myVideoWrap.solo-self.solo-faded .solo-eye-btn {
+  opacity: 0.3;
+}
+#myVideoWrap.solo-self .solo-eye-btn:hover {
+  opacity: 1 !important;
+}
+
+/* Hidden state: the whole thumbnail collapses down to a small
+   pill showing just an "Eye" icon, in the same corner, to bring
+   the camera preview back - mirrors FloatingLocalVideo's isHidden
+   branch (a totally different small button, same corner slot). */
+#myVideoWrap.solo-self.solo-hidden {
+  /* .Camera sets container-type: inline-size, which applies inline-size
+     containment - that forces any auto/max-content width on the
+     element itself to resolve as if it had no content (0), regardless
+     of the visible pill inside. Drop containment here so the box can
+     actually shrink-wrap the pill. */
+  container-type: normal;
+  width: max-content !important;
+  max-width: none;
+  height: max-content !important;
+  aspect-ratio: auto;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+#myVideoWrap.solo-self.solo-hidden > *:not(.solo-show-btn) {
+  display: none !important;
+}
+.solo-show-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(8, 21, 39, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(22, 50, 79, 1);
+  color: #4bb4de;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+.solo-show-btn svg {
+  width: 20px;
+  height: 20px;
+}
+@media (min-width: 640px) {
+  .solo-show-btn {
+    padding: 10px 24px;
+    border-radius: 12px;
+  }
+  .solo-show-btn svg {
+    width: 24px;
+    height: 24px;
+  }
+}
+#myVideoWrap.solo-self.solo-hidden .solo-show-btn {
+  display: flex;
+}
+#myVideoWrap.solo-self.solo-hidden.solo-faded .solo-show-btn {
+  opacity: 0.3;
+}
+#myVideoWrap.solo-self.solo-hidden:hover .solo-show-btn {
+  opacity: 1 !important;
+}
+
+/* Coordinated remote name-tag position: when my floating thumbnail
+   sits in the bottom-left corner, the remote video's name pill
+   moves to top-left to avoid overlapping it (App.tsx nameTagPosition). */
+.videoPeerName.name-pos-top-left {
+  top: 10px;
+  left: 10px;
+  bottom: auto;
+}
+@media (min-width: 640px) {
+  .videoPeerName.name-pos-top-left {
+    top: 12px;
+    left: 12px;
+  }
 }
 
 /* Video container with mouse light effect */
@@ -39,7 +463,7 @@
       rgba(0, 0, 0, 0.1) 80%,
       rgba(0, 0, 0, 0.25) 100%
     ),
-    var(--body-bg, linear-gradient(135deg, #222, #444));
+    var(--body-bg, linear-gradient(135deg, var(--ds-bg-1), var(--ds-bg-elevated)));
   background-blend-mode: multiply, normal;
   transition: background 0.2s;
 }
@@ -71,8 +495,8 @@
   border-radius: 16px;
   overflow: hidden;
   display: flex;
-  background: #0f172a;
-  border: 1px solid #1e293b;
+  background: var(--ds-bg-deep);
+  border: 1px solid var(--ds-bg-panel);
   box-shadow:
     0 20px 25px -5px rgba(0, 0, 0, 0.1),
     0 10px 10px -5px rgba(0, 0, 0, 0.04);
@@ -98,40 +522,77 @@
 .navbar {
   z-index: 8;
   position: absolute;
-  top: 0;
-  width: 100%;
-  background: var(--navbar-bg);
+  top: 8px;
+  right: 8px;
+  left: auto;
+  width: auto;
+  background: transparent;
   text-align: right;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
-  padding: 6px 12px 6px 6px;
+  padding: 0;
   gap: 4px;
   row-gap: 4px;
   box-sizing: border-box;
+}
+
+/* Match the reference design: per-tile controls (pin, zoom, mirror, PiP,
+   dropdown, mic/cam status duplicates) stay out of sight until the tile is
+   hovered/focused - mic status already lives in the name pill (see
+   refreshPeerNameTag) and camera-off state already shows the avatar card. */
+.navbar > * {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.Camera:hover > .navbar > *,
+.Screen:hover > .navbar > *,
+.navbar:focus-within > * {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The raised-hand indicator is meaningful even without hovering the tile,
+   so it always stays visible once shown (elemDisplay still toggles it). */
+.navbar > [id$="_handStatus"],
+.navbar > #myHandStatusIcon {
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 .navbar button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px;
-  font-size: 1.2rem;
+  padding: 8px;
+  font-size: 1rem;
   text-decoration: none;
-  border: none;
+  border: 1px solid rgba(36, 64, 107, 0.6);
   border-radius: 10px;
-  background: var(--body-bg);
-  color: #fff;
-  margin: 3px;
+  background: rgba(8, 21, 39, 0.8);
+  backdrop-filter: blur(12px);
+  /* Per-tile floating overlay button - stays dark-glass in both themes
+     (same reasoning as the caption/PiP overlays) since it always sits
+     directly on top of arbitrary video content, not app chrome. */
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
   flex-shrink: 0;
   box-sizing: border-box;
-  transition: transform 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
   transform-origin: center;
 }
 
 .navbar button:hover {
-  background: var(--btns-bg-color) !important;
+  /* Literal (not --btns-bg-color) - that token tracks the page
+     background and would flip to a light glass in light theme, but
+     this hover state sits on video too and must stay dark like the
+     button's own idle background above. */
+  background: rgba(22, 50, 79, 0.9) !important;
   cursor: pointer;
 }
 
@@ -277,7 +738,7 @@
   align-items: center;
   gap: 10px;
   padding: 8px 14px;
-  color: #fff;
+  color: var(--ds-text-primary);
   font-size: 0.85rem;
   cursor: pointer;
   white-space: nowrap;
@@ -285,7 +746,7 @@
 }
 
 .navbar-dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(var(--ds-text-primary-rgb), 0.1);
 }
 
 .navbar-dropdown-item button,
@@ -294,7 +755,7 @@
   pointer-events: none;
   background: none !important;
   border: none !important;
-  color: #fff !important;
+  color: var(--ds-text-primary) !important;
   font-size: 1rem !important;
   padding: 0 !important;
   margin: 0 !important;
@@ -332,9 +793,9 @@
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(11, 26, 46, 0.6);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(51, 65, 85, 0.5);
+  border: 1px solid rgba(36, 64, 107, 0.5);
   border-radius: 8px;
 
   color: #ffffff;
@@ -342,6 +803,21 @@
   font-weight: 500;
   max-width: calc(100% - 24px);
   pointer-events: none;
+  /* Matches #newControlBar/#topHeaderBar's Tailwind "duration-500" so the
+     name-tag dim finishes in step with the control-bar hide animation -
+     both are triggered from the same hideButtonsBarAndMenu() call. */
+  transition: opacity 0.5s ease;
+}
+
+/* Mobile: while the control bar auto-hides from inactivity, dim (not
+   hide) the other participant's name tag - mine stays fully visible.
+   !important is required: .videoPeerName also carries the ".fadein"
+   entrance-animation class, and a fill-mode:forwards animation's final
+   keyframe value (opacity:1) otherwise always wins over a plain rule
+   here regardless of specificity - only an !important author rule can
+   out-rank a running/filled CSS animation. */
+body.controls-idle .videoPeerName[data-isme="false"] {
+  opacity: 0.45 !important;
 }
 
 /*--------------------------------------------------------------
@@ -357,24 +833,39 @@
   border-radius: 16px;
   top: 0;
   left: 0;
+  /* This is a square (400x400 viewBox) generated avatar SVG - "cover"
+     blows it up to fill wide/tall tiles (scaling by the LARGER side),
+     making the avatar circle + name text render far bigger than the
+     reference's compact centered badge. "contain" scales by the smaller
+     side instead, keeping it proportionally sized like the reference. */
+  object-fit: contain;
+  background: transparent;
+}
+
+/* An externally-sourced avatar (uploaded/picked in the "ﾄ雪ｻ品 蘯｣nh" dialog)
+   has no built-in circular frame drawn into it like the generated SVGs
+   do, so without this it would stretch edge-to-edge to fill the tile.
+   Render it as a small centered circular badge instead - same treatment
+   on every tile this class is used on, big stage or small grid tile,
+   since sizing is percentage-based off the tile itself. */
+.videoAvatarImage.is-external-avatar {
+  width: 35% !important;
+  height: auto !important;
+  max-width: 180px;
+  min-width: 56px;
+  aspect-ratio: 1 / 1;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
   object-fit: cover;
+  background: var(--ds-bg-panel);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
 }
 
 /*--------------------------------------------------------------
 # Video 
 --------------------------------------------------------------*/
-
-.videoCircle {
-  position: absolute;
-  width: var(--vmi-wh);
-  height: var(--vmi-wh);
-  border-radius: 50%;
-  /* reliable centering - works in all scenarios */
-  top: 50% !important;
-  left: 50% !important;
-  transform: translate(-50%, -50%) !important;
-  transition: box-shadow 0.2s ease;
-}
 
 .videoDefault {
   position: absolute;
@@ -385,11 +876,26 @@
 }
 
 video {
-  width: 100%;
-  height: 100%;
+  /* !important: Tailwind CDN injects its preflight reset
+     ("img, video { max-width: 100%; height: auto; }") as an inline
+     <style> tag that lands AFTER this stylesheet in the cascade - with
+     equal specificity (element selector vs. element selector), that
+     later rule wins and forces height:auto, which sizes the video by
+     its own intrinsic aspect ratio instead of filling the tile. That's
+     invisible when the camera happens to be 16:9 (matches the tile), but
+     any other aspect ratio (portrait phone camera, 4:3 webcam, etc.)
+     then renders hugely oversized and clipped by the tile's
+     overflow:hidden - exactly the "zoomed/cropped video" bug. Must
+     out-rank it here so object-fit: contain can actually letterbox. */
+  width: 100% !important;
+  height: 100% !important;
   object-fit: var(--video-object-fit);
   border-radius: 10px;
-  cursor: pointer;
+  /* No hand cursor - clicking a video no longer enters full-screen
+     (see [[video-click-no-fullscreen]]), so it isn't "clickable" anymore.
+     Leave cursor unset (was "pointer") so it inherits from the wrapper
+     instead - the draggable floating self-view thumbnail still needs its
+     own "grab" cursor to come through. */
   transform-origin: center;
   transition: transform 0.3s ease-in-out;
 }
@@ -414,12 +920,6 @@ video:fullscreen {
   transform: rotateY(180deg);
 }
 
-.videoCircle.mirror {
-  -webkit-transform: translate(-50%, -50%) rotateY(180deg) !important;
-  -moz-transform: translate(-50%, -50%) rotateY(180deg) !important;
-  transform: translate(-50%, -50%) rotateY(180deg) !important;
-}
-
 @keyframes show {
   0% {
     opacity: 0;
@@ -440,7 +940,7 @@ video:fullscreen {
   justify-content: center;
   padding: 1.5rem;
   text-align: center;
-  background-color: #0f172a;
+  background-color: var(--ds-bg-deep);
   z-index: 7;
 }
 .videoPlaceholder.active {
@@ -449,8 +949,8 @@ video:fullscreen {
 .videoPlaceholder .avatar-circle {
   width: 5rem;
   height: 5rem;
-  background-image: linear-gradient(to top right, #1e293b, #334155);
-  border: 2px solid #475569;
+  background-image: linear-gradient(to top right, var(--ds-bg-panel), var(--ds-border));
+  border: 2px solid var(--ds-border-strong);
   border-radius: 9999px;
   display: flex;
   align-items: center;
@@ -469,7 +969,7 @@ video:fullscreen {
 .videoPlaceholder .avatar-text {
   font-size: 1.875rem;
   font-weight: 700;
-  color: #e2e8f0;
+  color: var(--ds-text-secondary);
 }
 @media (min-width: 640px) {
   .videoPlaceholder .avatar-text {
@@ -479,16 +979,614 @@ video:fullscreen {
 .videoPlaceholder .user-name {
   font-size: 0.875rem;
   font-weight: 500;
-  color: #cbd5e1;
+  color: var(--ds-text-tertiary);
 }
 .videoPlaceholder .camera-off-text {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--ds-text-caption);
   margin-top: 0.25rem;
+}
+
+/*--------------------------------------------------------------
+# Desktop-only browser full-screen corner button
+--------------------------------------------------------------*/
+
+.fullscreen-corner-btn {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  /* Floating glass control, positioned over the stage/video - stays a
+     fixed dark-glass style in both themes (like the caption overlay and
+     PiP controls) rather than following the site theme, so it stays
+     legible over arbitrary video content underneath it. */
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(11, 26, 46, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(36, 64, 107, 0.8);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.fullscreen-corner-btn:hover {
+  background: #16324f;
+  color: #fff;
+  border-color: rgba(60, 102, 147, 0.9);
+}
+/* Hard guarantee on top of the JS isMobileDevice gate: any touch-primary
+   device (no real mouse) must never show this button, full stop. */
+@media (hover: none) and (pointer: coarse) {
+  .fullscreen-corner-btn {
+    display: none !important;
+  }
+}
+
+/* Screen-share / record / PiP control-bar buttons are meant to be
+   desktop-only ("hidden md:flex" in client.html), but that Tailwind
+   width breakpoint alone isn't reliable on mobile: many phones exceed
+   the md breakpoint's width once rotated to landscape, which wrongly
+   re-shows these buttons. Same hard guarantee as .fullscreen-corner-btn
+   above - any touch-primary device (no real mouse) never sees them,
+   landscape or not. */
+@media (hover: none) and (pointer: coarse) {
+  #newScreenBtn,
+  #newRecordBtn,
+  #newPipBtn {
+    display: none !important;
+  }
+}
+
+/*--------------------------------------------------------------
+# In-page Picture-in-Picture (mirrors FloatingRemoteVideo.tsx)
+# - a draggable/resizable overlay inside the page itself, NOT the
+# real browser documentPictureInPicture window. Desktop only (the
+# control-bar button is hidden entirely on mobile and when the
+# browser lacks the PiP API, matching ControlBar.tsx's supportsPip
+# gate + its "hidden md:flex" class).
+--------------------------------------------------------------*/
+
+.pip-stage-placeholder {
+  display: none;
+  /* Exactly mirrors #videoMediaContainer's own geometry (it's a
+     sibling, not a child, so `inset:0` alone would resolve against
+     the wrong containing block) so it fully covers the stage while
+     the PiP window is open - reuses the same --stage-* custom
+     properties defined above #videoMediaContainer. */
+  position: absolute;
+  z-index: 3;
+  top: var(--stage-top);
+  left: var(--stage-side);
+  width: calc(100% - (var(--stage-side) * 2));
+  height: calc(100% - var(--stage-top) - var(--stage-pb));
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  background: var(--ds-bg-deep);
+  border-radius: 12px;
+  transition:
+    top 500ms,
+    left 500ms,
+    width 500ms,
+    height 500ms;
+}
+
+/* Mirrors #videoMediaContainer.expanded above - both --stage-top and
+   --stage-pb (and thus height) change together (see comment there).
+   Custom properties don't cascade across sibling elements, so this
+   re-declares the same values on the placeholder itself rather than
+   inheriting them from #videoMediaContainer.expanded. */
+#videoMediaContainer.expanded ~ .pip-stage-placeholder {
+  --stage-top: 8px;
+  --stage-pb: 24px;
+}
+@media (min-width: 640px) {
+  #videoMediaContainer.expanded ~ .pip-stage-placeholder {
+    --stage-top: 44px;
+    --stage-pb: 80px;
+  }
+}
+@media (max-width: 1023.98px) and (orientation: landscape) {
+  #videoMediaContainer.expanded ~ .pip-stage-placeholder {
+    --stage-top: 8px;
+    --stage-pb: 8px;
+  }
+}
+
+.pip-stage-placeholder.pip-active {
+  display: flex;
+}
+
+.pip-stage-placeholder-icon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  border-radius: 9999px;
+  background: rgba(59, 138, 196, 0.2);
+  color: var(--ds-brand-500);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+@media (min-width: 640px) {
+  .pip-stage-placeholder-icon {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 24px;
+  }
+}
+
+.pip-stage-placeholder-title {
+  color: var(--ds-text-secondary);
+  font-weight: 600;
+  font-size: 1.125rem;
+  margin-bottom: 8px;
+}
+@media (min-width: 640px) {
+  .pip-stage-placeholder-title {
+    font-size: 1.25rem;
+  }
+}
+
+.pip-stage-placeholder-desc {
+  color: var(--ds-text-muted);
+  font-size: 0.875rem;
+  max-width: 24rem;
+}
+
+.pip-stage-close-btn {
+  cursor: pointer;
+  margin-top: 24px;
+  padding: 8px 16px;
+  background: var(--ds-bg-panel);
+  color: var(--ds-text-secondary);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 0.15s ease;
+}
+.pip-stage-close-btn:hover {
+  background: var(--ds-border);
+}
+
+/* The floating PiP window itself */
+.pip-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--ds-bg-deep);
+  border: 1px solid rgba(36, 64, 107, 0.8);
+  border-radius: 12px;
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.2);
+  touch-action: none;
+  /* Dragging/resizing over the overlay must never turn into a text
+     selection (e.g. the "Camera ﾄ疎ng t蘯ｯt" label). */
+  user-select: none;
+  -webkit-user-select: none;
+}
+@media (min-width: 640px) {
+  .pip-overlay {
+    border-radius: 16px;
+  }
+}
+.pip-overlay:hover {
+  border-color: rgba(60, 102, 147, 0.9);
+}
+.pip-overlay.pip-dragging,
+.pip-overlay.pip-resizing {
+  cursor: grabbing;
+}
+
+.pip-overlay-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  background: linear-gradient(to bottom, rgba(11, 26, 46, 0.8), transparent);
+  /* Stays pointer-events:none permanently (only fades in/out) so the
+     empty space across this full-width strip never blocks dragging
+     near the top edge - only the button below actually needs clicks. */
+  pointer-events: none;
+}
+.pip-overlay:hover .pip-overlay-topbar,
+.pip-overlay.pip-dragging .pip-overlay-topbar,
+.pip-overlay.pip-resizing .pip-overlay-topbar {
+  opacity: 1;
+}
+.pip-overlay-topbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.pip-overlay-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(11, 26, 46, 0.6);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.pip-overlay-btn:hover {
+  background: #e11d48;
+  color: #fff;
+}
+
+.pip-overlay-video-area {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  cursor: grab;
+}
+.pip-overlay:active .pip-overlay-video-area {
+  cursor: grabbing;
+}
+
+.pip-overlay-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  object-fit: contain;
+  pointer-events: none;
+}
+.pip-overlay-video[hidden] {
+  display: none;
+}
+
+.pip-camera-off-text {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.875rem;
+  font-weight: 500;
+  pointer-events: none;
+}
+.pip-overlay.pip-video-off .pip-camera-off-text {
+  display: flex;
+}
+.pip-overlay.pip-video-off .pip-overlay-video {
+  opacity: 0;
+}
+
+.pip-overlay-badges {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pip-badge {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+  color: #fff;
+  background: rgba(52, 93, 167, 0.9);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.pip-badge-mic {
+  background: rgba(225, 29, 72, 0.9);
+}
+.pip-overlay.pip-remote-screen-sharing .pip-badge-screen {
+  display: flex;
+}
+.pip-overlay.pip-remote-audio-off .pip-badge-mic {
+  display: flex;
+}
+
+.pip-overlay-bottombar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translate(-50%, 8px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(11, 26, 46, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(36, 64, 107, 0.8);
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: all 0.3s ease;
+  /* Reference keeps this pointer-events-auto permanently (its box is
+     content-sized, not full-width, so it never blocks dragging outside
+     its own tight bounds) - only opacity/position fade with hover. */
+  pointer-events: auto;
+}
+.pip-overlay:hover .pip-overlay-bottombar,
+.pip-overlay.pip-dragging .pip-overlay-bottombar {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+/* While actively resizing, hide the control cluster - it just clutters
+   the shrinking/growing box and isn't meant to be clicked mid-resize. */
+.pip-overlay.pip-resizing .pip-overlay-bottombar {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.pip-overlay-ctrl-btn {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 8px;
+  color: var(--ds-text-secondary);
+  background: var(--ds-bg-panel);
+  transition: background-color 0.15s ease;
+}
+.pip-overlay-ctrl-btn:hover {
+  background: var(--ds-border);
+}
+.pip-overlay-ctrl-btn.pip-active-state {
+  background: #e11d48;
+  color: #fff;
+}
+.pip-overlay-ctrl-btn.pip-disabled-state {
+  background: rgba(22, 50, 79, 0.5);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.pip-overlay-ctrl-btn-leave {
+  background: #e11d48;
+  color: #fff;
+}
+.pip-overlay-ctrl-btn-leave:hover {
+  background: #be123c;
+}
+
+.pip-resize-handle {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  z-index: 50;
+  display: flex;
+  padding: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  color: rgba(255, 255, 255, 0.6);
+}
+.pip-overlay:hover .pip-resize-handle,
+.pip-overlay.pip-dragging .pip-resize-handle,
+.pip-overlay.pip-resizing .pip-resize-handle {
+  opacity: 1;
+}
+.pip-resize-handle svg {
+  width: 16px;
+  height: 16px;
+}
+.pip-resize-se {
+  bottom: 0;
+  right: 0;
+  cursor: se-resize;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+.pip-resize-sw {
+  bottom: 0;
+  left: 0;
+  cursor: sw-resize;
+  align-items: flex-end;
+  justify-content: flex-start;
+}
+.pip-resize-nw {
+  top: 0;
+  left: 0;
+  cursor: nw-resize;
+  align-items: flex-start;
+  justify-content: flex-start;
 }
 
 @media (max-width: 767px) and (orientation: portrait) {
   #videoMediaContainer {
     flex-direction: column;
   }
+
+  /* Camera-off avatar was crowding/touching the name tag below it on
+     phones - shrink the name tag a bit (the actual overlapping avatar
+     fix is further down, on .videoAvatarImage.is-external-avatar -
+     that's the element really rendered for camera-off; .videoPlaceholder
+     below is unused dead markup, kept only because other rules already
+     reference it, not touched further here). */
+  .videoPeerName {
+    padding: 4px 8px;
+    font-size: 12px;
+    gap: 4px;
+  }
+
+  /* This is the avatar actually shown for a custom/picked avatar
+     (camera off) - it's dead-centered in the tile (top/left 50%) and
+     capped at 180px, which is tall enough to reach down into the
+     bottom-left name pill once the tile itself gets short (e.g. the
+     "waiting for participant" card takes extra height below it).
+     Shrink it and shift its center point up a bit on mobile so it
+     clears the name pill. */
+  .videoAvatarImage.is-external-avatar {
+    max-width: 110px;
+    top: 40% !important;
+  }
+}
+
+/* Same camera-off avatar/name crowding, phone in landscape - matches
+   this file's existing mobile/tablet-landscape breakpoint (see
+   --stage-top overrides above) rather than the portrait one. */
+@media (max-width: 1023.98px) and (orientation: landscape) {
+  .videoPeerName {
+    padding: 4px 8px;
+    font-size: 12px;
+    gap: 4px;
+  }
+  .videoAvatarImage.is-external-avatar {
+    max-width: 110px;
+    top: 40% !important;
+  }
+}
+
+/*--------------------------------------------------------------
+# PiP suggestion modal (mirrors App.tsx's showPipSuggestion)
+--------------------------------------------------------------*/
+
+.pip-suggestion-backdrop {
+  position: fixed;
+  inset: 0;
+  /* Must beat SweetAlert2's own container (z-index: 1060) - the pre-join
+     name-entry screen is itself a Swal dialog, so this popup (used for
+     the "no mic/camera permission" warning, among others) needs to show
+     on top of it, not get buried underneath. */
+  z-index: 1070;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  padding: 16px;
+}
+
+.pip-suggestion-card {
+  width: 100%;
+  max-width: 24rem;
+  padding: 24px;
+  background: var(--ds-bg-deep);
+  border: 1px solid var(--ds-border);
+  border-radius: 24px;
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.2);
+  text-align: center;
+  animation: pipSuggestionIn 0.2s ease;
+}
+@media (min-width: 640px) {
+  .pip-suggestion-card {
+    padding: 32px;
+  }
+}
+
+@keyframes pipSuggestionIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.pip-suggestion-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: rgba(59, 138, 196, 0.1);
+  border: 1px solid rgba(59, 138, 196, 0.2);
+  color: var(--ds-brand-600);
+}
+/* Color variants for the reusable "PP" popup (showPP() in client.js) -
+   default stays the same blue as the PiP suggestion above. */
+.pip-suggestion-icon.icon-warn {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+.pip-suggestion-icon.icon-danger {
+  background: rgba(225, 29, 72, 0.1);
+  border-color: rgba(225, 29, 72, 0.2);
+  color: #e11d48;
+}
+
+.pip-suggestion-text {
+  margin-top: 24px;
+}
+
+.pip-suggestion-title {
+  color: var(--ds-text-primary);
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.025em;
+  margin-bottom: 12px;
+}
+
+.pip-suggestion-desc {
+  color: var(--ds-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.625;
+  padding: 0 8px;
+}
+
+.pip-suggestion-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.pip-suggestion-btn {
+  cursor: pointer;
+  flex: 1;
+  padding: 12px;
+  background: var(--ds-bg-panel);
+  color: var(--ds-cta-text);
+  font-weight: 600;
+  border-radius: 12px;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+.pip-suggestion-btn:hover {
+  background: var(--ds-border);
+}
+.pip-suggestion-btn:active {
+  transform: scale(0.98);
+}
+
+.pip-suggestion-btn-primary {
+  background: var(--ds-brand-700);
+}
+.pip-suggestion-btn-primary:hover {
+  background: var(--ds-brand-600);
 }

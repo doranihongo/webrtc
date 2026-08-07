@@ -35,11 +35,11 @@ async function requestWakeLock() {
       syncWakeLockDebounced();
     });
     switchKeepAwake.checked = true;
-    userLog("toast", "🟢 Wake Lock is active");
+    console.log("🟢 Wake Lock is active");
   } catch (err) {
     wakeLockSentinel = null;
     switchKeepAwake.checked = false;
-    userLog("toast", "🔴 Failed to request Wake Lock: " + err.message);
+    console.warn("🔴 Failed to request Wake Lock:", err.message);
   }
 }
 
@@ -47,7 +47,7 @@ async function releaseWakeLock() {
   if (isDesktopDevice) return;
   try {
     await wakeLockSentinel?.release();
-    userLog("toast", "⚪ Wake Lock released");
+    console.log("⚪ Wake Lock released");
   } catch {}
   wakeLockSentinel = null;
   switchKeepAwake.checked = false;

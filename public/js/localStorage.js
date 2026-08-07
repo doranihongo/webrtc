@@ -14,8 +14,11 @@ class LocalStorage {
     };
 
     this.P2P_SETTINGS = {
-      share_on_join: true,
-      show_chat_on_msg: true,
+      share_on_join: false,
+      // Reference never auto-opens the chat panel on an incoming message -
+      // it only bumps the unread-count badge; the panel opens solely from
+      // a manual click on the chat button.
+      show_chat_on_msg: false,
       transcript_show_on_msg: true,
       transcript_send_to_all: true,
       speech_in_msg: false,
@@ -26,14 +29,16 @@ class LocalStorage {
       pitch_bar: true,
       sounds: true,
       keep_buttons_visible: false,
-      keyboard_shortcuts: false,
-      video_obj_fit: 2, // cover
-      theme: 0, // dark
+      // Reference never crops/zooms video - it always shows the full
+      // frame letterboxed (object-fit: contain) if the aspect ratio
+      // doesn't match, so this matches that as the default.
+      video_obj_fit: 1, // contain
       theme_color: "#000000", // custom theme color
       theme_custom: false, // keep custom theme
       buttons_bar: 0, // vertical
       pin_grid: 0, // vertical
       peer_avatar: "", // persisted avatar URL
+      peer_avatar_auto: false, // true = peer_avatar was auto-assigned on first join, not hand-picked
     };
 
     this.DEVICES_COUNT = {
