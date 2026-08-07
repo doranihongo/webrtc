@@ -13,49 +13,103 @@
          là CSS riêng của trang login, không đụng tới landing.css/client.css -->
     <link rel="stylesheet" href="../css/_tokens.css" />
     <link rel="stylesheet" href="../css/login.css" />
+
+    <!-- Supabase JS SDK -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body>
     <main class="login-card">
       <div class="login-card-inner">
         <img class="login-logo" src="../images/logo.svg" alt="Logo" />
 
-        <div class="login-heading">
-          <h1>Đăng nhập</h1>
-          <p>Phòng học trực tuyến</p>
+        <!-- Hiện khi đang kiểm tra phiên đăng nhập cũ lúc tải trang -->
+        <div id="loginLoading" class="login-loading">
+          Đang kiểm tra phiên đăng nhập...
         </div>
 
-        <div id="loginError" class="login-error" role="alert"></div>
-
-        <form id="loginForm" novalidate>
-          <div class="login-field">
-            <label for="loginUsername">Tài khoản</label>
-            <input
-              id="loginUsername"
-              type="text"
-              autocomplete="username"
-              placeholder="Nhập tài khoản"
-              required
-            />
+        <!-- Form đăng nhập -->
+        <div id="loginView" class="hidden">
+          <div class="login-heading">
+            <h1>Đăng nhập</h1>
+            <p>Phòng học trực tuyến</p>
           </div>
 
-          <div class="login-field">
-            <label for="loginPassword">Mật khẩu</label>
-            <input
-              id="loginPassword"
-              type="password"
-              autocomplete="current-password"
-              placeholder="••••••"
-              required
-            />
+          <div id="loginError" class="login-error" role="alert"></div>
+
+          <form id="loginForm" novalidate>
+            <div class="login-field">
+              <label for="loginUsername">Tài khoản</label>
+              <input
+                id="loginUsername"
+                type="text"
+                autocomplete="username"
+                placeholder="Nhập tài khoản"
+                required
+              />
+            </div>
+
+            <div class="login-field">
+              <label for="loginPassword">Mật khẩu</label>
+              <input
+                id="loginPassword"
+                type="password"
+                autocomplete="current-password"
+                placeholder="••••••"
+                required
+              />
+            </div>
+
+            <button id="loginSubmitBtn" type="submit" class="login-submit">
+              ĐĂNG NHẬP
+            </button>
+          </form>
+        </div>
+
+        <!-- Bắt buộc đổi mật khẩu - chỉ hiện khi is_first_login = true -->
+        <div id="changePasswordView" class="hidden">
+          <div class="login-heading">
+            <h1>Đổi mật khẩu</h1>
+            <p>Lần đầu đăng nhập, vui lòng đặt mật khẩu mới để tiếp tục</p>
           </div>
 
-          <button id="loginSubmitBtn" type="submit" class="login-submit">
-            ĐĂNG NHẬP
-          </button>
-        </form>
+          <div id="changePasswordError" class="login-error" role="alert"></div>
+
+          <form id="changePasswordForm" novalidate>
+            <div class="login-field">
+              <label for="newPassword">Mật khẩu mới</label>
+              <input
+                id="newPassword"
+                type="password"
+                autocomplete="new-password"
+                placeholder="Nhập mật khẩu mới"
+                required
+              />
+            </div>
+
+            <div class="login-field">
+              <label for="confirmPassword">Nhập lại mật khẩu mới</label>
+              <input
+                id="confirmPassword"
+                type="password"
+                autocomplete="new-password"
+                placeholder="Nhập lại mật khẩu mới"
+                required
+              />
+            </div>
+
+            <button
+              id="changePasswordSubmitBtn"
+              type="submit"
+              class="login-submit"
+            >
+              XÁC NHẬN
+            </button>
+          </form>
+        </div>
       </div>
     </main>
 
+    <script defer src="../js/supabaseClient.js"></script>
     <script defer src="../js/login.js"></script>
   </body>
 </html>

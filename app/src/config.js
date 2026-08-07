@@ -136,6 +136,21 @@ module.exports = {
   },
 
   // ==========================================
+  // Supabase (account gating - đăng nhập bắt buộc)
+  // Dùng chung project Supabase với web "xóa mù kanji", cùng bảng
+  // public.profiles. anon key là public key, không phải secret.
+  // ==========================================
+  supabase: {
+    url: process.env.SUPABASE_URL,
+    anonKey: process.env.SUPABASE_ANON_KEY,
+    allowedRoles: parseJsonEnv(process.env.SUPABASE_ALLOWED_ROLES, [
+      "admin",
+      "giaovien",
+      "hocvien",
+    ]),
+  },
+
+  // ==========================================
   // WebRTC ICE Servers
   // ==========================================
   webrtc: {

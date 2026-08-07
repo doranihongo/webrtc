@@ -46,6 +46,67 @@ if (isStandalonePwa) {
   );
 }
 
+// ---------------------------------------------------------
+// Auth guard - chạy trên cả landing page lẫn trang phòng (client.html).
+// Chưa đăng nhập / role không hợp lệ -> đá về trang login, kèm đường
+// dẫn hiện tại để login xong quay lại đúng chỗ.
+//
+// LƯU Ý: đây chỉ là lớp chặn ở giao diện, không phải lớp bảo mật thật -
+// server vẫn phải tự verify token khi client connect Socket.IO (xem
+// server.js), vì HTML/JS phía client luôn có thể bị bỏ qua/sửa được.
+// window.__authToken được lưu lại ở đây để client.js gắn kèm khi
+// connect Socket.IO.
+//
+// window.__authReady là Promise của lần chạy authGuard này - client.js
+// PHẢI await cái này trước khi gọi io(...), nếu không __authToken vẫn
+// còn undefined lúc đó (authGuard cần đợi 2 lượt gọi Supabase, còn
+// initClientPeer() chạy gần như ngay lập tức lúc DOMContentLoaded) ->
+// socket gửi token null -> server từ chối -> client không báo lỗi gì,
+// treo mãi ở màn hình vào phòng.
+// ---------------------------------------------------------
+function redirectToLogin() {
+  const returnTo = window.location.pathname + window.location.search;
+  window.location.href =
+    "/login?redirect=" + encodeURIComponent(returnTo);
+}
+
+window.__authReady = (async function authGuard() {
+  try {
+    const {
+      data: { session },
+    } = await supabaseClient.auth.getSession();
+
+    if (!session?.user) {
+      redirectToLogin();
+      return;
+    }
+
+    const { data: profile, error } = await supabaseClient
+      .from("profiles")
+      .select("role, display_name")
+      .eq("id", session.user.id)
+      .single();
+
+    if (error || !profile || !ALLOWED_ROLES.includes(profile.role)) {
+      await supabaseClient.auth.signOut();
+      redirectToLogin();
+      return;
+    }
+
+    window.__authToken = session.access_token;
+    // Dùng cho icon tài khoản/bảng thông tin ở góc trên phải (landing.html)
+    window.__authUser = {
+      id: session.user.id,
+      email: session.user.email,
+      role: profile.role,
+      displayName: profile.display_name || session.user.email,
+    };
+  } catch (err) {
+    console.error("[authGuard] Lỗi kiểm tra đăng nhập:", err);
+    redirectToLogin();
+  }
+})();
+
 /**
  * Phát âm thanh - bản rút gọn dùng riêng cho trang landing (chưa vào
  * phòng nên chưa có bảng cài đặt tắt âm như trong client.js)

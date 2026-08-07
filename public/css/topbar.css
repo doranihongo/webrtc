@@ -1,0 +1,306 @@
+/*
+ * Top bar (logo + tên site + icon tài khoản), bottom bar (copyright +
+ * GitHub) và bảng thông tin tài khoản trên landing page.
+ *
+ * File riêng, không đụng vào landing.css - chỉ dùng chung token màu
+ * từ _tokens.css để đồng bộ với phần còn lại của site.
+ */
+
+/* ---------- Top bar ---------- */
+.top-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ds-space-4) var(--ds-space-6);
+}
+
+.top-bar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  min-width: 0;
+}
+
+.top-bar-logo {
+  height: 32px;
+  width: 32px;
+  object-fit: contain;
+  border-radius: var(--ds-radius-sm);
+  flex-shrink: 0;
+}
+
+.top-bar-title {
+  font-family: "Fira Sans", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--ds-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: var(--ds-radius-full);
+  border: 2px solid rgba(var(--ds-text-primary-rgb), 0.25);
+  background: rgba(var(--ds-overlay-rgb), 0.35);
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    border-color var(--ds-duration-base) var(--ds-ease-out),
+    transform var(--ds-duration-fast) var(--ds-ease-out);
+}
+
+.account-btn:hover {
+  border-color: var(--ds-brand-500);
+  transform: translateY(-1px);
+}
+
+.account-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ---------- Bottom bar ---------- */
+.bottom-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ds-space-4) var(--ds-space-6);
+}
+
+.bottom-bar-copyright {
+  font-size: 12px;
+  color: rgba(var(--ds-text-primary-rgb), 0.5);
+}
+
+.bottom-bar-github {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(var(--ds-text-primary-rgb), 0.5);
+  transition: color var(--ds-duration-base) var(--ds-ease-out);
+}
+
+.bottom-bar-github:hover {
+  color: var(--ds-text-primary);
+}
+
+/* ---------- Account panel ---------- */
+.hidden {
+  display: none !important;
+}
+
+.account-panel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-z-modal);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.account-panel {
+  width: 100%;
+  max-width: 380px;
+  height: 100%;
+  background: var(--ds-bg-deep);
+  border-left: 1px solid var(--ds-border);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--ds-shadow-lg);
+}
+
+.account-panel-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ds-space-6);
+  border-bottom: 1px solid var(--ds-border);
+}
+
+.account-panel-header h2 {
+  margin: 0;
+  font-family: "Fira Sans", sans-serif;
+  font-size: 18px;
+  color: var(--ds-text-primary);
+}
+
+.account-panel-close {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--ds-radius-full);
+  border: none;
+  background: var(--ds-bg-panel);
+  color: var(--ds-text-secondary);
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.account-panel-close:hover {
+  background: var(--ds-bg-elevated);
+}
+
+.account-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--ds-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-5);
+}
+
+.account-panel-subheader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--ds-space-4);
+}
+
+.account-panel-subheader h3 {
+  margin: 0;
+  font-family: "Fira Sans", sans-serif;
+  font-size: 15px;
+  color: var(--ds-text-primary);
+}
+
+.account-panel-subheader button {
+  background: none;
+  border: none;
+  color: var(--ds-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.account-panel-subheader button:hover {
+  color: var(--ds-text-primary);
+}
+
+.account-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  margin-bottom: var(--ds-space-4);
+}
+
+.account-field label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--ds-text-muted);
+}
+
+.account-field-value {
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-bg-panel);
+  border: 1px solid var(--ds-border);
+  color: var(--ds-text-primary);
+  font-weight: 600;
+}
+
+.account-field input {
+  width: 100%;
+  height: 44px;
+  padding: 0 var(--ds-space-4);
+  border-radius: var(--ds-radius-md);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-bg-panel);
+  color: var(--ds-text-primary);
+  font-size: 14px;
+  font-family: "Lato", sans-serif;
+}
+
+.account-field input:focus {
+  outline: none;
+  border-color: var(--ds-brand-500);
+  box-shadow: 0 0 0 3px rgba(var(--ds-brand-500-rgb), 0.25);
+}
+
+.account-error {
+  display: none;
+  margin-bottom: var(--ds-space-4);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-radius: var(--ds-radius-md);
+  background: rgba(231, 76, 60, 0.14);
+  border: 1px solid rgba(231, 76, 60, 0.4);
+  color: #ffd9d3;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.account-error.is-visible {
+  display: block;
+}
+
+.account-primary-btn,
+.account-secondary-btn {
+  width: 100%;
+  height: 46px;
+  border-radius: var(--ds-radius-md);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    background var(--ds-duration-base) var(--ds-ease-out),
+    transform var(--ds-duration-fast) var(--ds-ease-out);
+}
+
+.account-primary-btn {
+  margin-top: var(--ds-space-2);
+  border: none;
+  background: var(--ds-brand-600);
+  color: #ffffff;
+}
+
+.account-primary-btn:hover:not(:disabled) {
+  background: var(--ds-brand-500);
+}
+
+.account-primary-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.account-secondary-btn {
+  border: 1px solid var(--ds-border-strong);
+  background: transparent;
+  color: var(--ds-text-secondary);
+}
+
+.account-secondary-btn:hover {
+  background: var(--ds-bg-panel);
+}
+
+.account-panel-footer {
+  flex-shrink: 0;
+  padding: var(--ds-space-6);
+  border-top: 1px solid var(--ds-border);
+}
+
+.account-logout-btn {
+  width: 100%;
+  height: 46px;
+  border-radius: var(--ds-radius-md);
+  border: none;
+  background: rgba(231, 76, 60, 0.16);
+  color: #ff8a7a;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background var(--ds-duration-base) var(--ds-ease-out);
+}
+
+.account-logout-btn:hover {
+  background: rgba(231, 76, 60, 0.26);
+}

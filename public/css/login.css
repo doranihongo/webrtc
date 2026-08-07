@@ -57,6 +57,17 @@ body {
   margin: 0 auto var(--ds-space-5);
 }
 
+.hidden {
+  display: none !important;
+}
+
+.login-loading {
+  text-align: center;
+  padding: var(--ds-space-7) 0;
+  color: rgba(var(--ds-text-primary-rgb), 0.7);
+  font-size: 14px;
+}
+
 .login-heading {
   text-align: center;
   margin-bottom: var(--ds-space-7);

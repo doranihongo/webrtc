@@ -153,6 +153,85 @@ const io = new Server({
 
 // console.log(io);
 
+/**
+ * Account gating (Supabase) - lớp bảo mật thật, không phải chỉ chặn ở
+ * giao diện. Client (client.js) gắn token Supabase vào lúc connect
+ * (socket.handshake.auth.token, xem window.__authToken trong
+ * common.js). Ở đây verify lại token đó với chính Supabase, rồi tra
+ * role trong bảng `profiles` dùng chung với web "xóa mù kanji" -
+ * không hợp lệ thì từ chối kết nối luôn, không cho vào io.sockets.on
+ * "connect" ở dưới.
+ *
+ * Bỏ qua hoàn toàn (cho kết nối như cũ) nếu SUPABASE_URL/ANON_KEY
+ * chưa được cấu hình trong .env - tránh khoá cứng app của người khác
+ * dùng lại code này mà chưa set up Supabase.
+ */
+const supabaseCfg = config.supabase;
+if (supabaseCfg.url && supabaseCfg.anonKey) {
+  io.use(async (socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token) {
+      return next(new Error("unauthorized"));
+    }
+    try {
+      const { data: user } = await axios.get(
+        `${supabaseCfg.url}/auth/v1/user`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            apikey: supabaseCfg.anonKey,
+          },
+          timeout: 8000,
+        },
+      );
+      if (!user?.id) {
+        return next(new Error("unauthorized"));
+      }
+
+      const { data: profiles } = await axios.get(
+        `${supabaseCfg.url}/rest/v1/profiles`,
+        {
+          params: { id: `eq.${user.id}`, select: "role" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            apikey: supabaseCfg.anonKey,
+          },
+          timeout: 8000,
+        },
+      );
+      const role = profiles?.[0]?.role;
+      if (!role || !supabaseCfg.allowedRoles.includes(role)) {
+        return next(new Error("unauthorized"));
+      }
+
+      // Dùng ở phần phân quyền trong phòng (ai tự động là "presenter" -
+      // xem isPresenterRole/chỗ gán presenters[channel] lúc join, và
+      // presenterActions bên dưới cho screenStart).
+      socket.supabaseRole = role;
+
+      next();
+    } catch (err) {
+      log.warn("[Auth] Socket rejected - token verify failed", err.message);
+      next(new Error("unauthorized"));
+    }
+  });
+} else {
+  log.warn(
+    "[Auth] SUPABASE_URL/SUPABASE_ANON_KEY chưa được cấu hình trong .env - bỏ qua kiểm tra đăng nhập cho Socket.IO",
+  );
+}
+
+/**
+ * Role nào tự động là "chủ phòng" (presenter) - admin và giáo viên có
+ * đầy đủ quyền chủ phòng (khoá/mở phòng, kick, chia sẻ màn hình, ghi
+ * hình...); học viên thì không, kể cả khi vào phòng đầu tiên.
+ * @param {string} role
+ * @returns {boolean}
+ */
+function isPresenterRole(role) {
+  return role === "admin" || role === "giaovien";
+}
+
 // Host protection (disabled by default)
 const hostCfg = {
   protected: config.host.protected,
@@ -357,6 +436,7 @@ const dir = {
 const views = {
   client: path.join(__dirname, "../../", "public/views/client.html"),
   landing: path.join(__dirname, "../../", "public/views/landing.html"),
+  login: path.join(__dirname, "../../", "public/views/login.html"),
   stunTurn: path.join(__dirname, "../../", "public/views/testStunTurn.html"),
 };
 
@@ -592,6 +672,11 @@ app.get("/logout", (req, res) => {
   res.redirect("/"); // Redirect to the home page after logout
 });
 
+// Trang đăng nhập - link ngắn cho /views/login.html
+app.get("/login", (req, res) => {
+  res.sendFile(views.login);
+});
+
 // main page
 app.get("/", OIDCAuth, (req, res) => {
   if (!OIDC.enabled && hostCfg.protected) {
@@ -796,17 +881,13 @@ app.get("/brand", (req, res) => {
   });
 });
 
-// Join roomId redirect to /join?room=roomId
+// Link lỗi/không xác định (không phải /join/xxx, /api/..., v.v.) -> về
+// landing page. KHÔNG tự hiểu path lạ là tên phòng nữa (hành vi gốc
+// của MiroTalk là redirect sang /join/:roomId, nhưng web này giờ là hệ
+// thống đóng, chỉ vào phòng qua đúng link /join/... hoặc từ landing).
 app.get("/:roomId", (req, res) => {
-  const { roomId } = checkXSS(req.params);
-
-  if (!roomId) {
-    log.warn("/:roomId empty", roomId);
-    return res.redirect("/");
-  }
-
-  log.debug("Detected roomId --> redirect to /join?room=roomId");
-  res.redirect(`/join/${roomId}`);
+  log.debug("Unknown top-level path --> redirect to landing", req.params);
+  res.redirect("/");
 });
 
 /**
@@ -1408,8 +1489,18 @@ io.sockets.on("connect", async (socket) => {
       }
     }
 
-    // first we check if the username match the presenters username
-    if (roomPresenters && roomPresenters.includes(peer_name)) {
+    if (supabaseCfg.url && supabaseCfg.anonKey) {
+      // Đăng nhập bắt buộc đang bật - presenter hoàn toàn theo role
+      // (admin/giáo viên), KHÔNG dùng quy tắc "vào đầu tiên là chủ
+      // phòng" nữa - nếu không học viên vào phòng trống trước sẽ tự
+      // thành presenter, sai với yêu cầu học viên không được các
+      // quyền đó dù vào lúc nào.
+      if (isPresenterRole(socket.supabaseRole)) {
+        presenters[channel][socket.id] = presenter;
+      }
+    } else if (roomPresenters && roomPresenters.includes(peer_name)) {
+      // Hành vi gốc (không đổi) khi chưa cấu hình Supabase - dựa theo
+      // username khớp PRESENTERS hoặc người vào đầu tiên.
       presenters[channel][socket.id] = presenter;
     } else {
       // if not match the presenters username, the first one join room is the presenter
@@ -1858,11 +1949,16 @@ io.sockets.on("connect", async (socket) => {
     } = config;
 
     // Only the presenter can do this actions
+    // "screenStart" thêm vào để chặn học viên tự chia sẻ màn hình -
+    // chỉ chặn được thông báo/relay qua signaling ở đây, xem thêm
+    // guard phía client (toggleScreenSharing) vì đây là app P2P nên
+    // server không thấy/chặn được thẳng luồng media thật.
     const presenterActions = [
       "muteAudio",
       "hideVideo",
       "ejectAll",
       "stopScreen",
+      "screenStart",
       "recStart",
       "recStop",
     ];

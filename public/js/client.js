@@ -1383,10 +1383,25 @@ async function initClientPeer() {
       "mozFullScreenEnabled" in document ||
       "msFullscreenEnabled" in document);
 
+  // window.__authReady (gắn trong common.js) chỉ resolve sau khi
+  // authGuard verify xong đăng nhập Supabase + gán window.__authToken.
+  // initClientPeer() chạy gần như ngay lúc DOMContentLoaded, nhanh hơn
+  // nhiều so với 2 lượt gọi Supabase đó - không đợi thì token luôn là
+  // null lúc connect, server sẽ từ chối kết nối và trang treo mãi ở
+  // màn hình vào phòng.
+  if (window.__authReady) {
+    await window.__authReady;
+  }
+
   console.log("01. Connecting to signaling server");
 
+  // server.js tự verify lại token này trước khi cho socket kết
+  // nối/join phòng - đây là lớp bảo mật thật (không chỉ chặn ở giao diện).
   // Disable the HTTP long-polling transport
-  signalingSocket = io({ transports: ["websocket"] });
+  signalingSocket = io({
+    transports: ["websocket"],
+    auth: { token: window.__authToken || null },
+  });
 
   const transport = signalingSocket.io.engine.transport.name; // in most cases, "polling"
   console.log("02. Connection transport", transport);
@@ -1633,6 +1648,21 @@ function handleRules(isPresenter) {
     buttons.settings.showTabRoomSecurity = false;
     buttons.settings.showTabEmailInvitation = false;
     buttons.remote.showKickOutBtn = false;
+
+    // Chia sẻ màn hình + ghi hình chỉ dành cho chủ phòng (xem
+    // toggleScreenSharing/startStreamRecording - đây là phần ẩn nút
+    // đi, chỗ chặn thật nằm ở 2 hàm đó).
+    // showRecordStreamBtn được handleButtonsRule() dùng lại ngay dưới
+    // đây, nên phải sửa flag này (không gọi displayElements riêng cho
+    // recordStreamBtn/recImage) - nếu không nó sẽ bị ghi đè lại thành
+    // hiện. screenShareBtn thì không nằm trong danh sách đó (bị hiện
+    // thị/ẩn riêng ở setScreenShareBtn), nên ẩn thẳng luôn được.
+    buttons.main.showRecordStreamBtn = false;
+    elemDisplay(screenShareBtn, false);
+    const newScreenBtn = getId("newScreenBtn");
+    const newRecordBtn = getId("newRecordBtn");
+    if (newScreenBtn) elemDisplay(newScreenBtn, false);
+    if (newRecordBtn) elemDisplay(newRecordBtn, false);
 
     //...
   } else {
@@ -7544,6 +7574,18 @@ async function loadScreenMedia() {
  * @param {boolean} init - Indicates if it's the initial screen share state
  */
 async function toggleScreenSharing(init = false) {
+  // Chỉ chủ phòng (presenter) mới được BẮT ĐẦU chia sẻ màn hình - vẫn
+  // luôn cho phép TẮT chia sẻ của chính mình (nhánh isScreenStreaming
+  // true). Bỏ qua khi init=true (màn hình trước khi vào phòng) - lúc
+  // đó `isPresenter` chưa có giá trị thật (server chỉ trả lời sau khi
+  // đã join), nên không thể kiểm tra đúng ở bước này; điểm chặn chính
+  // vẫn là lúc bấm nút trong phòng (init=false).
+  // Đây là app P2P nên đây chỉ là chặn ở UI/điểm gọi hàm, không phải
+  // chặn được ở tầng media thật (server không thấy luồng media).
+  if (!init && !isScreenStreaming && !isPresenter) {
+    userLog("warning", "Chỉ chủ phòng mới được chia sẻ màn hình.");
+    return;
+  }
   try {
     screenMaxFrameRate = parseInt(screenFpsSelect.value, 10);
     const constraints = getScreenShareConstraints();
@@ -8292,6 +8334,11 @@ function getSupportedMimeTypes() {
  * https://developer.mozilla.org/en-US/docs/Web/API/MediaStream
  */
 function startStreamRecording() {
+  // Chỉ chủ phòng (presenter) mới được ghi hình cuộc gọi.
+  if (!isPresenter) {
+    userLog("warning", "Chỉ chủ phòng mới được ghi hình cuộc gọi.");
+    return;
+  }
   recordedBlobs = [];
 
   // Get supported MIME types and set options
@@ -9695,8 +9742,10 @@ function handleDataChannelChat(dataMessage) {
   if (!isChatRoomVisible) {
     chatUnreadCount++;
     updateChatUnreadBadge();
+    // Chỉ phát âm thanh báo tin nhắn khi khung chat đang ĐÓNG - đang mở
+    // sẵn xem chat rồi thì không cần báo nữa.
+    playSound("raiseHand");
   }
-  playSound("raiseHand");
 }
 
 /**
