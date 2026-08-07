@@ -563,6 +563,11 @@ let notify = getNotify(); // popup room sharing on join
 let chat = getChat(); // popup chat on join
 let notifyBySound = true; // turn on - off sound notifications
 let isPeerReconnected = false;
+// Remote peer_ids currently flagged as having a weak/lost P2P connection
+// (their RTCPeerConnection.connectionState went to "disconnected"/"failed").
+// Tracked so we don't spawn duplicate notices and so we know a "reconnected"
+// toast is warranted (vs. the state's normal transition on first join).
+let weakConnectionPeers = new Set();
 
 // media
 let useAudio = true; // User allow for microphone usage
@@ -1423,6 +1428,7 @@ async function initClientPeer() {
   signalingSocket.on("message", handleMessage);
   signalingSocket.on("videoPlayer", handleVideoPlayer);
   signalingSocket.on("kickOut", handleKickedOut);
+  signalingSocket.on("duplicateSession", handleDuplicateSession);
   signalingSocket.on("disconnect", handleDisconnect);
   signalingSocket.on("removePeer", handleRemovePeer);
 } // end [initClientPeer]
@@ -1883,7 +1889,14 @@ async function whoAreYou() {
     position: "center",
     input: "text",
     inputPlaceholder: "Nhập tên của bạn",
-    inputAttributes: { maxlength: 254, id: "usernameInput" },
+    inputAttributes: {
+      maxlength: 254,
+      id: "usernameInput",
+      autocomplete: "off",
+      autocorrect: "off",
+      autocapitalize: "off",
+      spellcheck: "false",
+    },
     inputValue: window.localStorage.peer_name
       ? window.localStorage.peer_name
       : "",
@@ -1986,18 +1999,21 @@ async function whoAreYou() {
   // select video - audio
 
   initVideoSelect.onchange = async () => {
+    playSound("click");
     await changeInitCamera(initVideoSelect.value);
     await handleLocalCameraMirror();
     videoSelect.selectedIndex = initVideoSelect.selectedIndex;
     refreshLsDevices();
   };
   initMicrophoneSelect.onchange = async () => {
+    playSound("click");
     detectBluetoothHeadset(true);
     await changeLocalMicrophone(initMicrophoneSelect.value);
     audioInputSelect.selectedIndex = initMicrophoneSelect.selectedIndex;
     refreshLsDevices();
   };
   initSpeakerSelect.onchange = async () => {
+    playSound("click");
     await changeAudioDestination();
     audioOutputSelect.selectedIndex = initSpeakerSelect.selectedIndex;
     refreshLsDevices();
@@ -2006,11 +2022,11 @@ async function whoAreYou() {
   // init video -audio buttons
   if (!useVideo) {
     initVideoBtn.className = className.videoOff;
-    setMyVideoStatus(useVideo);
+    setMyVideoStatus(useVideo, false);
   }
   if (!useAudio) {
     initAudioBtn.className = className.audioOff;
-    setMyAudioStatus(useAudio);
+    setMyAudioStatus(useAudio, false);
   }
 
   setTippy(initAudioBtn, "Tắt âm thanh", "top");
@@ -2450,7 +2466,8 @@ function checkPeerAudioVideo() {
       useAudio && buttons.main.showAudioBtn
         ? audio === "1" || audio === "true"
         : false;
-    if (queryPeerAudio != null) handleAudio(audioBtn, false, queryPeerAudio);
+    if (queryPeerAudio != null)
+      handleAudio(audioBtn, false, queryPeerAudio, true);
     //elemDisplay(tabAudioBtn, queryPeerAudio);
     console.log("Direct join", { audio: queryPeerAudio });
   }
@@ -2460,7 +2477,8 @@ function checkPeerAudioVideo() {
       useVideo && buttons.main.showVideoBtn
         ? video === "1" || video === "true"
         : false;
-    if (queryPeerVideo != null) handleVideo(videoBtn, false, queryPeerVideo);
+    if (queryPeerVideo != null)
+      handleVideo(videoBtn, false, queryPeerVideo, true);
     //elemDisplay(tabVideoBtn, queryPeerVideo);
     console.log("Direct join", { video: queryPeerVideo });
   }
@@ -2759,6 +2777,19 @@ async function handleAddPeer(config) {
   }
 
   playSound("addPeer");
+
+  // Announce every peer that shows up here - first-time join or rejoin
+  // after a full network drop (new peer_id either way), same message both
+  // times.
+  // should_create_offer is true only for the addPeer events the NEW joiner
+  // gets (one per peer already in the room) - that's "I'm meeting people
+  // who were already here", not "someone just joined". Only the reverse
+  // case (should_create_offer false - I was already here, this peer_id is
+  // the one who just showed up) should announce a join.
+  if (peer_name && !should_create_offer) {
+    toastMessage("success", `${peer_name} đã vào phòng.`, "", "top-end", 4000);
+  }
+
   updateTopHeaderPeerCount();
 }
 
@@ -2791,7 +2822,61 @@ async function handlePeersConnectionStatus(peer_id) {
       connectionStatus: connectionStatus,
       signalingState: signalingState,
     });
+
+    if (connectionStatus === "disconnected" || connectionStatus === "failed") {
+      showPeerWeakConnection(peer_id, peerName);
+    } else if (connectionStatus === "connected") {
+      showPeerReconnectedIfWasWeak(peer_id, peerName);
+    }
   };
+}
+
+/**
+ * Peer's own P2P link to us dropped (their WebRTC connectionState went to
+ * "disconnected"/"failed") - not the same thing as our own connection to
+ * the signaling server. Persistent notice, stays up until the link recovers
+ * or the peer is actually removed from the room (see hidePeerWeakConnection
+ * calls in handleRemovePeer / above).
+ * @param {string} peer_id socket.id
+ * @param {string} peer_name display name
+ */
+function showPeerWeakConnection(peer_id, peer_name) {
+  if (weakConnectionPeers.has(peer_id)) return; // already showing
+  weakConnectionPeers.add(peer_id);
+  Swal.fire({
+    toast: true,
+    position: "top-end",
+    background: swBg,
+    icon: "warning",
+    title: `${peer_name} đang mất mạng...`,
+    showConfirmButton: false,
+    showClass: { popup: "animate__animated animate__fadeInDown" },
+    hideClass: { popup: "animate__animated animate__fadeOutUp" },
+  });
+}
+
+/**
+ * Close the persistent "weak connection" notice for a peer, if one is open.
+ * @param {string} peer_id socket.id
+ */
+function hidePeerWeakConnection(peer_id) {
+  if (!weakConnectionPeers.has(peer_id)) return;
+  weakConnectionPeers.delete(peer_id);
+  Swal.close();
+}
+
+/**
+ * Peer's link came back after being flagged weak - swap the persistent
+ * notice for a brief auto-dismissing confirmation. No-op if this peer was
+ * never flagged (i.e. this is just their normal first-join transition to
+ * "connected", not an actual recovery).
+ * @param {string} peer_id socket.id
+ * @param {string} peer_name display name
+ */
+function showPeerReconnectedIfWasWeak(peer_id, peer_name) {
+  if (!weakConnectionPeers.has(peer_id)) return;
+  hidePeerWeakConnection(peer_id);
+  toastMessage("success", `${peer_name} đã vào phòng.`, "", "top-end", 4000);
 }
 
 /**
@@ -3323,6 +3408,16 @@ function handleRemovePeer(config) {
 
   const { peer_id } = config;
 
+  // Peer is actually leaving the room (not just a momentary link hiccup) -
+  // don't leave a "weak connection" notice stuck on screen with no peer
+  // left to recover.
+  hidePeerWeakConnection(peer_id);
+
+  // Grab the name before it's deleted below - covers both a voluntary leave
+  // and a network-loss auto-kick (server treats both the same way, sending
+  // this same 'removePeer' event either way).
+  const removedPeerName = allPeers[peer_id]?.["peer_name"];
+
   const peerScreenId = peer_id + "___screen";
   const peerVideoId = peer_id + "___video";
   const peerAudioId = peer_id + "___audio";
@@ -3399,6 +3494,33 @@ function handleRemovePeer(config) {
   delete allPeers[peer_id];
 
   playSound("removePeer");
+
+  if (removedPeerName) {
+    // Leave notice uses its own red "!" instead of toastMessage()'s default
+    // green checkmark - a checkmark reads as "success" which is backwards
+    // for someone leaving. didOpen forces the progress bar red too: the
+    // shared .swal2-timer-progress-bar CSS rule sets it with !important, so
+    // only an inline !important (via setProperty) can override it here
+    // without touching that shared rule (which every other toast still uses).
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      background: swBg,
+      icon: "warning",
+      iconColor: "#ef4444",
+      title: `${removedPeerName} đã rời phòng.`,
+      showConfirmButton: false,
+      timer: 4000,
+      timerProgressBar: true,
+      showClass: { popup: "animate__animated animate__fadeInDown" },
+      hideClass: { popup: "animate__animated animate__fadeOutUp" },
+      didOpen: (toastEl) => {
+        toastEl
+          .querySelector(".swal2-timer-progress-bar")
+          ?.style.setProperty("background-color", "#ef4444", "important");
+      },
+    });
+  }
 
   // Screen reader announcement for peer left
   const peer_name =
@@ -4471,6 +4593,13 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       attachMediaStream(remoteMedia, stream);
       // Explicitly play – required on mobile Safari where autoplay alone is not enough
       remoteMedia.play().catch(() => {});
+      // Nothing in this app ever calls .pause() on a peer's live stream -
+      // if it pauses anyway (mobile Safari's native tap-to-pause gesture
+      // on a <video>, even with no `controls` attribute), just resume
+      // immediately so a stray tap can never actually stop playback.
+      remoteMedia.addEventListener("pause", () => {
+        if (!remoteMedia.ended) remoteMedia.play().catch(() => {});
+      });
       if (typeof isInPagePip !== "undefined" && isInPagePip) syncPipVideoSource();
 
       // resize video elements
@@ -4655,6 +4784,12 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       attachMediaStream(remoteScreenMedia, stream);
       // Explicitly play – required on mobile Safari where autoplay alone is not enough
       remoteScreenMedia.play().catch(() => {});
+      // Same defensive auto-resume as the camera tile above - tapping a
+      // shared-screen video was pausing it on mobile even though nothing
+      // in this app ever pauses it intentionally.
+      remoteScreenMedia.addEventListener("pause", () => {
+        if (!remoteScreenMedia.ended) remoteScreenMedia.play().catch(() => {});
+      });
       if (typeof isInPagePip !== "undefined" && isInPagePip) syncPipVideoSource();
       adaptAspectRatio();
       // The tile just got created - make sure it doesn't sit stacked
@@ -6342,6 +6477,7 @@ function setupMySettings() {
   });
   // select audio input
   audioInputSelect.addEventListener("change", async () => {
+    playSound("click");
     detectBluetoothHeadset();
     await changeLocalMicrophone(audioInputSelect.value);
     refreshLsDevices();
@@ -6375,11 +6511,13 @@ function setupMySettings() {
 
   // select audio output
   audioOutputSelect.addEventListener("change", async () => {
+    playSound("click");
     await changeAudioDestination();
     refreshLsDevices();
   });
   // select video input
   videoSelect.addEventListener("change", async () => {
+    playSound("click");
     await changeLocalCamera(videoSelect.value);
     await handleLocalCameraMirror();
     await documentPictureInPictureRestart();
@@ -7116,8 +7254,11 @@ function getRoomURL() {
  * @param {object} e event
  * @param {boolean} init on join room
  * @param {null|boolean} force audio off (default null can be true/false)
+ * @param {boolean} silent true to suppress the toggle sound - for
+ *   automatic/programmatic calls (e.g. the ?audio= query param), not a
+ *   real user click on the mic button
  */
-async function handleAudio(e, init, force = null) {
+async function handleAudio(e, init, force = null, silent = false) {
   // https://developer.mozilla.org/en-US/docs/Web/API/MediaStream/getAudioTracks
 
   const audioStatus = force !== null ? force : !myAudioStatus;
@@ -7192,7 +7333,7 @@ async function handleAudio(e, init, force = null) {
     applyKeepAwake(myAudioStatus);
   }
 
-  setMyAudioStatus(myAudioStatus);
+  setMyAudioStatus(myAudioStatus, !silent);
 }
 
 /**
@@ -7211,8 +7352,11 @@ async function stopAudioTracks(stream) {
  * @param {object} e event
  * @param {boolean} init on join room
  * @param {null|boolean} force video off (default null can be true/false)
+ * @param {boolean} silent true to suppress the toggle sound - for
+ *   automatic/programmatic calls (e.g. the ?video= query param), not a
+ *   real user click on the camera button
  */
-async function handleVideo(e, init, force = null) {
+async function handleVideo(e, init, force = null, silent = false) {
   // https://developer.mozilla.org/en-US/docs/Web/API/MediaStream/getVideoTracks
 
   const videoStatus = force !== null ? force : !myVideoStatus;
@@ -7299,7 +7443,7 @@ async function handleVideo(e, init, force = null) {
       : await stopVideoTracks(localVideoMediaStream); // Stop local video track (camera LED off)
   }
 
-  setMyVideoStatus(videoStatus);
+  setMyVideoStatus(videoStatus, !silent);
 }
 
 /**
@@ -7648,7 +7792,7 @@ async function mixScreenAndMicAudio(screenAudioTrack, micAudioTrack) {
 function updateScreenSharingUI(isScreenStreaming, init) {
   // Only for an actual toggle, not the initial pre-join screen-share setup
   // (mirrors the addPeer/removePeer sounds, which also skip that case).
-  if (!init) playSound(isScreenStreaming ? "on" : "off");
+  if (!init) playSound("eject");
   setScreenSharingStatus(isScreenStreaming);
   if (!init && myVideoAvatarImage && !useVideo) {
     elemDisplay(myVideo, false);
@@ -7802,6 +7946,7 @@ async function setMyVideoStatusTrue() {
  * https://developer.mozilla.org/en-US/docs/Web/API/Fullscreen_API
  */
 function toggleFullScreen() {
+  playSound("click");
   const fullScreenIcon = fullScreenBtn.querySelector("i");
   const cornerIcon = fullScreenCornerBtn?.querySelector("i");
   if (!document.fullscreenElement) {
@@ -9551,7 +9696,7 @@ function handleDataChannelChat(dataMessage) {
     chatUnreadCount++;
     updateChatUnreadBadge();
   }
-  playSound("newMessage");
+  playSound("raiseHand");
 }
 
 /**
@@ -9629,6 +9774,7 @@ let peerNameSuccessIconTimeout = null;
 function showPeerNameSuccessIcon() {
   const icon = getId("myPeerNameSuccessIcon");
   if (!icon) return;
+  playSound("click");
   if (peerNameSuccessIconTimeout) clearTimeout(peerNameSuccessIconTimeout);
   icon.style.display = "inline-flex";
   void icon.offsetWidth; // force reflow so the fade-in re-triggers on repeat renames
@@ -9725,6 +9871,8 @@ async function updateMyPeerAvatarByUrl() {
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
     didOpen: () => {
+      playSound("newMessage");
+
       const root = document.getElementById("avatarPickerRoot");
       if (!root) return;
 
@@ -9785,9 +9933,10 @@ async function updateMyPeerAvatarByUrl() {
         "mouseout",
         () => (refreshBtn.style.borderColor = "var(--ds-border)"),
       );
-      refreshBtn.addEventListener("click", () =>
-        renderGrid(buildRandomAvatarUrls()),
-      );
+      refreshBtn.addEventListener("click", () => {
+        playSound("locked");
+        renderGrid(buildRandomAvatarUrls());
+      });
 
       const actions = Swal.getActions();
       if (actions) {
@@ -9813,6 +9962,7 @@ async function updateMyPeerAvatarByUrl() {
     setPeerChatAvatarImgName("right", myPeerName, myPeerAvatar);
 
     emitMyPeerProfile();
+    playSound("click");
   } catch (err) {
     console.error("Failed to set avatar URL", err);
   }
@@ -9921,8 +10071,11 @@ function setMyHandStatus() {
 /**
  * Set My Audio Status Icon and Title
  * @param {boolean} status of my audio
+ * @param {boolean} playToggleSound false for automatic/programmatic status
+ *   changes (init defaults, ?audio= query param, etc.) - only a real user
+ *   click on the mic button should make a sound.
  */
-function setMyAudioStatus(status) {
+function setMyAudioStatus(status, playToggleSound = true) {
   setTimeout(() => {
     refreshPeerNameTag(document.getElementById("myVideoPeerName"));
     refreshPeerNameTag(document.getElementById("myScreenPeerName"));
@@ -9951,7 +10104,7 @@ function setMyAudioStatus(status) {
   );
   if (audioBtn && audioBtn.setAttribute)
     audioBtn.setAttribute("aria-pressed", String(!!status));
-  status ? playSound("on") : playSound("off");
+  if (playToggleSound) playSound("click");
 
   if (typeof isInPagePip !== "undefined" && isInPagePip)
     updatePipLocalControlButtons();
@@ -9960,8 +10113,11 @@ function setMyAudioStatus(status) {
 /**
  * Set My Video Status Icon and Title
  * @param {boolean} status of my video
+ * @param {boolean} playToggleSound false for automatic/programmatic status
+ *   changes (init defaults, ?video= query param, etc.) - only a real user
+ *   click on the camera button should make a sound.
  */
-function setMyVideoStatus(status) {
+function setMyVideoStatus(status, playToggleSound = true) {
   setTimeout(() => {
     refreshPeerNameTag(document.getElementById("myVideoPeerName"));
     refreshPeerNameTag(document.getElementById("myScreenPeerName"));
@@ -10016,7 +10172,7 @@ function setMyVideoStatus(status) {
       { element: myVideo, display: true, mode: "block" },
       { element: initVideo, display: true, mode: "block" },
     ]);
-    playSound("on");
+    if (playToggleSound) playSound("click");
   } else {
     displayElements([
       { element: myVideo, display: false },
@@ -10027,7 +10183,7 @@ function setMyVideoStatus(status) {
       ? myVideoWrap.querySelector(".video-loading-spinner")
       : null;
     if (spinner) elemDisplay(spinner, false);
-    playSound("off");
+    if (playToggleSound) playSound("click");
   }
 
   if (typeof isInPagePip !== "undefined" && isInPagePip)
@@ -10195,6 +10351,22 @@ function setPeerVideoStatus(peer_id, status) {
       setTippy(peerVideoStatus, "Video người tham gia đang tắt", "bottom");
       playSound("off");
     }
+    // Can't draw a custom avatar/caption inside iOS's native fullscreen
+    // video player (#newFullscreenBtn's webkitEnterFullscreen) - that
+    // surface is owned by the OS, not our DOM. Next best thing: drop
+    // back out of it automatically, which lands on the normal in-app
+    // tile that already shows the peer's round avatar + "Camera đang
+    // tắt" caption for a generated avatar.
+    if (peerVideoPlayer?.webkitDisplayingFullscreen) {
+      peerVideoPlayer.webkitExitFullscreen();
+    }
+  }
+
+  // Ask the new control bar to re-sync (#newFullscreenBtn only enables
+  // once the peer has camera or screen visible - see updateUI() in
+  // client.html), same bridge setPeerScreenStatus already uses.
+  if (typeof window.updateNewControlBarUI === "function") {
+    window.updateNewControlBarUI();
   }
 }
 
@@ -10202,6 +10374,16 @@ function setPeerScreenStatus(peer_id, status, extras) {
   // Track screen status on the peer model
   if (!allPeers[peer_id]) allPeers[peer_id] = {};
   allPeers[peer_id]["peer_screen_status"] = !!status;
+
+  // Same as setPeerVideoStatus's camera-off case: if their screen share
+  // just stopped while its native fullscreen player was open, exit it
+  // rather than leave a frozen/blank video stuck in fullscreen.
+  if (!status) {
+    const peerScreenPlayer = getId(peer_id + "___screen");
+    if (peerScreenPlayer?.webkitDisplayingFullscreen) {
+      peerScreenPlayer.webkitExitFullscreen();
+    }
+  }
 
   // Exposed for the control-bar bridge (client.html) so it can disable
   // "Chia sẻ màn hình" while a peer is already sharing theirs.
@@ -10669,7 +10851,7 @@ function setMyAudioOff(peer_name) {
     myAudioStatus = false;
   }
   audioBtn.className = className.audioOff;
-  setMyAudioStatus(myAudioStatus);
+  setMyAudioStatus(myAudioStatus, false);
   playSound("off");
 }
 
@@ -10687,7 +10869,7 @@ function setMyAudioOn(peer_name) {
     myAudioStatus = false;
   }
   audioBtn.className = className.audioOn;
-  setMyAudioStatus(myAudioStatus);
+  setMyAudioStatus(myAudioStatus, false);
   playSound("on");
 }
 
@@ -10706,7 +10888,7 @@ function setMyVideoOff(peer_name) {
     myVideoStatus = false;
   }
   videoBtn.className = className.videoOff;
-  setMyVideoStatus(myVideoStatus);
+  setMyVideoStatus(myVideoStatus, false);
   playSound("off");
 }
 
@@ -11185,6 +11367,34 @@ function kickOut(peer_id) {
 }
 
 /**
+ * The same peer_uuid (this browser/device) opened the room again elsewhere
+ * (another tab, or a reconnect after a network drop that raced ahead of the
+ * old connection's own timeout). The server evicted this tab's session to
+ * avoid double-counting one person as two. Tell the user plainly instead of
+ * leaving them stuck on a "reconnecting…" banner that will never resolve
+ * (a server-initiated disconnect does not auto-retry), then send them home.
+ */
+function handleDuplicateSession() {
+  signalingSocket.disconnect();
+
+  Swal.fire({
+    allowOutsideClick: false,
+    background: swBg,
+    position: "center",
+    imageUrl: images.leave,
+    title: "Phòng đã được mở ở nơi khác",
+    text: "Bạn vừa vào phòng này từ một tab hoặc thiết bị khác, nên tab này đã ngắt kết nối.",
+    confirmButtonText: "Về trang chủ",
+    timer: 6000,
+    timerProgressBar: true,
+    showClass: { popup: "animate__animated animate__fadeInDown" },
+    hideClass: { popup: "animate__animated animate__fadeOutUp" },
+  }).then(() => {
+    openURL("/");
+  });
+}
+
+/**
  * You will be kicked out from the room and popup the peer name that performed this action
  * @param {object} config data
  */
@@ -11277,7 +11487,7 @@ function exitRoom() {
 }
 
 function redirectOnLeave() {
-  playSound("eject");
+  playSound("removePeer");
   // Give the sound a moment to actually be heard before the page
   // navigates away and cuts it off.
   setTimeout(() => {
@@ -12655,6 +12865,7 @@ function initTopHeaderBar() {
   const headerCopyIcon = getId("headerCopyIcon");
   if (headerCopyBtn) {
     headerCopyBtn.addEventListener("click", () => {
+      playSound("switch");
       navigator.clipboard.writeText(roomId);
       // Hiện icon check xanh lá khi copy thành công
       headerCopyBtn.innerHTML =
@@ -12673,6 +12884,7 @@ function initTopHeaderBar() {
   const waitingCopyRoomLink = getId("waitingCopyRoomLink");
   if (waitingCopyRoomLink) {
     waitingCopyRoomLink.addEventListener("click", () => {
+      playSound("switch");
       navigator.clipboard.writeText(roomId);
 
       const text = getId("waitingCopyText");
@@ -12736,6 +12948,21 @@ function updateTopHeaderPeerCount() {
         pipBtn.classList.add("opacity-50", "cursor-not-allowed");
       }
     }
+  }
+
+  // Native-fullscreen-video button (#newFullscreenBtn, wired in
+  // client.html) - mobile only, always sits in the bar like every other
+  // button there (same shell). Its enabled/disabled look is driven by
+  // whether the peer actually has camera/screen visible right now, not
+  // just peer count - that's updateUI()'s job in client.html (see the
+  // updateNewControlBarUI bridge call below), since it needs to react
+  // to camera/screen toggles mid-call too, not only join/leave.
+  const newFullscreenBtn = getId("newFullscreenBtn");
+  if (newFullscreenBtn) {
+    elemDisplay(newFullscreenBtn, isMobileDevice, "flex");
+  }
+  if (typeof window.updateNewControlBarUI === "function") {
+    window.updateNewControlBarUI();
   }
 
   if (typeof resizeVideoMedia === "function") {
@@ -13161,6 +13388,7 @@ function setPagePip(enable) {
 
   isInPagePip = enable;
   window.isInPagePip = enable; // read by the control-bar bridge in client.html
+  playSound("click");
 
   const overlay = getId("pipOverlay");
   const placeholder = getId("pipStagePlaceholder");

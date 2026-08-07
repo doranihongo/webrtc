@@ -371,6 +371,11 @@ const channels = {}; // collect channels
 const sockets = {}; // collect sockets
 const peers = {}; // collect peers info grp by channels
 const presenters = {}; // collect presenters grp by channels
+// Server-only lookup of peer_uuid grp by channel, used to detect a peer
+// reconnecting under a new socket.id (e.g. after a network drop) so it isn't
+// miscounted as a second person. Never sent to clients - unlike `peers`,
+// which is broadcast wholesale via "addPeer".
+const peerUUIDs = {};
 
 const roomMetaKeys = new Set(["lock", "password"]);
 
@@ -1422,6 +1427,14 @@ io.sockets.on("connect", async (socket) => {
     const { osName, osVersion, browserName, browserVersion, extras } =
       peer_info;
 
+    // Track this peer's uuid server-side only, for reconnect dedupe on the
+    // next join (see above). Never included in peers[channel], which is
+    // broadcast to other clients as-is.
+    if (peer_uuid) {
+      if (!(channel in peerUUIDs)) peerUUIDs[channel] = {};
+      peerUUIDs[channel][socket.id] = peer_uuid;
+    }
+
     // collect peers info grp by channels
     peers[channel][socket.id] = {
       peer_name: peer_name,
@@ -1438,6 +1451,46 @@ io.sockets.on("connect", async (socket) => {
       browser: browserName ? `${browserName} ${browserVersion}` : "",
       extras: extras,
     };
+
+    // Deduplicate reconnects: peer_uuid is a stable id the client keeps in
+    // localStorage across page reloads, unlike socket.id which changes on
+    // every reconnect. If a network drop hasn't been detected yet (Socket.IO
+    // relies on a ping-timeout, which can take up to ~45s) and the same
+    // person reconnects in the meantime, the room would otherwise show two
+    // entries for one real person and could wrongly count against
+    // maxRoomParticipants. Evict the stale entry immediately instead of
+    // waiting for the timeout, so the peer count always reflects real people.
+    // Run this AFTER adding the new peer above (not before), so the peer
+    // count never dips to 0 mid-eviction when this is the only occupant -
+    // that would otherwise make removePeerFrom() think the room just went
+    // empty and wipe peers[channel]/presenters[channel] (incl. lock state)
+    // out from under this very join.
+    if (peer_uuid) {
+      for (const [existingId, existingUUID] of Object.entries(
+        peerUUIDs[channel],
+      )) {
+        if (existingId === socket.id || existingUUID !== peer_uuid) continue;
+        log.debug(
+          "[" + socket.id + "] Duplicate peer_uuid, evicting stale peer",
+          { stale_peer_id: existingId, peer_name: peer_name },
+        );
+        const staleSocket = sockets[existingId];
+        if (staleSocket) {
+          // Tell the stale tab why it's being cut off *before* tearing down
+          // its connection, so its UI can show a clear message and redirect
+          // instead of getting stuck on a generic "reconnecting…" banner
+          // that a server-initiated disconnect will never actually resolve.
+          staleSocket.emit("duplicateSession", { peer_name: peer_name });
+          await removePeerFrom(channel, staleSocket, "duplicate_session");
+          staleSocket.disconnect(true);
+        } else {
+          delete peers[channel]?.[existingId];
+          delete channels[channel]?.[existingId];
+          delete peerUUIDs[channel][existingId];
+        }
+        break;
+      }
+    }
 
     const activeRooms = getActiveRooms();
 
@@ -2001,11 +2054,13 @@ io.sockets.on("connect", async (socket) => {
       delete socket.channels[channel];
       delete channels[channel][socket.id];
       delete peers[channel][socket.id]; // delete peer data from the room
+      delete peerUUIDs[channel]?.[socket.id];
 
       if (getPeerCount(channel) === 0) {
         delete peers[channel];
         delete presenters[channel];
         delete channels[channel]; // Clean up channels to prevent memory leak
+        delete peerUUIDs[channel];
       }
     } catch (err) {
       log.error("Remove Peer", toJson(err));

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Đăng nhập</title>
+
+    <link rel="shortcut icon" href="../images/logo.svg" />
+    <link rel="apple-touch-icon" href="../images/mirotalk-logo.png" />
+    <meta name="theme-color" content="#3b8ac4" />
+
+    <!-- StyleSheet - dùng chung token màu với các trang khác, còn lại
+         là CSS riêng của trang login, không đụng tới landing.css/client.css -->
+    <link rel="stylesheet" href="../css/_tokens.css" />
+    <link rel="stylesheet" href="../css/login.css" />
+  </head>
+  <body>
+    <main class="login-card">
+      <div class="login-card-inner">
+        <img class="login-logo" src="../images/logo.svg" alt="Logo" />
+
+        <div class="login-heading">
+          <h1>Đăng nhập</h1>
+          <p>Phòng học trực tuyến</p>
+        </div>
+
+        <div id="loginError" class="login-error" role="alert"></div>
+
+        <form id="loginForm" novalidate>
+          <div class="login-field">
+            <label for="loginUsername">Tài khoản</label>
+            <input
+              id="loginUsername"
+              type="text"
+              autocomplete="username"
+              placeholder="Nhập tài khoản"
+              required
+            />
+          </div>
+
+          <div class="login-field">
+            <label for="loginPassword">Mật khẩu</label>
+            <input
+              id="loginPassword"
+              type="password"
+              autocomplete="current-password"
+              placeholder="••••••"
+              required
+            />
+          </div>
+
+          <button id="loginSubmitBtn" type="submit" class="login-submit">
+            ĐĂNG NHẬP
+          </button>
+        </form>
+      </div>
+    </main>
+
+    <script defer src="../js/login.js"></script>
+  </body>
+</html>

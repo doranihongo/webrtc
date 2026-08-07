@@ -13,6 +13,54 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+// ---------------------------------------------------------
+// PWA standalone mode (opened from the home-screen icon, not a normal
+// Safari/Chrome tab): iOS still lets the whole page rubber-band/bounce
+// on drag at the native WKWebView level even though the page itself has
+// overflow:hidden. Block that drag here (normal browser-tab visits are
+// untouched); still lets any element that's actually meant to scroll
+// (chat log, settings panel, etc.) scroll normally.
+// ---------------------------------------------------------
+const isStandalonePwa =
+  window.matchMedia?.("(display-mode: standalone)")?.matches ||
+  window.navigator.standalone === true;
+
+if (isStandalonePwa) {
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      let el = e.target;
+      while (el && el !== document.documentElement) {
+        const style = window.getComputedStyle(el);
+        if (
+          /(auto|scroll)/.test(style.overflowY) &&
+          el.scrollHeight > el.clientHeight
+        ) {
+          return; // inside a genuinely scrollable element - let it scroll
+        }
+        el = el.parentElement;
+      }
+      e.preventDefault();
+    },
+    { passive: false },
+  );
+}
+
+/**
+ * Phát âm thanh - bản rút gọn dùng riêng cho trang landing (chưa vào
+ * phòng nên chưa có bảng cài đặt tắt âm như trong client.js)
+ * @param {string} name tên file .mp3 trong thư mục /sounds
+ */
+async function playSound(name) {
+  try {
+    const audio = new Audio(`../sounds/${name}.mp3`);
+    audio.volume = 0.5;
+    await audio.play();
+  } catch (err) {
+    // Autoplay bị chặn (Safari) hoặc file không tồn tại - bỏ qua
+  }
+}
+
 /**
  * Tạo mã phòng ngẫu nhiên 10 ký tự: chỉ chữ IN HOA + số, luôn có ít nhất
  * 1 chữ và 1 số (không phải ngẫu nhiên thuần có thể ra toàn chữ/toàn số)
@@ -109,6 +157,7 @@ const joinRoomButton = document.getElementById("joinRoomButton");
 if (genRoomButton) {
   genRoomButton.onclick = (e) => {
     e.preventDefault();
+    playSound("switch");
     genRoomButton.classList.remove("spin");
     void genRoomButton.offsetWidth; // Kích hoạt lại animation
     genRoomButton.classList.add("spin");

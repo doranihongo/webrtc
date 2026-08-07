@@ -39,7 +39,7 @@
     <meta name="theme-color" content="#3b8ac4" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="DORA NIHONGO" />
 
     <!-- Meta Information -->
@@ -670,7 +670,7 @@ micro để sử dụng ứng dụng này.
         <!-- Fullscreen Video (Mobile only) -->
         <button
           id="newFullscreenBtn"
-          class="hidden sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all"
+          class="hidden cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 text-slate-200 items-center justify-center transition-all opacity-50 cursor-not-allowed"
         >
           <i
             data-lucide="maximize"
@@ -751,7 +751,26 @@ micro để sử dụng ứng dụng này.
           newPip?.addEventListener("click", () => {
             if (typeof togglePagePip === "function") togglePagePip("toggle");
           });
-          newFs?.addEventListener("click", () => oldFs?.click());
+          // Opens the OTHER participant's video (their screen share if
+          // they're sharing one, else their camera) in the device's own
+          // native fullscreen video player - not the generic document/
+          // page fullscreen oldFs used to trigger. iOS Safari's <video>
+          // elements expose webkitEnterFullscreen() for this; Chrome on
+          // Android (and everything else) falls back to the standard
+          // Fullscreen API on the video element itself.
+          newFs?.addEventListener("click", () => {
+            const peerId = Object.keys(peerConnections || {})[0];
+            if (!peerId) return;
+            const video =
+              document.getElementById(peerId + "___screen") ||
+              document.getElementById(peerId + "___video");
+            if (!video) return;
+            if (typeof video.webkitEnterFullscreen === "function") {
+              video.webkitEnterFullscreen();
+            } else if (typeof video.requestFullscreen === "function") {
+              video.requestFullscreen().catch(() => {});
+            }
+          });
           newSettings?.addEventListener("click", () => oldSettings?.click());
           newLeave?.addEventListener("click", () => {
             if (typeof leaveRoom === "function") leaveRoom();
@@ -884,6 +903,39 @@ micro để sử dụng ứng dụng này.
             } else {
               newPip.className =
                 "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all";
+            }
+
+            // Fullscreen-video state (mobile only) - only enabled once
+            // the OTHER participant actually has something to show
+            // (camera on, or they're screen sharing). No hover class on
+            // purpose: unlike the buttons above, nothing here rewrites
+            // this element's className on every tap, so on a touch
+            // device a stuck :hover (no mouse-leave event exists to
+            // clear it) would otherwise darken it permanently after the
+            // very first tap.
+            if (newFs) {
+              const peerId =
+                typeof peerConnections !== "undefined"
+                  ? Object.keys(peerConnections || {})[0]
+                  : null;
+              const peerVideoStatus = peerId
+                ? document.getElementById(peerId + "_videoStatus")
+                : null;
+              const peerCameraOn =
+                !!peerVideoStatus &&
+                typeof className !== "undefined" &&
+                peerVideoStatus.className === className.videoOn;
+              const peerHasVisual =
+                peerCameraOn || !!window.isRemoteScreenSharing;
+              if (peerHasVisual) {
+                newFs.className =
+                  "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 text-slate-200 flex items-center justify-center transition-all";
+                newFs.style.pointerEvents = "auto";
+              } else {
+                newFs.className =
+                  "cursor-not-allowed p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 text-slate-500 opacity-50 flex items-center justify-center transition-all";
+                newFs.style.pointerEvents = "none";
+              }
             }
 
             if (oldBottom && newBottom) {

@@ -345,9 +345,10 @@
   justify-content: center;
   padding: 6px;
   border-radius: 10px;
+  overflow: hidden;
   background: rgba(8, 21, 39, 0.8);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(36, 64, 107, 0.6);
+  border: none;
   color: rgba(255, 255, 255, 0.9);
   cursor: pointer;
   opacity: 1;
@@ -371,8 +372,14 @@
 #myVideoWrap.solo-self.solo-faded .solo-eye-btn {
   opacity: 0.3;
 }
-#myVideoWrap.solo-self .solo-eye-btn:hover {
-  opacity: 1 !important;
+/* hover:hover only - on touch devices this rule stays permanently
+   "stuck" active after a tap (no mouse-leave event exists to clear it),
+   which otherwise beats .solo-faded's opacity:0.3 forever via
+   !important and stops the icon from ever dimming down. */
+@media (hover: hover) {
+  #myVideoWrap.solo-self .solo-eye-btn:hover {
+    opacity: 1 !important;
+  }
 }
 
 /* Hidden state: the whole thumbnail collapses down to a small
@@ -403,9 +410,14 @@
   justify-content: center;
   padding: 8px 16px;
   border-radius: 10px;
+  /* iOS Safari renders backdrop-filter's blur as a full rectangle that
+     ignores border-radius clipping unless the element also has
+     overflow:hidden - without it the blur pokes out square past the
+     rounded corners, making the border look like it's missing there. */
+  overflow: hidden;
   background: rgba(8, 21, 39, 0.8);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(22, 50, 79, 1);
+  border: none;
   color: #4bb4de;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
   cursor: pointer;
@@ -432,8 +444,13 @@
 #myVideoWrap.solo-self.solo-hidden.solo-faded .solo-show-btn {
   opacity: 0.3;
 }
-#myVideoWrap.solo-self.solo-hidden:hover .solo-show-btn {
-  opacity: 1 !important;
+/* hover:hover only - same stuck-hover-on-tap issue as .solo-eye-btn
+   above, which is exactly what was stopping this icon from ever
+   dimming down on mobile. */
+@media (hover: hover) {
+  #myVideoWrap.solo-self.solo-hidden:hover .solo-show-btn {
+    opacity: 1 !important;
+  }
 }
 
 /* Coordinated remote name-tag position: when my floating thumbnail
