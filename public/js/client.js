@@ -12353,6 +12353,37 @@ function msgPopup(icon, message, position, timer = 1000) {
   });
 }
 
+// Notification sound files that actually exist in public/sounds/ - preloaded
+// on startup so playSound() plays instantly instead of fetching over the
+// network on first use (only noticeable once served over a real network,
+// not on localhost). Together they're ~280KB, cheap to preload eagerly.
+const SOUND_NAMES = [
+  "addPeer",
+  "alert",
+  "click",
+  "eject",
+  "locked",
+  "newMessage",
+  "off",
+  "on",
+  "raiseHand",
+  "recStart",
+  "recStop",
+  "removePeer",
+  "speaker",
+  "switch",
+];
+const preloadedSounds = {};
+function preloadSounds(path = "../sounds/") {
+  SOUND_NAMES.forEach((name) => {
+    const audio = new Audio(path + name + ".mp3");
+    audio.preload = "auto";
+    audio.load();
+    preloadedSounds[name] = audio;
+  });
+}
+preloadSounds();
+
 /**
  * https://notificationsounds.com/notification-sounds
  * @param {string} name audio to play
@@ -12361,8 +12392,13 @@ function msgPopup(icon, message, position, timer = 1000) {
  */
 async function playSound(name, force = false, path = "../sounds/") {
   if (!notifyBySound && !force) return;
-  const sound = path + name + ".mp3";
-  const audioToPlay = new Audio(sound);
+  // Clone the preloaded element so playback starts from the already-cached
+  // resource (no network round-trip) while still allowing overlapping
+  // plays of the same sound, same as the old new-Audio()-per-call behavior.
+  const cached = preloadedSounds[name];
+  const audioToPlay = cached
+    ? cached.cloneNode(true)
+    : new Audio(path + name + ".mp3");
   try {
     audioToPlay.volume = 0.5;
     await audioToPlay.play();
