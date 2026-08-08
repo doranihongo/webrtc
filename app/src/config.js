@@ -334,7 +334,7 @@ module.exports = {
     og: {
       type: "app-webrtc",
       siteName: "DORA ONLINE",
-      title: "Nhấn vào link để vào phòng học.",
+      title: "Phòng học DORA ONLINE",
       description:
         "DORA ONLINE",
       image: "https://doranihongo.com/images/dora-logo.png",
