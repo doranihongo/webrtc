@@ -154,7 +154,7 @@
   display: flex;
   align-items: center;
   gap: var(--ds-space-2);
-  font-family: "Fira Sans", sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 18px;
   color: var(--ds-text-primary);
 }
@@ -243,7 +243,7 @@
 
 .account-success-card h3 {
   margin: 0 0 var(--ds-space-2);
-  font-family: "Fira Sans", sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 17px;
   color: var(--ds-text-primary);
 }
@@ -263,7 +263,7 @@
 
 .account-panel-subheader h3 {
   margin: 0;
-  font-family: "Fira Sans", sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 15px;
   color: var(--ds-text-primary);
 }
@@ -322,7 +322,7 @@
   background: var(--ds-bg-panel);
   color: var(--ds-text-primary);
   font-size: 14px;
-  font-family: "Lato", sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 /* iOS Safari tự động zoom vào ô input nếu font-size < 16px lúc bấm vào

@@ -131,8 +131,21 @@ async function handleSignedIn(user, accessToken) {
     .single();
 
   if (profileError || !profile || !ALLOWED_ROLES.includes(profile.role)) {
+    // Không lấy được profile (profileError, chưa chắc role sai) - phân
+    // biệt lỗi mạng/timeout thoáng qua với token thật sự không hợp lệ
+    // (401/403). Lỗi mạng ngay sau khi vừa đăng nhập thành công thì
+    // không nên đăng xuất/báo "không có quyền" nhầm - chỉ báo lỗi mạng,
+    // giữ nguyên phiên để bấm thử lại được luôn.
+    if (!profile && profileError && !isAuthInvalidError(profileError)) {
+      const { error: userErr } = await supabaseClient.auth.getUser();
+      if (!isAuthInvalidError(userErr)) {
+        showError(loginError, "Lỗi mạng, vui lòng thử lại.");
+        return;
+      }
+    }
     localStorage.removeItem(changepwPendingKey(user.id));
     await supabaseClient.auth.signOut();
+    hardResetSupabaseSession();
     showView("login");
     showError(
       loginError,
@@ -154,6 +167,7 @@ async function handleSignedIn(user, accessToken) {
     ) {
       localStorage.removeItem(changepwPendingKey(user.id));
       await supabaseClient.auth.signOut();
+      hardResetSupabaseSession();
       showView("login");
       showError(
         loginError,
@@ -170,6 +184,7 @@ async function handleSignedIn(user, accessToken) {
   if (!access.ok) {
     localStorage.removeItem(changepwPendingKey(user.id));
     await supabaseClient.auth.signOut();
+    hardResetSupabaseSession();
     showView("login");
     showError(
       loginError,

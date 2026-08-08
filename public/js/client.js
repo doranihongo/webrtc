@@ -580,6 +580,14 @@ let useVideo = true; // User allow for camera usage
 let isEnumerateVideoDevices = false;
 let isEnumerateAudioDevices = false;
 
+// Headset auto-switch: tracks known audio device ids so we can tell when a
+// device exposing both a mic and a speaker (i.e. a headset) connects or
+// disconnects, and remembers the pre-headset selection to restore it
+// automatically. null = baseline not captured yet. See autoSwitchHeadsetIfNeeded().
+let knownAudioInputIds = null;
+let knownAudioOutputIds = null;
+let autoSwitchedHeadset = null; // { micId, speakerId, baselineMicId, baselineSpeakerId }
+
 // video/audio player
 let isVideoUrlPlayerOpen = false;
 let pinnedVideoPlayerId = null;
@@ -602,7 +610,7 @@ let localScreenMediaStream; // my screen share
 let localScreenDisplayStream; // raw getDisplayMedia stream (may include audio)
 let screenShareAudioContext; // AudioContext used to mix screen audio + microphone
 let remoteAudioBoostContext; // shared AudioContext used to boost remote peers' audio playback volume
-const REMOTE_AUDIO_GAIN = 1.6; // gain applied to remote peer audio; <audio>.volume caps at 1.0 (100%), this goes louder
+const REMOTE_AUDIO_GAIN = 1.7; // gain applied to remote peer audio; <audio>.volume caps at 1.0 (100%), this goes louder
 let localAudioMediaStream; // my microphone
 let noiseProcessor = null; // RNNoise audio processing
 let peerScreenMediaElements = {}; // keep track of our peer <video> tags, indexed by peer_id_screen
@@ -3689,13 +3697,132 @@ async function initEnumerateVideoDevices() {
 }
 
 /**
+ * Windows/Chrome thường liệt kê cùng 1 thiết bị vật lý thành nhiều mục ảo:
+ * "Default - <tên>", "Communications - <tên>" và mục gốc "<tên>" (deviceId
+ * thật, không phải chuỗi "default"/"communications"). Hàm này gộp các mục
+ * trỏ tới cùng 1 thiết bị lại làm một, ưu tiên giữ mục gốc để dropdown
+ * không bị nhân bản và lựa chọn mặc định luôn là thiết bị gốc.
+ * @param {MediaDeviceInfo[]} devices
+ * @returns {MediaDeviceInfo[]}
+ */
+function dedupeMediaDevices(devices) {
+  const groups = new Map();
+  const order = [];
+  for (const device of devices) {
+    const label = device.label || "";
+    let realLabel = label;
+    if (label.startsWith("Default - ")) realLabel = label.slice("Default - ".length);
+    else if (label.startsWith("Communications - ")) realLabel = label.slice("Communications - ".length);
+    // Nếu chưa có label (chưa cấp quyền), dùng deviceId làm khóa để không gộp nhầm.
+    const key = `${device.kind}::${realLabel || device.deviceId}`;
+    if (!groups.has(key)) {
+      groups.set(key, {});
+      order.push(key);
+    }
+    const group = groups.get(key);
+    if (device.deviceId === "default") group.pseudoDefault = device;
+    else if (device.deviceId === "communications") group.pseudoCommunications = device;
+    else group.genuine = device;
+  }
+  return order.map((key) => {
+    const group = groups.get(key);
+    return group.genuine || group.pseudoDefault || group.pseudoCommunications;
+  });
+}
+
+/**
+ * Decide whether audio input/output selection should be force-switched
+ * because a headset (a device exposing both a mic AND a speaker at once -
+ * the strongest signal that it's a headset rather than e.g. a lone USB mic
+ * or an external monitor's HDMI audio-out) just connected or disconnected.
+ *
+ * - Headset connects -> remember what was selected before (the "thiết bị
+ *   hiện tại"/current device) and switch to the headset's mic + speaker.
+ * - That same headset disconnects -> switch back to whatever was selected
+ *   before it connected (falls back to the default entry if that device is
+ *   also gone).
+ * - Nothing connects/disconnects -> no override, caller keeps current selection.
+ *
+ * Called on every device list refresh (both from the `devicechange` event
+ * and from the polling fallback in setupQuickDeviceSwitchDropdowns(), since
+ * `devicechange` does not reliably fire for Bluetooth connect/disconnect on
+ * Windows/Chrome).
+ * @param {MediaDeviceInfo[]} devices deduped device list (post dedupeMediaDevices)
+ * @param {string} currentMicId currently selected mic device id (before this refresh)
+ * @param {string} currentSpeakerId currently selected speaker device id (before this refresh)
+ * @returns {{mic: string|null, speaker: string|null}} forced target device ids, or null to leave selection alone
+ */
+function autoSwitchHeadsetIfNeeded(devices, currentMicId, currentSpeakerId) {
+  const micIds = new Set(
+    devices.filter((d) => d.kind === "audioinput").map((d) => d.deviceId),
+  );
+  const speakerIds = new Set(
+    devices.filter((d) => d.kind === "audiooutput").map((d) => d.deviceId),
+  );
+
+  const result = { mic: null, speaker: null };
+
+  if (knownAudioInputIds === null || knownAudioOutputIds === null) {
+    // First run - just capture the baseline, nothing "newly connected" yet.
+    knownAudioInputIds = micIds;
+    knownAudioOutputIds = speakerIds;
+    return result;
+  }
+
+  const newMicIds = [...micIds].filter((id) => !knownAudioInputIds.has(id));
+  const newSpeakerIds = [...speakerIds].filter(
+    (id) => !knownAudioOutputIds.has(id),
+  );
+  const removedMicIds = [...knownAudioInputIds].filter(
+    (id) => !micIds.has(id),
+  );
+  const removedSpeakerIds = [...knownAudioOutputIds].filter(
+    (id) => !speakerIds.has(id),
+  );
+
+  if (newMicIds.length > 0 && newSpeakerIds.length > 0 && !autoSwitchedHeadset) {
+    // A device exposing both a mic and a speaker just appeared - a headset.
+    autoSwitchedHeadset = {
+      micId: newMicIds[0],
+      speakerId: newSpeakerIds[0],
+      baselineMicId: currentMicId,
+      baselineSpeakerId: currentSpeakerId,
+    };
+    console.log("🎧 Headset connected, auto-switching to it:", autoSwitchedHeadset);
+    result.mic = autoSwitchedHeadset.micId;
+    result.speaker = autoSwitchedHeadset.speakerId;
+  } else if (
+    autoSwitchedHeadset &&
+    (removedMicIds.includes(autoSwitchedHeadset.micId) ||
+      removedSpeakerIds.includes(autoSwitchedHeadset.speakerId))
+  ) {
+    // The headset we auto-switched to just disconnected - go back to what
+    // was selected before it connected (fall back to default if that's gone too).
+    console.log("🎧 Headset disconnected, reverting to previous device");
+    result.mic = micIds.has(autoSwitchedHeadset.baselineMicId)
+      ? autoSwitchedHeadset.baselineMicId
+      : null;
+    result.speaker = speakerIds.has(autoSwitchedHeadset.baselineSpeakerId)
+      ? autoSwitchedHeadset.baselineSpeakerId
+      : null;
+    autoSwitchedHeadset = null;
+  }
+
+  knownAudioInputIds = micIds;
+  knownAudioOutputIds = speakerIds;
+  return result;
+}
+
+/**
  * Enumerate Audio
  * @param {object} stream
  */
 async function enumerateAudioDevices(stream) {
   console.log("06. Get Audio Devices");
+  let dedupedDevices = [];
   await navigator.mediaDevices
     .enumerateDevices()
+    .then((devices) => (dedupedDevices = dedupeMediaDevices(devices)))
     .then((devices) =>
       devices.forEach(async (device) => {
         let el,
@@ -3716,6 +3843,19 @@ async function enumerateAudioDevices(stream) {
     .then(async () => {
       await stopTracks(stream);
       isEnumerateAudioDevices = true;
+      // Seed the headset auto-switch baseline so the polling fallback in
+      // setupQuickDeviceSwitchDropdowns() doesn't treat these already-present
+      // devices as a "newly connected headset" on its first tick.
+      knownAudioInputIds = new Set(
+        dedupedDevices
+          .filter((d) => d.kind === "audioinput")
+          .map((d) => d.deviceId),
+      );
+      knownAudioOutputIds = new Set(
+        dedupedDevices
+          .filter((d) => d.kind === "audiooutput")
+          .map((d) => d.deviceId),
+      );
       //const sinkId = 'sinkId' in HTMLMediaElement.prototype;
       audioOutputSelect.disabled = !sinkId;
       // Check if there is speakers
@@ -3736,6 +3876,7 @@ async function enumerateVideoDevices(stream) {
   console.log("07. Get Video Devices");
   await navigator.mediaDevices
     .enumerateDevices()
+    .then((devices) => dedupeMediaDevices(devices))
     .then((devices) =>
       devices.forEach(async (device) => {
         let el,
@@ -3806,7 +3947,7 @@ async function refreshMyAudioVideoDevices() {
 
   try {
     // Re-enumerate all devices
-    const devices = await navigator.mediaDevices.enumerateDevices();
+    const devices = dedupeMediaDevices(await navigator.mediaDevices.enumerateDevices());
 
     // Clear existing options
     if (videoSelect) videoSelect.innerHTML = "";
@@ -3851,19 +3992,37 @@ async function refreshMyAudioVideoDevices() {
       }
     }
 
-    if (audioInputSelect && selectedAudioInputId) {
-      if (selectOptionByValueExist(audioInputSelect, selectedAudioInputId)) {
-        audioInputSelect.value = selectedAudioInputId;
-      } else {
+    // A headset connecting/disconnecting takes priority over just restoring
+    // the previous mic/speaker selection - see autoSwitchHeadsetIfNeeded().
+    const headsetSwitch = autoSwitchHeadsetIfNeeded(
+      devices,
+      selectedAudioInputId,
+      selectedAudioOutputId,
+    );
+
+    if (audioInputSelect) {
+      const targetAudioInputId = headsetSwitch.mic || selectedAudioInputId;
+      if (
+        targetAudioInputId &&
+        selectOptionByValueExist(audioInputSelect, targetAudioInputId)
+      ) {
+        audioInputSelect.value = targetAudioInputId;
+        if (headsetSwitch.mic) audioInputChanged = true;
+      } else if (selectedAudioInputId) {
         audioInputChanged = true;
         console.log("Previously selected microphone no longer available");
       }
     }
 
-    if (audioOutputSelect && selectedAudioOutputId) {
-      if (selectOptionByValueExist(audioOutputSelect, selectedAudioOutputId)) {
-        audioOutputSelect.value = selectedAudioOutputId;
-      } else {
+    if (audioOutputSelect) {
+      const targetAudioOutputId = headsetSwitch.speaker || selectedAudioOutputId;
+      if (
+        targetAudioOutputId &&
+        selectOptionByValueExist(audioOutputSelect, targetAudioOutputId)
+      ) {
+        audioOutputSelect.value = targetAudioOutputId;
+        if (headsetSwitch.speaker) audioOutputChanged = true;
+      } else if (selectedAudioOutputId) {
         audioOutputChanged = true;
         console.log("Previously selected speaker no longer available");
       }
@@ -5789,7 +5948,7 @@ function setVideoBtn() {
  */
 function setSwapCameraBtn() {
   navigator.mediaDevices.enumerateDevices().then((devices) => {
-    const videoInput = devices.filter((device) => device.kind === "videoinput");
+    const videoInput = dedupeMediaDevices(devices).filter((device) => device.kind === "videoinput");
     if (videoInput.length > 1 && isMobileDevice) {
       swapCameraBtn.addEventListener("click", (e) => {
         swapCamera();
@@ -12400,6 +12559,14 @@ async function playSound(name, force = false, path = "../sounds/") {
     ? cached.cloneNode(true)
     : new Audio(path + name + ".mp3");
   try {
+    // Route notification sounds through the speaker selected in the app,
+    // same as remote peer audio (changeAudioDestination). Without this they
+    // always fall back to whatever the OS considers the "default" output
+    // device (e.g. it auto-switches to a newly connected Bluetooth headset),
+    // silently ignoring the in-app speaker selection.
+    if (typeof audioToPlay.setSinkId === "function" && audioOutputSelect?.value) {
+      await audioToPlay.setSinkId(audioOutputSelect.value).catch(() => {});
+    }
     audioToPlay.volume = 0.5;
     await audioToPlay.play();
   } catch (err) {
@@ -12969,6 +13136,23 @@ function setupQuickDeviceSwitchDropdowns() {
   if (navigator.mediaDevices) {
     let deviceChangeFrame;
     let lastChangeTime = 0;
+    let deviceRefreshInFlight = false;
+
+    const runDeviceRefresh = async () => {
+      if (deviceRefreshInFlight) return;
+      deviceRefreshInFlight = true;
+      try {
+        await refreshMyAudioVideoDevices();
+      } catch (err) {
+        console.warn("Device refresh failed:", err);
+      } finally {
+        deviceRefreshInFlight = false;
+      }
+      setTimeout(() => {
+        rebuildVideoMenu();
+        rebuildAudioMenu();
+      }, 50);
+    };
 
     navigator.mediaDevices.addEventListener("devicechange", async () => {
       const now = Date.now();
@@ -12984,17 +13168,44 @@ function setupQuickDeviceSwitchDropdowns() {
         await new Promise((resolve) =>
           setTimeout(resolve, isMobileDevice ? 1500 : 500),
         );
-        try {
-          await refreshMyAudioVideoDevices();
-        } catch (err) {
-          console.warn("Device refresh failed:", err);
-        }
-        setTimeout(() => {
-          rebuildVideoMenu();
-          rebuildAudioMenu();
-        }, 50);
+        await runDeviceRefresh();
       });
     });
+
+    // Fallback poll: Bluetooth headset connect/disconnect does not reliably
+    // fire `devicechange` on Windows/Chrome, which would otherwise leave the
+    // headset auto-switch (autoSwitchHeadsetIfNeeded) waiting for an event
+    // that never comes until the page is reloaded. Do a cheap id-only check
+    // first so this doesn't rebuild the device dropdowns every tick.
+    setInterval(async () => {
+      if (deviceRefreshInFlight) return;
+      try {
+        const devices = dedupeMediaDevices(
+          await navigator.mediaDevices.enumerateDevices(),
+        );
+        const micIds = devices
+          .filter((d) => d.kind === "audioinput")
+          .map((d) => d.deviceId)
+          .sort()
+          .join(",");
+        const speakerIds = devices
+          .filter((d) => d.kind === "audiooutput")
+          .map((d) => d.deviceId)
+          .sort()
+          .join(",");
+        const knownMicIds = knownAudioInputIds
+          ? [...knownAudioInputIds].sort().join(",")
+          : null;
+        const knownSpeakerIds = knownAudioOutputIds
+          ? [...knownAudioOutputIds].sort().join(",")
+          : null;
+        if (knownMicIds === null || micIds !== knownMicIds || speakerIds !== knownSpeakerIds) {
+          await runDeviceRefresh();
+        }
+      } catch (err) {
+        // ignore - next tick will retry
+      }
+    }, 3000);
   }
 }
 
