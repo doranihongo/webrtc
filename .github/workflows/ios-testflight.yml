@@ -17,7 +17,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # @capacitor/cli 8.x yêu cầu Node >=22 - lts/* để luôn lấy
+          # bản LTS hiện hành, tránh phải tự bump tay khi Node 22 hết hạn.
+          node-version: "lts/*"
 
       - name: Install npm dependencies
         run: npm ci
