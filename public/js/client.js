@@ -27,7 +27,7 @@ window.isHideALLVideosActive = false;
 /**
  * Truncate a display name to at most 12 characters (spaces included),
  * appending "..." when cut. A name of exactly 12 chars or fewer (e.g.
- * "DORA NIHONGO") is shown in full. Display-only - never use this on a
+ * "DORA ONLINE") is shown in full. Display-only - never use this on a
  * name before storing/matching/sending it, only right before it's
  * rendered into the DOM.
  * @param {string} name
@@ -137,10 +137,10 @@ const images = {
   message: "../images/message.png",
   leave: "../images/leave-room.png",
   vaShare: "../images/va-share.png",
-  about: "../images/mirotalk-logo.gif",
+  about: "../images/dora-logo.png",
   feedback: "../images/feedback.png",
   forbidden: "../images/forbidden.png",
-  avatar: "../images/mirotalk-logo.png",
+  avatar: "../images/dora-logo.png",
   recording: "../images/recording.png",
   poster: "../images/loader.gif",
   geoLocation: "../images/geolocation.png",
@@ -1963,9 +1963,9 @@ async function whoAreYou() {
   window.localStorage.peer_name = await getUserName();
 
   // Tài khoản role "giaovien" (giáo viên) luôn mặc định tên "DORA
-  // NIHONGO" ở màn nhập tên này, mỗi lần tải lại trang - dù họ sửa/xoá
+  // ONLINE" ở màn nhập tên này, mỗi lần tải lại trang - dù họ sửa/xoá
   // đi để vào với tên khác lần đó, lần sau tải trang lại vẫn về đúng
-  // "DORA NIHONGO" (không đọc theo localStorage.peer_name đã lưu như
+  // "DORA ONLINE" (không đọc theo localStorage.peer_name đã lưu như
   // bình thường). Admin/hocvien giữ nguyên hành vi cũ (nhớ tên đã nhập
   // lần trước qua localStorage).
   const defaultPeerName =
@@ -7204,7 +7204,7 @@ function createVideoLoadingSpinner(wrap, videoEl) {
 
   const spinnerLogo = document.createElement("img");
   spinnerLogo.className = "spinner-logo";
-  spinnerLogo.src = "../images/logo.svg";
+  spinnerLogo.src = "../images/dora-logo.png";
   spinnerLogo.alt = "logo";
 
   loadingSpinner.appendChild(spinnerRing);

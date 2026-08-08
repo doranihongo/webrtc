@@ -1,7 +1,7 @@
 {
-  "name": "DORA NIHONGO",
-  "short_name": "DORA NIHONGO",
-  "description": "DORA NIHONGO - Gọi video, Trò chuyện & Chia sẻ màn hình.",
+  "name": "DORA ONLINE",
+  "short_name": "DORA ONLINE",
+  "description": "DORA ONLINE",
   "start_url": "/",
   "scope": "/",
   "id": "/",
@@ -11,12 +11,12 @@
   "theme_color": "#0b1a2e",
   "icons": [
     {
-      "src": "/images/favicon.png",
+      "src": "/images/dora-logo.png",
       "sizes": "32x32",
       "type": "image/png"
     },
     {
-      "src": "/images/mirotalk-logo.png",
+      "src": "/images/dora-logo.png",
       "sizes": "256x256",
       "type": "image/png",
       "purpose": "any"

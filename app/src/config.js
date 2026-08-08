@@ -294,9 +294,7 @@ module.exports = {
   // Stats / Analytics
   // ==========================================
   stats: {
-    enabled: process.env.STATS_ENABLED
-      ? getEnvBoolean(process.env.STATS_ENABLED)
-      : true,
+    enabled: getEnvBoolean(process.env.STATS_ENABLED), // default off - internal app, no external analytics
     src: process.env.STATS_SCR || "https://stats.mirotalk.com/script.js",
     id: process.env.STATS_ID || "c7615aa7-ceec-464a-baba-54cb605d7261",
   },
@@ -335,12 +333,12 @@ module.exports = {
     },
     og: {
       type: "app-webrtc",
-      siteName: "MiroTalk",
-      title: "Click the link to make a call.",
+      siteName: "DORA ONLINE",
+      title: "Nhấn vào link để vào phòng học.",
       description:
-        "MiroTalk calling provides real-time HD quality and latency simply not available with traditional technology.",
-      image: "https://p2p.mirotalk.com/images/preview.png",
-      url: "https://p2p.mirotalk.com",
+        "DORA ONLINE",
+      image: "https://doranihongo.com/images/dora-logo.png",
+      url: "https://doranihongo.com",
     },
     site: {
       shortcutIcon: "../images/logo.svg",
