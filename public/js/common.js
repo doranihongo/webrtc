@@ -106,7 +106,24 @@ window.__authReady = (async function authGuard() {
       .single();
 
     if (error || !profile || !ALLOWED_ROLES.includes(profile.role)) {
+      // Không lấy được profile (error, chưa chắc role sai) - phân biệt
+      // lỗi mạng/timeout thoáng qua với token thật sự đã chết (401/403).
+      // Chỉ lỗi mạng thì KHÔNG đăng xuất/xoá phiên - giữ nguyên để lần
+      // tải trang sau tự thử lại, tránh 1 lần mất mạng cũng bị bắt đăng
+      // nhập lại y như token hỏng thật. profile lấy được nhưng role sai
+      // thì chắc chắn là chặn thật, luôn xử lý như cũ.
+      if (!profile && error && !isAuthInvalidError(error)) {
+        const { error: userErr } = await supabaseClient.auth.getUser();
+        if (!isAuthInvalidError(userErr)) {
+          console.warn(
+            "[authGuard] Không lấy được profile, có thể do mạng - bỏ qua, thử lại ở lần tải sau:",
+            error.message,
+          );
+          return;
+        }
+      }
       await supabaseClient.auth.signOut();
+      hardResetSupabaseSession();
       redirectToLogin();
       return;
     }
@@ -135,6 +152,7 @@ window.__authReady = (async function authGuard() {
         tokenIssuedMs < changedMs - PASSWORD_CHANGE_GRACE_MS
       ) {
         await supabaseClient.auth.signOut();
+        hardResetSupabaseSession();
         redirectToLogin();
         return;
       }
@@ -146,6 +164,7 @@ window.__authReady = (async function authGuard() {
     const access = await checkAccountAccess(session.user.id, profile);
     if (!access.ok) {
       await supabaseClient.auth.signOut();
+      hardResetSupabaseSession();
       redirectToLogin();
       return;
     }
@@ -163,6 +182,13 @@ window.__authReady = (async function authGuard() {
     revealPage();
   } catch (err) {
     console.error("[authGuard] Lỗi kiểm tra đăng nhập:", err);
+    // Chỉ xoá cứng phiên khi CHẮC CHẮN token đã chết (401/403). Lỗi
+    // khác (mất mạng, timeout, Supabase lag) thì giữ nguyên phiên -
+    // không đăng xuất, để lần tải trang sau tự thử lại bình thường thay
+    // vì bắt đăng nhập lại chỉ vì 1 lần trục trặc mạng.
+    if (isAuthInvalidError(err)) {
+      hardResetSupabaseSession();
+    }
     redirectToLogin();
   }
 })();

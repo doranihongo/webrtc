@@ -31,6 +31,42 @@ const supabaseClient = window.supabase.createClient(
 );
 
 /**
+ * true nếu lỗi này nghĩa là Supabase đã XÁC NHẬN RÕ RÀNG token/session
+ * không còn hợp lệ (401/403 từ chính server) - KHÔNG phải lỗi mạng/
+ * timeout/server lag thoáng qua (những lỗi đó không có status này).
+ * Chỉ nên coi là "phiên chết thật" và xoá cứng khi hàm này trả true -
+ * dùng sai sẽ khiến 1 lần mất mạng cũng bị bắt đăng nhập lại y như token
+ * hỏng thật, dù phiên vẫn còn tốt.
+ */
+function isAuthInvalidError(err) {
+  return err?.status === 401 || err?.status === 403;
+}
+
+/**
+ * Xoá cứng phiên Supabase khỏi localStorage của trình duyệt (không qua
+ * mạng, không phụ thuộc signOut() gọi API có thành công hay không) - chỉ
+ * gọi khi đã chắc chắn qua isAuthInvalidError() là token thật sự chết.
+ * signOut() bình thường cũng tự dọn localStorage, nhưng nếu chính API
+ * logout cũng bị 403 (phiên đã chết từ trước khi kịp đăng xuất) thì
+ * không có gì đảm bảo local storage được dọn sạch - dẫn tới F5/đăng nhập
+ * lại trên CÙNG trình duyệt đó vẫn đọc phải đúng token hỏng, kẹt lại y
+ * hệt (chỉ cửa sổ ẩn danh - không có localStorage cũ - mới thoát được).
+ * Hàm này đảm bảo dọn sạch bất kể signOut() có thành công hay không.
+ *
+ * Không đụng tới "device_id" (khoá riêng, sống vĩnh viễn - xem
+ * getDeviceId() dưới) nên đăng nhập lại trên cùng trình duyệt vẫn được
+ * tính là cùng 1 thiết bị cũ, không tốn thêm suất max_devices.
+ */
+function hardResetSupabaseSession() {
+  try {
+    const projectRef = new URL(SUPABASE_URL).hostname.split(".")[0];
+    localStorage.removeItem(`sb-${projectRef}-auth-token`);
+  } catch (err) {
+    // best effort - không để lỗi ở đây chặn luồng redirect về login
+  }
+}
+
+/**
  * Đọc claim "iat" (lúc token được cấp, tính bằng mili-giây) từ access
  * token Supabase - không cần verify chữ ký, vì token đã được chính
  * Supabase xác thực rồi (session đến từ getSession()/

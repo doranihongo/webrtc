@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 /*--------------------------------------------------------------
 # Root settings
@@ -74,7 +74,7 @@
 
 * {
   outline: none;
-  font-family: "Montserrat";
+  font-family: "Inter";
 }
 
 /*--------------------------------------------------------------
@@ -269,11 +269,11 @@ body {
 }
 #loadingDiv h1 {
   font-size: 60px;
-  font-family: "Montserrat";
+  font-family: "Inter";
 }
 #loadingDiv pre {
   padding: 5px;
-  font-family: "Montserrat";
+  font-family: "Inter";
 }
 
 /* Custom CSS spinner */
@@ -2720,7 +2720,7 @@ button {
   border-radius: 8px;
   --rgb-background: var(--body-bg) !important;
   --color-border-over: var(--body-bg) !important;
-  --font-family: "Montserrat";
+  --font-family: "Inter";
 }
 
 .chatEmojiPicker {
@@ -2736,7 +2736,7 @@ button {
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
   --rgb-background: var(--body-bg) !important;
   --color-border-over: var(--body-bg) !important;
-  --font-family: "Montserrat";
+  --font-family: "Inter";
 }
 
 @media (max-width: 820px) {
@@ -2761,7 +2761,7 @@ button {
   transform: translate(-50%, -50%);
   --rgb-background: var(--body-bg);
   --color-border-over: var(--body-bg);
-  --font-family: "Montserrat";
+  --font-family: "Inter";
 }
 
 .room-emoji-header {
@@ -5712,7 +5712,7 @@ z-index
 .timer-text * {
   color: var(--ds-text-tertiary) !important;
   font-family:
-    "Montserrat",
+    "Inter",
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",

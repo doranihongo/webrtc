@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css?family=Fira+Sans:600|Lato:400&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 html {
   line-height: 1.15;
@@ -40,7 +40,7 @@ body {
   -webkit-font-smoothing: antialiased;
   color: var(--ds-text-muted);
   font-size: 1rem;
-  font-family: "Lato", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 400;
   touch-action: none;
 }
@@ -52,7 +52,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: "Fira Sans", sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 600;
   clear: both;
   /* Headings on this page only ever appear inside .cta-inner's dark-teal
@@ -89,7 +89,7 @@ a:not(.button):active {
 
 button,
 input {
-  font-family: sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 100%;
   line-height: 1.15;
   margin: 0;
