@@ -70,6 +70,22 @@ function redirectToLogin() {
     "/login?redirect=" + encodeURIComponent(returnTo);
 }
 
+// Trang (landing.html/client.html) tự gắn sẵn class "auth-pending" lên
+// <html> + CSS ẩn <body> bằng visibility:hidden, để tránh nội dung
+// hiện ra chớp nhoáng rồi mới bị đá về /login (authGuard chạy chậm hơn
+// 1 nhịp so với lúc HTML paint lần đầu vì phải chờ Supabase). Gỡ ở đây
+// khi xác thực xong. Không gỡ ở nhánh redirect - trang sắp điều hướng
+// đi rồi nên cứ để ẩn cho tới lúc đó.
+function revealPage() {
+  document.documentElement.classList.remove("auth-pending");
+}
+// Timeout dự phòng: nếu lỡ có lỗi JS bất ngờ khiến authGuard không bao
+// giờ chạy xong (và cũng không redirect được), không để trang kẹt màn
+// hình trắng mãi mãi.
+setTimeout(revealPage, 6000);
+// decodeJwtIssuedAtMs() dùng ở đây được định nghĩa chung trong
+// supabaseClient.js (load trước common.js ở cả landing.html/client.html).
+
 window.__authReady = (async function authGuard() {
   try {
     const {
@@ -83,11 +99,52 @@ window.__authReady = (async function authGuard() {
 
     const { data: profile, error } = await supabaseClient
       .from("profiles")
-      .select("role, display_name")
+      .select(
+        "role, display_name, is_first_login, password_changed_at, max_devices, expires_at",
+      )
       .eq("id", session.user.id)
       .single();
 
     if (error || !profile || !ALLOWED_ROLES.includes(profile.role)) {
+      await supabaseClient.auth.signOut();
+      redirectToLogin();
+      return;
+    }
+
+    // Chưa đổi mật khẩu lần đầu -> không cho vào thẳng landing/phòng
+    // bằng cách gõ URL, phải quay lại /login để hoàn tất màn đổi mật
+    // khẩu bắt buộc trước (xem localStorage fallback tương ứng trong
+    // login.js -> handleSignedIn).
+    const firstLoginDone =
+      localStorage.getItem(`first_login_done_${session.user.id}`) === "true";
+    if (profile.is_first_login && !firstLoginDone) {
+      redirectToLogin();
+      return;
+    }
+
+    // Phiên này được cấp TRƯỚC lần đổi mật khẩu gần nhất (đổi ở thiết
+    // bị khác) -> access token cũ vẫn còn "sống" nhưng không còn đại
+    // diện cho mật khẩu hiện tại - bắt đăng nhập lại. Chặn thật ở server
+    // (server.js) rồi, đây chỉ là lớp giao diện để không lọt qua chớp
+    // nhoáng trước khi socket bị server từ chối.
+    if (profile.password_changed_at) {
+      const tokenIssuedMs = decodeJwtIssuedAtMs(session.access_token);
+      const changedMs = new Date(profile.password_changed_at).getTime();
+      if (
+        tokenIssuedMs !== null &&
+        tokenIssuedMs < changedMs - PASSWORD_CHANGE_GRACE_MS
+      ) {
+        await supabaseClient.auth.signOut();
+        redirectToLogin();
+        return;
+      }
+    }
+
+    // Hạn sử dụng + giới hạn số thiết bị (xem checkAccountAccess trong
+    // supabaseClient.js) - chặn thật ở server (server.js) rồi, đây chỉ
+    // là lớp giao diện để không lọt qua chớp nhoáng.
+    const access = await checkAccountAccess(session.user.id, profile);
+    if (!access.ok) {
       await supabaseClient.auth.signOut();
       redirectToLogin();
       return;
@@ -100,7 +157,10 @@ window.__authReady = (async function authGuard() {
       email: session.user.email,
       role: profile.role,
       displayName: profile.display_name || session.user.email,
+      maxDevices: profile.max_devices,
+      expiresAt: profile.expires_at,
     };
+    revealPage();
   } catch (err) {
     console.error("[authGuard] Lỗi kiểm tra đăng nhập:", err);
     redirectToLogin();
@@ -178,12 +238,34 @@ function shuffleText(input, finalValue, duration = 600) {
 }
 
 // ---------------------------------------------------------
-// 1. Tự động điền tên phòng ngẫu nhiên khi mới vào trang
+// 1. Tự động điền tên phòng ngẫu nhiên khi mới vào trang - TRỪ học
+//    viên (role "hocvien"): học viên không tự tạo phòng được (server
+//    chặn ở handler "join" trong server.js nếu phòng chưa có giáo
+//    viên/admin), nên để trống bắt phải tự gõ/dán (Ctrl+V) đúng mã
+//    phòng giáo viên gửi - không có nút xáo trộn mã ngẫu nhiên nữa.
+//    Phải chờ authGuard (window.__authReady) xong mới biết role, nên
+//    khối này giờ chạy async thay vì đồng bộ ngay lúc tải trang.
 // ---------------------------------------------------------
 const roomName = document.getElementById("roomName");
-if (roomName) {
-  roomName.value = "";
-  shuffleText(roomName, getRandomRoomCode());
+const genRoomButton = document.getElementById("genRoomButton");
+
+async function setupRoomCodeInput() {
+  if (!roomName) return; // trang này không có ô nhập mã phòng (client.html)
+
+  if (window.__authReady) {
+    await window.__authReady;
+  }
+  const isHocvien = window.__authUser?.role === "hocvien";
+
+  if (isHocvien) {
+    roomName.value = "";
+    // Không có nút xáo trộn/dán gì cho học viên - chỉ tự gõ/dán thủ
+    // công (Ctrl+V) mã phòng giáo viên gửi.
+    if (genRoomButton) genRoomButton.style.display = "none";
+  } else {
+    shuffleText(roomName, getRandomRoomCode());
+    setupGenRoomButton();
+  }
 
   // Bấm Enter ở ô nhập tên phòng để truy cập
   roomName.onkeyup = (e) => {
@@ -193,6 +275,28 @@ if (roomName) {
     }
   };
 }
+
+/**
+ * Nút xáo trộn mã phòng ngẫu nhiên - hành vi gốc, dùng cho
+ * admin/giaovien (và khi Supabase chưa cấu hình, chưa có role).
+ */
+function setupGenRoomButton() {
+  if (!genRoomButton) return;
+  genRoomButton.onclick = (e) => {
+    e.preventDefault();
+    playSound("locked");
+    genRoomButton.classList.remove("spin");
+    void genRoomButton.offsetWidth; // Kích hoạt lại animation
+    genRoomButton.classList.add("spin");
+    shuffleText(roomName, getRandomRoomCode());
+  };
+  genRoomButton.addEventListener("animationend", () => {
+    genRoomButton.classList.remove("spin");
+  });
+}
+
+
+setupRoomCodeInput();
 
 // ---------------------------------------------------------
 // 2. Hiển thị phòng truy cập gần nhất (Last Room)
@@ -210,24 +314,11 @@ if (lastRoomContainer && lastRoom && lastRoomName) {
 }
 
 // ---------------------------------------------------------
-// 3. Xử lý các nút bấm (Tạo phòng & Tham gia)
+// 3. Xử lý nút "Tham gia" (nút tạo/xáo trộn mã phòng đã chuyển vào
+//    setupRoomCodeInput() ở trên, vì cần biết role trước - trừ khi là
+//    học viên, đổi thành nút "Dán")
 // ---------------------------------------------------------
-const genRoomButton = document.getElementById("genRoomButton");
 const joinRoomButton = document.getElementById("joinRoomButton");
-
-if (genRoomButton) {
-  genRoomButton.onclick = (e) => {
-    e.preventDefault();
-    playSound("switch");
-    genRoomButton.classList.remove("spin");
-    void genRoomButton.offsetWidth; // Kích hoạt lại animation
-    genRoomButton.classList.add("spin");
-    shuffleText(document.getElementById("roomName"), getRandomRoomCode());
-  };
-  genRoomButton.addEventListener("animationend", () => {
-    genRoomButton.classList.remove("spin");
-  });
-}
 
 if (joinRoomButton) {
   joinRoomButton.onclick = (e) => {

@@ -7,7 +7,18 @@
 
     <link rel="shortcut icon" href="../images/logo.svg" />
     <link rel="apple-touch-icon" href="../images/mirotalk-logo.png" />
-    <meta name="theme-color" content="#3b8ac4" />
+
+    <!-- PWA: cho phép "Thêm vào màn hình chính" ngay từ trang login -
+         giờ đây đây là trang đầu tiên người chưa đăng nhập gặp trên di
+         động, cần đủ thẻ giống landing.html thì trình duyệt mới coi là
+         cài được (apple-touch-icon ở trên phải là PNG, không phải SVG -
+         iOS không render SVG làm touch icon đáng tin cậy). -->
+    <link rel="manifest" href="../manifest.json" />
+    <meta name="theme-color" content="#0b1a2e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="DORA NIHONGO" />
 
     <!-- StyleSheet - dùng chung token màu với các trang khác, còn lại
          là CSS riêng của trang login, không đụng tới landing.css/client.css -->
@@ -18,76 +29,52 @@
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body>
-    <main class="login-card">
-      <div class="login-card-inner">
-        <img class="login-logo" src="../images/logo.svg" alt="Logo" />
+    <!-- Hiện khi đang kiểm tra phiên đăng nhập cũ lúc tải trang -->
+    <div id="loginLoading" class="login-loading">
+      Đang kiểm tra phiên đăng nhập...
+    </div>
 
-        <!-- Hiện khi đang kiểm tra phiên đăng nhập cũ lúc tải trang -->
-        <div id="loginLoading" class="login-loading">
-          Đang kiểm tra phiên đăng nhập...
+    <main id="authCard" class="auth-card hidden state-login">
+      <div class="auth-curve" aria-hidden="true"></div>
+
+      <img
+        class="auth-logo auth-logo-left"
+        src="https://i.ibb.co/GvC0pFmy/Logo-tr-ng.png"
+        alt="DORA"
+      />
+      <img
+        class="auth-logo auth-logo-right"
+        src="https://i.ibb.co/kgWx9gtZ/Logo-Dora.png"
+        alt="DORA"
+      />
+
+      <!-- Nửa trái -->
+      <div class="auth-slot auth-slot-left">
+        <div class="auth-message" data-panel="login">
+          <h2>Xin chào</h2>
+          <p>Đăng nhập để vào phòng học trực tuyến DORA NIHONGO.</p>
         </div>
 
-        <!-- Form đăng nhập -->
-        <div id="loginView" class="hidden">
-          <div class="login-heading">
-            <h1>Đăng nhập</h1>
-            <p>Phòng học trực tuyến</p>
-          </div>
-
-          <div id="loginError" class="login-error" role="alert"></div>
-
-          <form id="loginForm" novalidate>
-            <div class="login-field">
-              <label for="loginUsername">Tài khoản</label>
-              <input
-                id="loginUsername"
-                type="text"
-                autocomplete="username"
-                placeholder="Nhập tài khoản"
-                required
-              />
-            </div>
-
-            <div class="login-field">
-              <label for="loginPassword">Mật khẩu</label>
-              <input
-                id="loginPassword"
-                type="password"
-                autocomplete="current-password"
-                placeholder="••••••"
-                required
-              />
-            </div>
-
-            <button id="loginSubmitBtn" type="submit" class="login-submit">
-              ĐĂNG NHẬP
-            </button>
-          </form>
-        </div>
-
-        <!-- Bắt buộc đổi mật khẩu - chỉ hiện khi is_first_login = true -->
-        <div id="changePasswordView" class="hidden">
-          <div class="login-heading">
-            <h1>Đổi mật khẩu</h1>
-            <p>Lần đầu đăng nhập, vui lòng đặt mật khẩu mới để tiếp tục</p>
-          </div>
-
-          <div id="changePasswordError" class="login-error" role="alert"></div>
+        <div class="auth-form" data-panel="changepw">
+          <h1>Đổi mật khẩu</h1>
 
           <form id="changePasswordForm" novalidate>
-            <div class="login-field">
-              <label for="newPassword">Mật khẩu mới</label>
+            <div class="auth-field auth-field-password">
               <input
                 id="newPassword"
                 type="password"
                 autocomplete="new-password"
-                placeholder="Nhập mật khẩu mới"
+                placeholder="Mật khẩu mới"
                 required
               />
+              <button
+                type="button"
+                class="auth-toggle-password"
+                data-target="newPassword"
+                aria-label="Hiện mật khẩu"
+              ></button>
             </div>
-
-            <div class="login-field">
-              <label for="confirmPassword">Nhập lại mật khẩu mới</label>
+            <div class="auth-field auth-field-password">
               <input
                 id="confirmPassword"
                 type="password"
@@ -95,21 +82,82 @@
                 placeholder="Nhập lại mật khẩu mới"
                 required
               />
+              <button
+                type="button"
+                class="auth-toggle-password"
+                data-target="confirmPassword"
+                aria-label="Hiện mật khẩu"
+              ></button>
             </div>
-
             <button
               id="changePasswordSubmitBtn"
               type="submit"
-              class="login-submit"
+              class="auth-submit"
             >
               XÁC NHẬN
             </button>
           </form>
+
+          <div id="changePasswordError" class="auth-error" role="alert"></div>
+        </div>
+      </div>
+
+      <!-- Nửa phải -->
+      <div class="auth-slot auth-slot-right">
+        <div class="auth-form" data-panel="login">
+          <h1>Đăng nhập</h1>
+
+          <form id="loginForm" novalidate>
+            <div class="auth-field">
+              <input
+                id="loginUsername"
+                type="text"
+                autocomplete="off"
+                placeholder="Tài khoản"
+                required
+              />
+            </div>
+            <div class="auth-field auth-field-password">
+              <input
+                id="loginPassword"
+                type="password"
+                autocomplete="off"
+                placeholder="Mật khẩu"
+                required
+              />
+              <button
+                type="button"
+                class="auth-toggle-password"
+                data-target="loginPassword"
+                aria-label="Hiện mật khẩu"
+              ></button>
+            </div>
+            <button id="loginSubmitBtn" type="submit" class="auth-submit">
+              ĐĂNG NHẬP
+            </button>
+          </form>
+
+          <div id="loginError" class="auth-error" role="alert"></div>
+        </div>
+
+        <div class="auth-message" data-panel="changepw">
+          <h2>Gần xong rồi!</h2>
+          <p>Đổi mật khẩu là vào được luôn!</p>
         </div>
       </div>
     </main>
 
     <script defer src="../js/supabaseClient.js"></script>
     <script defer src="../js/login.js"></script>
+    <script>
+      // Đăng ký service worker để trang này cũng "cài được" (Add to
+      // Home Screen) trên di động - không load chung common.js vì
+      // authGuard trong đó sẽ redirect ngay trên chính trang login.
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/sw.js").catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>

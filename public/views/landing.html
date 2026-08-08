@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="no-js">
+<html lang="en" class="no-js auth-pending">
   <head>
     <!-- Title and Icon -->
     <title id="landingTitle">
@@ -17,7 +17,7 @@
          bookmark. apple-touch-icon above must be a PNG, not the SVG it
          was before - iOS doesn't reliably render SVG touch icons. -->
     <link rel="manifest" href="../manifest.json" />
-    <meta name="theme-color" content="#3b8ac4" />
+    <meta name="theme-color" content="#0b1a2e" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
@@ -27,6 +27,17 @@
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Ẩn trang cho tới khi common.js (authGuard) xác nhận đã đăng
+         nhập - tránh trang chủ hiện ra chớp nhoáng rồi mới bị đá về
+         /login (authGuard chạy chậm hơn 1 nhịp vì phải chờ Supabase).
+         Gỡ bởi common.js khi xác thực xong; common.js còn có timeout
+         dự phòng để không kẹt màn hình trắng nếu lỡ có lỗi JS. -->
+    <style>
+      html.auth-pending body {
+        visibility: hidden;
+      }
+    </style>
 
     <meta
       name="description"
@@ -75,10 +86,9 @@
         <div class="top-bar-brand">
           <img
             class="top-bar-logo"
-            src="https://i.ibb.co/kgWx9gtZ/Logo-Dora.png"
+            src="https://i.ibb.co/GvC0pFmy/Logo-tr-ng.png"
             alt="DORA NIHONGO"
           />
-          <span class="top-bar-title">DORA NIHONGO</span>
         </div>
         <button id="accountBtn" class="account-btn" aria-label="Tài khoản">
           <img id="accountAvatar" class="account-avatar" alt="Avatar" />
@@ -134,7 +144,6 @@
       </main>
 
       <footer class="bottom-bar">
-        <span class="bottom-bar-copyright">© 2026 DORA VIETNAM</span>
         <a
           class="bottom-bar-github"
           href="https://github.com/miroslavpejic85/mirotalk"
@@ -156,36 +165,59 @@
       </footer>
     </div>
 
-    <!-- Bảng thông tin tài khoản - ẩn mặc định, mở khi bấm accountBtn -->
+    <!-- Bảng thông tin tài khoản - ẩn mặc định, mở khi bấm accountBtn.
+         Port từ UserProfileSidebar.tsx bên web kanji (cùng bố cục, cỡ
+         chữ, icon, hiệu ứng trượt vào + popup "Thành công!"), chỉ đổi
+         màu theo Ocean theme. -->
     <div id="accountPanelOverlay" class="account-panel-overlay hidden">
       <div id="accountPanel" class="account-panel">
         <div class="account-panel-header">
-          <h2>Tài khoản của tôi</h2>
+          <h2><i class="fa-solid fa-user"></i> Tài khoản của tôi</h2>
           <button
             id="accountPanelClose"
             class="account-panel-close"
             aria-label="Đóng"
           >
-            ✕
+            <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
 
         <div class="account-panel-body">
+          <!-- Popup "Thành công!" - hiện đè lên, tự ẩn sau 2.5s, giống
+               hệt hiệu ứng showSuccessPopup bên kanji -->
+          <div id="accountSuccessPopup" class="account-success-popup hidden">
+            <div class="account-success-card">
+              <div class="account-success-icon">
+                <i class="fa-solid fa-circle-check"></i>
+              </div>
+              <h3>Thành công!</h3>
+              <p>Mật khẩu của bạn đã được thay đổi.</p>
+            </div>
+          </div>
+
           <div id="accountInfoView">
             <div class="account-field">
-              <label>Tên hiển thị</label>
+              <label>TÀI KHOẢN</label>
               <div id="accountDisplayName" class="account-field-value">-</div>
             </div>
             <div class="account-field">
               <label>Vai trò</label>
               <div id="accountRole" class="account-field-value">-</div>
             </div>
+            <div class="account-field">
+              <label>Số lượng thiết bị</label>
+              <div id="accountDeviceCount" class="account-field-value">-</div>
+            </div>
+            <div class="account-field">
+              <label>Hạn sử dụng</label>
+              <div id="accountExpiresAt" class="account-field-value">-</div>
+            </div>
             <button
               id="accountChangePasswordBtn"
               type="button"
               class="account-secondary-btn"
             >
-              Đổi mật khẩu
+              <i class="fa-solid fa-key"></i> Đổi mật khẩu
             </button>
           </div>
 
@@ -204,17 +236,62 @@
             <form id="accountChangePasswordForm" novalidate>
               <div class="account-field">
                 <label for="accountOldPassword">Mật khẩu hiện tại</label>
-                <input id="accountOldPassword" type="password" required />
+                <div class="account-field-input-wrap">
+                  <input
+                    id="accountOldPassword"
+                    type="password"
+                    placeholder=" "
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="account-toggle-password"
+                    data-target="accountOldPassword"
+                    aria-label="Hiện mật khẩu"
+                  >
+                    <i class="fa-solid fa-eye"></i>
+                  </button>
+                </div>
               </div>
               <div class="account-field">
                 <label for="accountNewPassword">Mật khẩu mới</label>
-                <input id="accountNewPassword" type="password" required />
+                <div class="account-field-input-wrap">
+                  <input
+                    id="accountNewPassword"
+                    type="password"
+                    placeholder=" "
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="account-toggle-password"
+                    data-target="accountNewPassword"
+                    aria-label="Hiện mật khẩu"
+                  >
+                    <i class="fa-solid fa-eye"></i>
+                  </button>
+                </div>
               </div>
               <div class="account-field">
                 <label for="accountConfirmPassword"
                   >Nhập lại mật khẩu mới</label
                 >
-                <input id="accountConfirmPassword" type="password" required />
+                <div class="account-field-input-wrap">
+                  <input
+                    id="accountConfirmPassword"
+                    type="password"
+                    placeholder=" "
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="account-toggle-password"
+                    data-target="accountConfirmPassword"
+                    aria-label="Hiện mật khẩu"
+                  >
+                    <i class="fa-solid fa-eye"></i>
+                  </button>
+                </div>
               </div>
               <button
                 id="accountChangePasswordSubmit"
@@ -229,7 +306,7 @@
 
         <div class="account-panel-footer">
           <button id="accountLogoutBtn" type="button" class="account-logout-btn">
-            Đăng xuất
+            <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
           </button>
         </div>
       </div>

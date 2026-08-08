@@ -1,39 +1,18 @@
 "use strict";
 
 // ---------------------------------------------------------
-// Icon tài khoản + bảng thông tin ở landing page. Chức năng giống
-// UserProfileSidebar.tsx bên web "xóa mù kanji" (xem tên hiển thị,
-// vai trò, đổi mật khẩu, đăng xuất) - chỉ khác giao diện, theo đúng
-// Ocean theme của web này.
+// Icon tài khoản + bảng thông tin ở landing page. Port gần như y hệt
+// UserProfileSidebar.tsx bên web "xóa mù kanji" (tên hiển thị, vai
+// trò, số lượng thiết bị, hạn sử dụng, đổi mật khẩu, đăng xuất, popup
+// "Thành công!") - chỉ khác màu sắc, theo đúng Ocean theme của web
+// này. Xem topbar.css cho phần CSS (hiệu ứng trượt vào, popup...).
 // ---------------------------------------------------------
 
-// Cùng bộ style DiceBear + cùng key localStorage "P2P_SETTINGS" mà
-// client.js dùng trong phòng họp - để avatar hiển thị y hệt nhau ở cả
-// landing lẫn trong phòng, không phải 2 avatar khác nhau.
-const ACCOUNT_AVATAR_STYLES = ["adventurer-neutral", "thumbs"];
-
-function getOrCreateAccountAvatarUrl() {
-  let settings = {};
-  try {
-    settings = JSON.parse(localStorage.getItem("P2P_SETTINGS")) || {};
-  } catch (err) {
-    settings = {};
-  }
-
-  if (settings.peer_avatar) return settings.peer_avatar;
-
-  const seed = Math.random().toString(36).substring(2, 10);
-  const style =
-    ACCOUNT_AVATAR_STYLES[
-      Math.floor(Math.random() * ACCOUNT_AVATAR_STYLES.length)
-    ];
-  const url = `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}`;
-
-  settings.peer_avatar = url;
-  settings.peer_avatar_auto = true;
-  localStorage.setItem("P2P_SETTINGS", JSON.stringify(settings));
-  return url;
-}
+// Avatar icon tài khoản ở landing - CỐ ĐỊNH, luôn là ảnh này, không
+// ngẫu nhiên và không đụng tới localStorage "P2P_SETTINGS.peer_avatar"
+// (đó là avatar RIÊNG dùng trong phòng họp, do client.js tự quản lý,
+// vẫn ngẫu nhiên như cũ - 2 avatar này độc lập với nhau).
+const ACCOUNT_AVATAR_URL = "https://api.dicebear.com/9.x/thumbs/svg?seed=ghm0gmgl";
 
 const ROLE_LABELS = {
   admin: "Quản trị viên",
@@ -47,6 +26,9 @@ const accountPanelOverlay = document.getElementById("accountPanelOverlay");
 const accountPanelClose = document.getElementById("accountPanelClose");
 const accountDisplayName = document.getElementById("accountDisplayName");
 const accountRole = document.getElementById("accountRole");
+const accountDeviceCount = document.getElementById("accountDeviceCount");
+const accountExpiresAt = document.getElementById("accountExpiresAt");
+const accountSuccessPopup = document.getElementById("accountSuccessPopup");
 
 const accountInfoView = document.getElementById("accountInfoView");
 const accountChangePasswordView = document.getElementById(
@@ -75,8 +57,23 @@ const accountConfirmPassword = document.getElementById(
 const accountLogoutBtn = document.getElementById("accountLogoutBtn");
 
 if (accountAvatar) {
-  accountAvatar.src = getOrCreateAccountAvatarUrl();
+  accountAvatar.src = ACCOUNT_AVATAR_URL;
 }
+
+// Nút hiện/ẩn mật khẩu (icon con mắt, màu trắng - xem topbar.css) ở
+// form đổi mật khẩu trong bảng tài khoản.
+document.querySelectorAll(".account-toggle-password").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const target = document.getElementById(btn.dataset.target);
+    const icon = btn.querySelector("i");
+    if (!target || !icon) return;
+    const isVisible = target.type === "text";
+    target.type = isVisible ? "password" : "text";
+    icon.classList.toggle("fa-eye", isVisible);
+    icon.classList.toggle("fa-eye-slash", !isVisible);
+    btn.setAttribute("aria-label", isVisible ? "Hiện mật khẩu" : "Ẩn mật khẩu");
+  });
+});
 
 function openAccountPanel() {
   accountPanelOverlay.classList.remove("hidden");
@@ -174,8 +171,33 @@ if (accountChangePasswordForm) {
       });
       if (updateError) throw updateError;
 
-      showAccountInfoView();
-      closeAccountPanel();
+      // Đánh dấu mốc đổi mật khẩu - giống hệt luồng bắt buộc lần đầu
+      // (login.js), để các phiên cũ ở thiết bị khác bị thu hồi (xem
+      // authGuard/server.js). Không có bước này thì đổi mật khẩu qua
+      // đường tự nguyện này sẽ không kích hoạt bảo vệ đó.
+      const { error: markChangedError } = await supabaseClient
+        .from("profiles")
+        .update({ password_changed_at: new Date().toISOString() })
+        .eq("id", window.__authUser.id);
+      if (markChangedError) {
+        console.warn(
+          "Không cập nhật được password_changed_at (có thể do RLS):",
+          markChangedError.message,
+        );
+      }
+
+      // Làm mới token của chính thiết bị này - nếu không, lần authGuard
+      // chạy tiếp theo sẽ tưởng nhầm token hiện tại (cấp từ trước lúc
+      // đổi) là phiên cũ rồi tự đăng xuất, y hệt bug đã gặp ở login.js.
+      await supabaseClient.auth.refreshSession();
+
+      // Hiện popup "Thành công!" 2.5s rồi mới quay lại màn thông tin,
+      // giống hệt showSuccessPopup bên UserProfileSidebar (kanji).
+      accountSuccessPopup.classList.remove("hidden");
+      setTimeout(() => {
+        accountSuccessPopup.classList.add("hidden");
+        showAccountInfoView();
+      }, 2500);
     } catch (err) {
       const msg = err.message || "";
       if (msg.toLowerCase().includes("different from the old password")) {
@@ -199,7 +221,7 @@ if (accountLogoutBtn) {
 
 // Điền thông tin tài khoản ngay khi authGuard (common.js) xác thực xong
 if (window.__authReady) {
-  window.__authReady.then(() => {
+  window.__authReady.then(async () => {
     if (!window.__authUser) return; // authGuard đang redirect về login
     if (accountDisplayName) {
       accountDisplayName.textContent = window.__authUser.displayName;
@@ -207,6 +229,27 @@ if (window.__authReady) {
     if (accountRole) {
       accountRole.textContent =
         ROLE_LABELS[window.__authUser.role] || window.__authUser.role;
+    }
+    if (accountDeviceCount) {
+      const maxDevices = window.__authUser.maxDevices || 1;
+      // admin miễn giới hạn thiết bị (xem checkAccountAccess trong
+      // supabaseClient.js) - không có dữ liệu tracking thật cho role
+      // này, hiện "1/tối đa" như trước.
+      if (window.__authUser.role === "admin") {
+        accountDeviceCount.textContent = `1/${maxDevices}`;
+      } else {
+        const { data: devices, error } = await supabaseClient
+          .from("user_devices")
+          .select("id")
+          .eq("user_id", window.__authUser.id);
+        const activeCount = error ? 1 : devices?.length || 1;
+        accountDeviceCount.textContent = `${activeCount}/${maxDevices}`;
+      }
+    }
+    if (accountExpiresAt) {
+      accountExpiresAt.textContent = window.__authUser.expiresAt
+        ? new Date(window.__authUser.expiresAt).toLocaleDateString("vi-VN")
+        : "Vĩnh viễn";
     }
   });
 }

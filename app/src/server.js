@@ -191,7 +191,11 @@ if (supabaseCfg.url && supabaseCfg.anonKey) {
       const { data: profiles } = await axios.get(
         `${supabaseCfg.url}/rest/v1/profiles`,
         {
-          params: { id: `eq.${user.id}`, select: "role" },
+          params: {
+            id: `eq.${user.id}`,
+            select:
+              "role,is_first_login,password_changed_at,max_devices,expires_at",
+          },
           headers: {
             Authorization: `Bearer ${token}`,
             apikey: supabaseCfg.anonKey,
@@ -202,6 +206,126 @@ if (supabaseCfg.url && supabaseCfg.anonKey) {
       const role = profiles?.[0]?.role;
       if (!role || !supabaseCfg.allowedRoles.includes(role)) {
         return next(new Error("unauthorized"));
+      }
+      // Chưa hoàn tất đổi mật khẩu lần đầu -> chặn luôn ở lớp bảo mật
+      // thật (không chỉ dựa vào authGuard phía client, có thể bị bỏ
+      // qua). is_first_login=false đã được set khi đổi mật khẩu xong
+      // (public/js/login.js) - nếu lệch do RLS chặn ghi, client vẫn có
+      // fallback localStorage riêng ở lớp giao diện, nhưng ở đây ta chỉ
+      // tin dữ liệu thật trong DB.
+      if (profiles?.[0]?.is_first_login) {
+        return next(new Error("unauthorized"));
+      }
+
+      // Phiên (token) được cấp TRƯỚC lần đổi mật khẩu gần nhất -> từ
+      // chối, bắt đăng nhập lại bằng mật khẩu mới. Không có bước này
+      // thì: máy A đăng nhập bằng mật khẩu tạm -> đứng ở màn đổi mật
+      // khẩu không làm gì -> máy B đăng nhập CÙNG tài khoản và đổi mật
+      // khẩu xong -> máy A vẫn còn access token cũ (Supabase không tự
+      // thu hồi token khác khi đổi mật khẩu) -> is_first_login lúc này
+      // đã false (đổi ở máy B) nên máy A lọt vào thẳng, dù chưa hề tự
+      // đổi mật khẩu trên chính nó. token.iat (giây) so với
+      // password_changed_at (mốc do login.js set lúc đổi mật khẩu
+      // thành công) - null thì bỏ qua kiểm tra này (tài khoản cũ chưa
+      // từng qua luồng đổi mật khẩu, không có gì để so).
+      // Khoảng đệm 10s: JWT iat chỉ chính xác tới giây còn
+      // password_changed_at chính xác tới mili-giây, và client tự
+      // refreshSession() ngay sau khi đổi mật khẩu nên token mới hay
+      // rơi vào ĐÚNG CÙNG 1 GIÂY với password_changed_at rồi bị làm
+      // tròn xuống thành "sớm hơn" - không có đệm này thì chính người
+      // vừa đổi mật khẩu xong cũng bị từ chối.
+      const passwordChangedAt = profiles?.[0]?.password_changed_at;
+      if (passwordChangedAt) {
+        const decoded = jwt.decode(token);
+        const tokenIssuedMs = decoded?.iat ? decoded.iat * 1000 : 0;
+        const PASSWORD_CHANGE_GRACE_MS = 10000;
+        if (
+          tokenIssuedMs <
+          new Date(passwordChangedAt).getTime() - PASSWORD_CHANGE_GRACE_MS
+        ) {
+          return next(new Error("unauthorized"));
+        }
+      }
+
+      // Hạn sử dụng + giới hạn số thiết bị - port từ checkAccountAccess
+      // trong public/js/supabaseClient.js sang Node cho lớp bảo mật
+      // thật (client-side chỉ là UX, có thể bị bỏ qua). Hết hạn -> chỉ
+      // chặn, KHÔNG tự xoá tài khoản (xoá cần service_role key, cố
+      // tình không thêm vào server - xem giải thích trong
+      // checkAccountAccess). Thiết bị đã đăng nhập từ trước luôn được
+      // dùng tiếp bình thường, chỉ chặn thiết bị MỚI khi đã đầy chỗ.
+      const profileRow = profiles?.[0] || {};
+      if (
+        profileRow.expires_at &&
+        new Date(profileRow.expires_at) < new Date()
+      ) {
+        return next(new Error("unauthorized"));
+      }
+
+      if (!supabaseCfg.deviceLimitExemptRoles.includes(role)) {
+        try {
+          const maxDevices = profileRow.max_devices;
+          if (maxDevices) {
+            const deviceId = socket.handshake.auth?.deviceId;
+            if (!deviceId) {
+              return next(new Error("unauthorized"));
+            }
+            const { data: devices } = await axios.get(
+              `${supabaseCfg.url}/rest/v1/user_devices`,
+              {
+                params: { user_id: `eq.${user.id}`, select: "id,device_id" },
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  apikey: supabaseCfg.anonKey,
+                },
+                timeout: 8000,
+              },
+            );
+            const existing = devices?.find((d) => d.device_id === deviceId);
+            const restHeaders = {
+              Authorization: `Bearer ${token}`,
+              apikey: supabaseCfg.anonKey,
+            };
+            if (existing) {
+              // Không chặn connect để chờ ghi xong - chỉ để cập nhật
+              // "lần cuối hoạt động", không phải điều kiện cho vào.
+              axios
+                .patch(
+                  `${supabaseCfg.url}/rest/v1/user_devices`,
+                  { last_active: new Date().toISOString() },
+                  { params: { id: `eq.${existing.id}` }, headers: restHeaders },
+                )
+                .catch(() => {});
+            } else if ((devices?.length || 0) >= maxDevices) {
+              return next(new Error("unauthorized"));
+            } else {
+              axios
+                .post(
+                  `${supabaseCfg.url}/rest/v1/user_devices`,
+                  {
+                    user_id: user.id,
+                    device_id: deviceId,
+                    last_active: new Date().toISOString(),
+                  },
+                  {
+                    params: { on_conflict: "user_id,device_id" },
+                    headers: {
+                      ...restHeaders,
+                      Prefer: "resolution=merge-duplicates",
+                    },
+                  },
+                )
+                .catch(() => {});
+            }
+          }
+        } catch (deviceErr) {
+          // Lỗi mạng/RLS tạm thời khi đọc user_devices - không chặn
+          // nhầm người dùng thật vì 1 lỗi đọc dữ liệu phụ, chỉ log lại.
+          log.warn(
+            "[Auth] Không kiểm tra được giới hạn thiết bị",
+            deviceErr.message,
+          );
+        }
       }
 
       // Dùng ở phần phân quyền trong phòng (ai tự động là "presenter" -
@@ -457,11 +581,82 @@ const presenters = {}; // collect presenters grp by channels
 // which is broadcast wholesale via "addPeer".
 const peerUUIDs = {};
 
+// Học viên không được tự "tạo phòng" (vào phòng trống) - chỉ vào được
+// phòng đang có giáo viên/admin, hoặc phòng giáo viên/admin vừa rời đi
+// / mất kết nối chưa quá 15 phút (roomTeacherGraceEnter/Evict bên
+// dưới, trong handler "join"). roomLastTeacherSeenAt: channel -> lúc
+// giáo viên/admin cuối cùng rời phòng (ms). roomEvictionTimers: channel
+// -> hẹn giờ tự đuổi học viên còn sót lại nếu hết 15 phút mà giáo viên
+// chưa quay lại - huỷ hẹn giờ cũ mỗi khi có giáo viên/admin vào lại
+// trước khi nó kịp chạy.
+const roomLastTeacherSeenAt = {};
+const roomEvictionTimers = {};
+const HOCVIEN_ROOM_GRACE_MS = 15 * 60 * 1000;
+
+// Học viên bị chặn (phòng chưa có giáo viên/admin) không bị ngắt kết
+// nối - đứng chờ ở màn hình "vui lòng đợi", vẫn giữ socket sống. channel
+// -> { [socket.id]: socket }. Ngay khi có giáo viên/admin vào phòng đó,
+// server báo cho từng socket đang chờ để client tự thử "join" lại (xem
+// io.use "join" - phát hiện waiting qua socket.waitingChannel để dọn
+// dẹp đúng chỗ lúc disconnect).
+const roomWaitingSockets = {};
+
 const roomMetaKeys = new Set(["lock", "password"]);
 
 function getPeerCount(roomId) {
   if (!peers[roomId]) return 0;
   return Object.keys(peers[roomId]).filter((k) => !roomMetaKeys.has(k)).length;
+}
+
+/**
+ * Huỷ hẹn giờ tự đuổi học viên đang chờ (nếu có) cho 1 phòng - gọi khi
+ * có giáo viên/admin vào lại trước khi hết 15 phút, hoặc khi phòng đã
+ * trống hẳn (không còn gì để đuổi).
+ * @param {string} channel
+ */
+function clearTeacherGraceState(channel) {
+  if (roomEvictionTimers[channel]) {
+    clearTimeout(roomEvictionTimers[channel]);
+    delete roomEvictionTimers[channel];
+  }
+  delete roomLastTeacherSeenAt[channel];
+}
+
+/**
+ * Hẹn giờ 15 phút - nếu hết giờ mà phòng vẫn chưa có giáo viên/admin
+ * nào quay lại, tự đuổi hết học viên còn sót lại trong phòng. Chỉ emit
+ * sự kiện báo cho client - client tự disconnect() chính nó rồi mới
+ * chuyển hướng (y hệt cách "kickOut"/"duplicateSession" đang làm ở
+ * public/js/client.js), không tự gọi removePeerFrom ở đây vì hàm đó là
+ * closure riêng theo từng kết nối, không gọi được từ setTimeout module-
+ * level này - handler "disconnect" client tự kích hoạt sẽ lo phần đó.
+ * @param {string} channel
+ */
+function scheduleTeacherGraceEviction(channel) {
+  if (roomEvictionTimers[channel]) {
+    clearTimeout(roomEvictionTimers[channel]);
+  }
+  roomEvictionTimers[channel] = setTimeout(() => {
+    delete roomEvictionTimers[channel];
+    // Luôn dọn mốc thời gian khi hết giờ, DÙ phòng lúc này trống hẳn
+    // hay không - nếu không xoá ở đây, phòng trống hẳn trước khi hết
+    // giờ (channels[channel] đã bị xoá, return sớm bên dưới) sẽ khiến
+    // roomLastTeacherSeenAt nằm lại trong bộ nhớ mãi mãi.
+    delete roomLastTeacherSeenAt[channel];
+
+    // Giáo viên/admin đã quay lại trước khi hết giờ - không đuổi ai
+    // (clearTeacherGraceState() lẽ ra đã huỷ timer này rồi, nhưng
+    // phòng hờ trường hợp race).
+    if (Object.keys(presenters[channel] || {}).length > 0) return;
+
+    const roomSockets = channels[channel];
+    if (!roomSockets) return; // phòng đang trống, không có ai để đuổi
+
+    for (const peerSocket of Object.values(roomSockets)) {
+      if (!peerSocket || peerSocket.supabaseRole !== "hocvien") continue;
+      peerSocket.emit("teacherGraceExpired");
+    }
+  }, HOCVIEN_ROOM_GRACE_MS);
 }
 
 app.set("trust proxy", trustProxy); // Enables trust for proxy headers (e.g., X-Forwarded-For) based on the trustProxy setting
@@ -1300,6 +1495,13 @@ io.sockets.on("connect", async (socket) => {
     for (let channel in socket.channels) {
       await removePeerFrom(channel, socket, reason);
     }
+    // Học viên đang đứng chờ (chưa vào phòng thật) đóng tab/mất mạng -
+    // dọn khỏi danh sách chờ, không phải channel nào cũng nằm trong
+    // socket.channels vì họ chưa từng "vào" được phòng.
+    if (socket.waitingChannel) {
+      delete roomWaitingSockets[socket.waitingChannel]?.[socket.id];
+      delete socket.waitingChannel;
+    }
     log.debug("[" + socket.id + "] disconnected", { reason: reason });
     delete sockets[socket.id];
   });
@@ -1457,6 +1659,52 @@ io.sockets.on("connect", async (socket) => {
       return socket.emit("roomIsLocked");
     }
 
+    // Phòng đã đủ người - chặn NGAY tại đây, TRƯỚC khi đưa vào
+    // peers/channels và trước khi báo "addPeer" cho ai khác trong
+    // phòng. Trước đây việc này chỉ bị phát hiện Ở PHÍA CLIENT
+    // (handleServerInfo), sau khi server đã cho vào hẳn và đã báo cho
+    // những người có sẵn trong phòng rằng có người mới tới - rồi client
+    // tự ngắt kết nối ngay sau đó, khiến những người có sẵn lại thấy
+    // thông báo người đó "rời phòng" dù họ chưa từng thực sự ở trong
+    // phòng - rất vô lý. Chặn ở đây thì không ai khác biết gì về lượt
+    // vào hụt này cả.
+    if (getPeerCount(channel) >= hostCfg.maxRoomParticipants) {
+      log.debug("[" + socket.id + "] [Warning] Room Is Busy", channel);
+      return socket.emit("roomIsBusy");
+    }
+
+    // Học viên không được tự "tạo phòng" (vào phòng chưa từng có ai) -
+    // chỉ vào được phòng đang có giáo viên/admin, hoặc còn trong 15
+    // phút ân hạn kể từ lúc giáo viên/admin cuối cùng rời phòng (xem
+    // roomLastTeacherSeenAt/scheduleTeacherGraceEviction). Chỉ áp dụng
+    // khi đăng nhập bắt buộc đang bật - không có khái niệm role nếu
+    // Supabase chưa cấu hình.
+    if (
+      supabaseCfg.url &&
+      supabaseCfg.anonKey &&
+      socket.supabaseRole === "hocvien"
+    ) {
+      const hasTeacherPresent =
+        Object.keys(presenters[channel]).length > 0;
+      const lastTeacherSeenAt = roomLastTeacherSeenAt[channel];
+      const inGracePeriod =
+        lastTeacherSeenAt &&
+        Date.now() - lastTeacherSeenAt <= HOCVIEN_ROOM_GRACE_MS;
+      if (!hasTeacherPresent && !inGracePeriod) {
+        log.debug(
+          "[" + socket.id + "] [Warning] hocvien waiting - no teacher/admin in room",
+          channel,
+        );
+        // KHÔNG disconnect - giữ socket sống, đứng chờ. Ngay khi có
+        // giáo viên/admin vào phòng này, server sẽ báo cho client tự
+        // gửi lại "join" (xem chỗ gán presenters[channel] bên dưới).
+        if (!(channel in roomWaitingSockets)) roomWaitingSockets[channel] = {};
+        roomWaitingSockets[channel][socket.id] = socket;
+        socket.waitingChannel = channel;
+        return socket.emit("roomWaitingForTeacher");
+      }
+    }
+
     // Set the presenters
     const presenter = {
       peer_ip: peer_ip,
@@ -1497,6 +1745,25 @@ io.sockets.on("connect", async (socket) => {
       // quyền đó dù vào lúc nào.
       if (isPresenterRole(socket.supabaseRole)) {
         presenters[channel][socket.id] = presenter;
+        // Giáo viên/admin vừa vào (lại) - huỷ đếm giờ ân hạn 15 phút
+        // nếu đang chạy, phòng không còn "thiếu giáo viên" nữa.
+        clearTeacherGraceState(channel);
+
+        // Báo ngay cho các học viên đang đứng chờ (màn "Giáo viên chưa
+        // mở phòng") - client tự gửi lại "join", lần này sẽ qua vì đã
+        // có giáo viên/admin trong phòng.
+        const waiting = roomWaitingSockets[channel];
+        if (waiting) {
+          for (const waitingSocket of Object.values(waiting)) {
+            // Kèm tên giáo viên/admin vừa vào - học viên hiện thông báo
+            // "(tên) đã vào phòng." đúng người, không phải tên chính họ.
+            waitingSocket.emit("roomTeacherJoined", {
+              peer_name: presenter.peer_name,
+            });
+            delete waitingSocket.waitingChannel;
+          }
+          delete roomWaitingSockets[channel];
+        }
       }
     } else if (roomPresenters && roomPresenters.includes(peer_name)) {
       // Hành vi gốc (không đổi) khi chưa cấu hình Supabase - dựa theo
@@ -2152,11 +2419,40 @@ io.sockets.on("connect", async (socket) => {
       delete peers[channel][socket.id]; // delete peer data from the room
       delete peerUUIDs[channel]?.[socket.id];
 
+      // Trước đây presenters[channel][socket.id] chỉ bị xoá khi CẢ
+      // phòng trống hẳn (bên dưới) - nghĩa là 1 giáo viên/admin rời đi
+      // nhưng học viên còn ở lại thì entry cũ vẫn nằm lì trong
+      // presenters[channel], khiến không bao giờ phát hiện được đúng
+      // lúc "phòng vừa mất hết giáo viên/admin". Xoá ngay tại đây để
+      // presenters[channel] luôn phản ánh đúng ai đang THẬT SỰ kết nối.
+      const wasPresenter = presenters[channel]?.[socket.id] !== undefined;
+      delete presenters[channel]?.[socket.id];
+
+      // 2 điều kiện độc lập (không phải if/else if) - giáo viên/admin
+      // cuối cùng rời đi VÀ phòng trống hẳn có thể xảy ra CÙNG LÚC (vd:
+      // chỉ có đúng 1 giáo viên trong phòng, không ai khác).
+      if (
+        wasPresenter &&
+        Object.keys(presenters[channel] || {}).length === 0
+      ) {
+        // Giáo viên/admin cuối cùng vừa rời phòng - bắt đầu/làm mới 15
+        // phút ân hạn (xem scheduleTeacherGraceEviction()). Set mốc này
+        // DÙ phòng có trống hẳn ngay sau đó hay không - học viên (kể cả
+        // người vừa thoát ra) vẫn phải vào lại được trong 15 phút này.
+        roomLastTeacherSeenAt[channel] = Date.now();
+        scheduleTeacherGraceEviction(channel);
+      }
+
       if (getPeerCount(channel) === 0) {
         delete peers[channel];
         delete presenters[channel];
         delete channels[channel]; // Clean up channels to prevent memory leak
         delete peerUUIDs[channel];
+        // CHÚ Ý: không xoá roomLastTeacherSeenAt/roomEvictionTimers ở
+        // đây - phải sống sót qua việc phòng trống tạm thời để học
+        // viên vào lại được trong 15 phút ân hạn.
+        // scheduleTeacherGraceEviction() tự dọn khi hết giờ (hoặc
+        // clearTeacherGraceState() dọn khi có giáo viên/admin vào lại).
       }
     } catch (err) {
       log.error("Remove Peer", toJson(err));

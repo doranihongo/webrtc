@@ -24,7 +24,18 @@ body {
 
 body {
   margin: 0;
-  background: linear-gradient(to left, var(--ds-bg-1), var(--ds-bg-2));
+  /* Trước: chỉ 2 tông navy gần như giống hệt nhau (--ds-bg-1/2), nhìn
+     gần như 1 màu phẳng lì. Giờ thêm điểm dừng thứ 3 sáng hơn hẳn
+     (--ds-hero-1, cùng tông xanh brand đã dùng cho nút CTA) để mắt
+     thấy rõ nền "chuyển sắc" chéo góc, vẫn đủ tối để chữ/thẻ nổi trên
+     nền đọc được bình thường - vùng sáng ở góc trên-trái (315deg),
+     phần còn lại vẫn tối như cũ. */
+  background: linear-gradient(
+    315deg,
+    var(--ds-bg-2) 0%,
+    var(--ds-bg-1) 45%,
+    var(--ds-hero-1) 100%
+  );
   -moz-osx-font-smoothing: grayscale;
   -webkit-font-smoothing: antialiased;
   color: var(--ds-text-muted);

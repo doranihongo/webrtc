@@ -148,6 +148,12 @@ module.exports = {
       "giaovien",
       "hocvien",
     ]),
+    // admin dùng chung tài khoản với web kanji, miễn giới hạn số thiết
+    // bị (max_devices) - giống hệt cách kanji đang làm.
+    deviceLimitExemptRoles: parseJsonEnv(
+      process.env.SUPABASE_DEVICE_LIMIT_EXEMPT_ROLES,
+      ["admin"],
+    ),
   },
 
   // ==========================================
@@ -160,7 +166,9 @@ module.exports = {
     },
     turn: {
       enabled: getEnvBoolean(process.env.TURN_SERVER_ENABLED),
-      url: process.env.TURN_SERVER_URL,
+      // Có thể là 1 url dạng string, hoặc JSON array nhiều url
+      // (vd nhiều transport: udp/tcp/443/turns) dùng chung username/credential.
+      url: parseJsonEnv(process.env.TURN_SERVER_URL, process.env.TURN_SERVER_URL),
       username: process.env.TURN_SERVER_USERNAME,
       credential: process.env.TURN_SERVER_CREDENTIAL,
     },

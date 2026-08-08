@@ -248,7 +248,15 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--ds-bg-2);
+  /* Cùng gradient nền của trang landing (đổi từ màu phẳng var(--ds-bg-2)
+     trước đây), theo yêu cầu cho 2 màn "load vào phòng" và "nhập tên
+     trước khi vào phòng" cùng 1 nền. */
+  background: linear-gradient(
+    315deg,
+    var(--ds-bg-2) 0%,
+    var(--ds-bg-1) 45%,
+    var(--ds-hero-1) 100%
+  );
   opacity: 1;
   transition: opacity 0.4s ease;
 }
@@ -329,9 +337,85 @@ body {
 
 /* Fully opaque backdrop for the pre-join dialog - the room behind it
    must never show through. Scoped to this one Swal via customClass.container
-   so other Swal dialogs in the app keep their normal (lighter) backdrop. */
+   so other Swal dialogs in the app keep their normal (lighter) backdrop.
+   Cùng gradient nền trang landing (đổi từ màu phẳng trước đây) - đây mới
+   đúng là "cái nền" (không phải khung nhập tên, khung vẫn giữ swBg như
+   mọi Swal khác). */
 .init-swal-backdrop {
-  background: var(--ds-bg-2) !important;
+  background: linear-gradient(
+    315deg,
+    var(--ds-bg-2) 0%,
+    var(--ds-bg-1) 45%,
+    var(--ds-hero-1) 100%
+  ) !important;
+}
+
+/* ---------- Bảng "chờ giáo viên" (handleRoomWaitingForTeacher) ---------- */
+/* Width (to hơn trên máy tính, gọn hơn trên điện thoại) set trực tiếp
+   trong Swal.fire(), đây chỉ chỉnh cỡ chữ + khoảng cách tiêu đề.
+   padding:0 trước đây làm chữ dính sát mép trên khung - giữ khoảng
+   cách rõ ràng với mép trên/2 bên. */
+/* Swal2 tự có padding mặc định ~1.25em quanh cả popup - đây mới thật
+   sự là phần làm khoảng trên dày, không chỉ riêng padding của tiêu đề
+   bên dưới. Giảm hẳn xuống, còn lại để title/html tự canh khoảng nhỏ
+   của riêng chúng. */
+.teacher-wait-modal {
+  padding-top: 10px;
+}
+
+.teacher-wait-modal .swal2-title {
+  font-size: 19px;
+  padding: 20px 10px 0;
+  margin-bottom: 4px;
+}
+
+.teacher-wait-video-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+
+.teacher-wait-video-wrap iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  /* Không cho chạm/click thẳng vào player YouTube - chặn hẳn khả năng
+     vuốt tua, bấm nút full màn hình hay bất kỳ tương tác gốc nào của
+     YouTube (đặc biệt quan trọng trên iPhone/Android hay tự full màn
+     hình khi video bắt đầu phát). Chỉ overlay bên dưới mới nhận click,
+     và overlay chỉ gọi play/pause qua API, không có gì khác. */
+  pointer-events: none;
+}
+
+.teacher-wait-yt-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: transparent;
+}
+
+.teacher-wait-yt-overlay i {
+  font-size: 44px;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.65);
+  transition: opacity 0.2s ease;
+}
+
+.teacher-wait-caption {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: rgba(var(--ds-text-primary-rgb), 0.6);
+  text-align: center;
+  line-height: 1.4;
 }
 
 /* Swal2's popup is a flex column - reorder its children so the simplified

@@ -1,6 +1,6 @@
 /*
- * Top bar (logo + tên site + icon tài khoản), bottom bar (copyright +
- * GitHub) và bảng thông tin tài khoản trên landing page.
+ * Top bar (logo + icon tài khoản), bottom bar (copyright + GitHub) và
+ * bảng thông tin tài khoản trên landing page.
  *
  * File riêng, không đụng vào landing.css - chỉ dùng chung token màu
  * từ _tokens.css để đồng bộ với phần còn lại của site.
@@ -23,21 +23,17 @@
 }
 
 .top-bar-logo {
-  height: 32px;
-  width: 32px;
+  /* Không bo góc/cắt - giống cách logo hiển thị ở màn đăng nhập
+     (auth-logo trong login.css: object-fit contain, không
+     border-radius). Chữ "DORA NIHONGO" cạnh logo đã bỏ, chỉ còn logo. */
+  height: 26px;
+  width: auto;
   object-fit: contain;
-  border-radius: var(--ds-radius-sm);
   flex-shrink: 0;
-}
-
-.top-bar-title {
-  font-family: "Fira Sans", sans-serif;
-  font-weight: 600;
-  font-size: 16px;
-  color: var(--ds-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* File ảnh logo có khoảng trong mờ phía trên nên dù box đã center
+     theo align-items của .top-bar, mắt vẫn thấy nó thấp hơn avatar -
+     đẩy lên thêm cho thẳng hàng thị giác với accountAvatar. */
+  transform: translateY(-8px);
 }
 
 .account-btn {
@@ -50,6 +46,11 @@
   background: rgba(var(--ds-overlay-rgb), 0.35);
   cursor: pointer;
   overflow: hidden;
+  /* Không có outline:none thì trình duyệt tự vẽ viền xanh mặc định khi
+     nút này được focus (vd: sau khi bấm mở/đóng bảng tài khoản) - nhìn
+     y hệt màu hover dù chuột không hề để lên. Vẫn giữ 1 viền focus rõ
+     ràng cho người dùng bàn phím qua :focus-visible bên dưới. */
+  outline: none;
   transition:
     border-color var(--ds-duration-base) var(--ds-ease-out),
     transform var(--ds-duration-fast) var(--ds-ease-out);
@@ -60,6 +61,11 @@
   transform: translateY(-1px);
 }
 
+.account-btn:focus-visible {
+  outline: 2px solid var(--ds-brand-500);
+  outline-offset: 2px;
+}
+
 .account-avatar {
   width: 100%;
   height: 100%;
@@ -68,29 +74,21 @@
 }
 
 /* ---------- Bottom bar ---------- */
+/* Chỉ còn icon GitHub (đã bỏ logo + chữ bản quyền) - đẩy hẳn sang phải
+   thay vì space-between (không còn phần tử bên trái để "between" nữa). */
 .bottom-bar {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: var(--ds-space-4) var(--ds-space-6);
-}
-
-.bottom-bar-copyright {
-  font-size: 12px;
-  color: rgba(var(--ds-text-primary-rgb), 0.5);
 }
 
 .bottom-bar-github {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(var(--ds-text-primary-rgb), 0.5);
-  transition: color var(--ds-duration-base) var(--ds-ease-out);
-}
-
-.bottom-bar-github:hover {
-  color: var(--ds-text-primary);
+  color: rgba(var(--ds-text-primary-rgb), 0.3);
 }
 
 /* ---------- Account panel ---------- */
@@ -108,6 +106,19 @@
   justify-content: flex-end;
 }
 
+/* Trượt vào từ phải mỗi lần overlay hết "hidden" - animation tự phát
+   lại vì element chuyển từ display:none sang hiện, giống hệt
+   "animate-in slide-in-from-right duration-300" bên UserProfileSidebar
+   (kanji). */
+@keyframes accountPanelSlideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 .account-panel {
   width: 100%;
   max-width: 380px;
@@ -117,6 +128,16 @@
   display: flex;
   flex-direction: column;
   box-shadow: var(--ds-shadow-lg);
+  animation: accountPanelSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Trên mobile panel chiếm gần hết chiều rộng màn hình nên viền này nằm
+   sát mép, nhìn như 1 vệt xanh dọc theo cạnh - bỏ trên mobile, giữ
+   nguyên desktop. */
+@media (max-width: 640px) {
+  .account-panel {
+    border-left: none;
+  }
 }
 
 .account-panel-header {
@@ -130,12 +151,23 @@
 
 .account-panel-header h2 {
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
   font-family: "Fira Sans", sans-serif;
   font-size: 18px;
   color: var(--ds-text-primary);
 }
 
+.account-panel-header h2 i {
+  color: var(--ds-brand-500);
+  font-size: 16px;
+}
+
 .account-panel-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 36px;
   height: 36px;
   border-radius: var(--ds-radius-full);
@@ -151,12 +183,75 @@
 }
 
 .account-panel-body {
+  position: relative;
   flex: 1;
   overflow-y: auto;
   padding: var(--ds-space-6);
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-5);
+}
+
+/* ---------- Popup "Thành công!" sau khi đổi mật khẩu ---------- */
+@keyframes accountSuccessFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.account-success-popup {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--ds-bg-deep-rgb), 0.85);
+  backdrop-filter: blur(2px);
+  animation: accountSuccessFadeIn 0.3s ease-out;
+}
+
+.account-success-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 260px;
+  width: 100%;
+  padding: var(--ds-space-6);
+  border-radius: var(--ds-radius-xl);
+  background: var(--ds-bg-panel);
+  border: 1px solid var(--ds-border);
+  box-shadow: var(--ds-shadow-lg);
+}
+
+.account-success-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--ds-space-4);
+  border-radius: var(--ds-radius-full);
+  background: rgba(34, 197, 94, 0.16);
+  color: var(--ds-success);
+  font-size: 30px;
+}
+
+.account-success-card h3 {
+  margin: 0 0 var(--ds-space-2);
+  font-family: "Fira Sans", sans-serif;
+  font-size: 17px;
+  color: var(--ds-text-primary);
+}
+
+.account-success-card p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ds-text-muted);
 }
 
 .account-panel-subheader {
@@ -200,6 +295,12 @@
   color: var(--ds-text-muted);
 }
 
+/* Bên kanji, label ở màn thông tin (text-sm) to hơn hẳn label trong
+   form đổi mật khẩu (text-xs) - không phải cùng 1 cỡ như trước. */
+#accountInfoView .account-field label {
+  font-size: 13px;
+}
+
 .account-field-value {
   padding: var(--ds-space-3) var(--ds-space-4);
   border-radius: var(--ds-radius-md);
@@ -207,6 +308,9 @@
   border: 1px solid var(--ds-border);
   color: var(--ds-text-primary);
   font-weight: 600;
+  /* Không set trước đây -> ăn theo html { font-size: 20px } của
+     landing.css, to hẳn so với label 13px cạnh nó. */
+  font-size: 15px;
 }
 
 .account-field input {
@@ -221,10 +325,65 @@
   font-family: "Lato", sans-serif;
 }
 
+/* iOS Safari tự động zoom vào ô input nếu font-size < 16px lúc bấm vào
+   - chỉ áp cho mobile, desktop giữ nguyên 14px. */
+@media (max-width: 640px) {
+  .account-field input {
+    font-size: 16px;
+  }
+}
+
 .account-field input:focus {
   outline: none;
   border-color: var(--ds-brand-500);
   box-shadow: 0 0 0 3px rgba(var(--ds-brand-500-rgb), 0.25);
+}
+
+/* Nút ẩn/hiện mật khẩu (icon con mắt) bên phải ô nhập - màu trắng theo
+   yêu cầu, không phải icon trang trí nữa. */
+.account-field-input-wrap {
+  position: relative;
+}
+
+.account-field-input-wrap input {
+  padding-right: calc(var(--ds-space-4) * 2 + 16px);
+}
+
+/* Tắt icon "reveal"/"clear" mật khẩu có sẵn của Edge/trình duyệt - chỉ
+   dùng đúng 1 icon con mắt tự làm, giống hệt login.css. */
+.account-field-input-wrap input::-ms-reveal,
+.account-field-input-wrap input::-ms-clear {
+  display: none;
+}
+
+.account-toggle-password {
+  display: none;
+  position: absolute;
+  top: 50%;
+  right: var(--ds-space-2);
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  font-size: 15px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+/* Chỉ hiện icon con mắt khi ô đã có chữ - cần placeholder=" " trên
+   input (xem landing.html) thì :placeholder-shown mới hoạt động. */
+.account-field-input-wrap
+  input:not(:placeholder-shown)
+  ~ .account-toggle-password {
+  display: flex;
+}
+
+.account-toggle-password:hover {
+  opacity: 1;
 }
 
 .account-error {
@@ -247,6 +406,10 @@
 .account-secondary-btn {
   width: 100%;
   height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-2);
   border-radius: var(--ds-radius-md);
   font-weight: 700;
   font-size: 14px;
@@ -291,6 +454,10 @@
 .account-logout-btn {
   width: 100%;
   height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-2);
   border-radius: var(--ds-radius-md);
   border: none;
   background: rgba(231, 76, 60, 0.16);

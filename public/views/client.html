@@ -1,9 +1,17 @@
 <!doctype html>
-<html lang="vi">
+<html lang="vi" class="auth-pending">
   <head>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
+      /* Ẩn trang cho tới khi common.js (authGuard) xác nhận đã đăng
+         nhập - tránh phòng học hiện ra chớp nhoáng rồi mới bị đá về
+         /login. Gỡ bởi common.js khi xác thực xong; common.js còn có
+         timeout dự phòng để không kẹt màn hình trắng nếu lỡ có lỗi JS. */
+      html.auth-pending body {
+        visibility: hidden;
+      }
+
       #bottomButtons {
         opacity: 0 !important;
         pointer-events: none !important;
@@ -36,7 +44,7 @@
          app (own icon, no browser address bar) instead of a bare
          bookmark. -->
     <link rel="manifest" href="../manifest.json" />
-    <meta name="theme-color" content="#3b8ac4" />
+    <meta name="theme-color" content="#0b1a2e" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
@@ -1941,13 +1949,6 @@ Ghi chú</textarea>
       <span data-template-html="recordingInfo"></span>
     </template>
 
-    <template id="tpl-room-busy-message">
-      Phòng này giới hạn tối đa <span data-template-text="maxUsers"></span>
-      người dùng.
-      <br />
-      Vui lòng thử lại sau
-    </template>
-
     <template id="tpl-username-in-use-message">
       Tên người dùng này đã được sử dụng. <br />
       Vui lòng thử tên khác
@@ -2056,7 +2057,7 @@ Ghi chú</textarea>
     <!-- Start Top Header Bar -->
     <header
       id="topHeaderBar"
-      class="fixed top-0 left-0 right-0 z-40 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-b from-slate-950/90 to-transparent backdrop-blur-sm flex max-lg:landscape:hidden items-center justify-between text-xs transition-all duration-500 transform translate-y-0 opacity-100"
+      class="fixed top-0 left-0 right-0 z-40 px-2.5 sm:px-4 py-1.5 sm:py-2 flex max-lg:landscape:hidden items-center justify-between text-xs transition-all duration-500 transform translate-y-0 opacity-100"
     >
       <!-- Room Code Badge -->
       <div class="flex items-center gap-2">

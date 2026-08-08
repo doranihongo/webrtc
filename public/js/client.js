@@ -527,6 +527,11 @@ let thisMaxRoomParticipants = 2;
 
 // misc
 let swBg = "rgba(11, 26, 46, 0.85)"; // swAlert background color
+// Riêng khung "nhập tên trước khi vào phòng" - sáng hơn swBg 1 chút
+// (vẫn tối) để không bị chìm quá trên nền gradient phía sau
+// (.init-swal-backdrop). Không đổi swBg trực tiếp vì nó dùng chung cho
+// mọi Swal khác trong app.
+const initUserPopupBg = "rgba(28, 59, 92, 0.92)"; // --ds-bg-elevated
 let isDocumentOnFullScreen = false;
 let isToggleExtraBtnClicked = false;
 // DiceBear styles used for the "Đổi ảnh đại diện" dialog's random avatar
@@ -596,6 +601,8 @@ let localVideoMediaStream; // my webcam
 let localScreenMediaStream; // my screen share
 let localScreenDisplayStream; // raw getDisplayMedia stream (may include audio)
 let screenShareAudioContext; // AudioContext used to mix screen audio + microphone
+let remoteAudioBoostContext; // shared AudioContext used to boost remote peers' audio playback volume
+const REMOTE_AUDIO_GAIN = 1.6; // gain applied to remote peer audio; <audio>.volume caps at 1.0 (100%), this goes louder
 let localAudioMediaStream; // my microphone
 let noiseProcessor = null; // RNNoise audio processing
 let peerScreenMediaElements = {}; // keep track of our peer <video> tags, indexed by peer_id_screen
@@ -1400,7 +1407,14 @@ async function initClientPeer() {
   // Disable the HTTP long-polling transport
   signalingSocket = io({
     transports: ["websocket"],
-    auth: { token: window.__authToken || null },
+    auth: {
+      token: window.__authToken || null,
+      // Gửi kèm để server tự kiểm tra giới hạn số thiết bị (xem
+      // checkAccountAccess trong supabaseClient.js + io.use trong
+      // server.js) - đây là lớp bảo mật thật, không chỉ chặn ở giao diện.
+      deviceId:
+        typeof getDeviceId === "function" ? getDeviceId() : null,
+    },
   });
 
   const transport = signalingSocket.io.engine.transport.name; // in most cases, "polling"
@@ -1431,6 +1445,7 @@ async function initClientPeer() {
   signalingSocket.on("connect", handleConnect);
   signalingSocket.on("unauthorized", handleUnauthorized);
   signalingSocket.on("roomIsLocked", handleUnlockTheRoom);
+  signalingSocket.on("roomIsBusy", roomIsBusy);
   signalingSocket.on("roomAction", handleRoomAction);
   signalingSocket.on("addPeer", handleAddPeer);
   signalingSocket.on("serverInfo", handleServerInfo);
@@ -1444,6 +1459,9 @@ async function initClientPeer() {
   signalingSocket.on("videoPlayer", handleVideoPlayer);
   signalingSocket.on("kickOut", handleKickedOut);
   signalingSocket.on("duplicateSession", handleDuplicateSession);
+  signalingSocket.on("roomWaitingForTeacher", handleRoomWaitingForTeacher);
+  signalingSocket.on("roomTeacherJoined", handleRoomTeacherJoined);
+  signalingSocket.on("teacherGraceExpired", handleTeacherGraceExpired);
   signalingSocket.on("disconnect", handleDisconnect);
   signalingSocket.on("removePeer", handleRemovePeer);
 } // end [initClientPeer]
@@ -1534,6 +1552,13 @@ async function handleConnect() {
 function handleServerInfo(config) {
   console.log("13. Server info", config);
 
+  // Vào phòng thật sự thành công (kể cả sau khi phải đứng chờ giáo
+  // viên - xem handleRoomTeacherJoined) - nếu nền phủ mờ vẫn còn hiện
+  // (đã "chụp" tức thì lúc trước đó), fade nó ra để lộ phòng thật.
+  // Không tác dụng gì nếu nó đã ẩn sẵn từ trước (fadeOutLoadingBackdrop
+  // tự bỏ qua).
+  fadeOutLoadingBackdrop();
+
   const {
     peers_count,
     host_protected,
@@ -1555,11 +1580,10 @@ function handleServerInfo(config) {
   redirectActive = redirect.active;
   redirectURL = redirect.url;
 
-  // Limit room to n peers
+  // Limit room to n peers - server giờ tự chặn TRƯỚC khi cho vào (xem
+  // "roomIsBusy" trong server.js), nên tới được đây nghĩa là đã chắc
+  // chắn còn chỗ. Chỉ còn giữ lại việc lưu con số này để hiển thị.
   if (maxRoomParticipants) thisMaxRoomParticipants = maxRoomParticipants;
-  if (peers_count > thisMaxRoomParticipants) {
-    return roomIsBusy();
-  }
 
   // Let start with some basic rules
   isPresenter = is_presenter;
@@ -1601,32 +1625,58 @@ function handleUnauthorized() {
 }
 
 /**
- * Room is busy, disconnect me and alert the user that
- * will be redirected to home page
+ * Phòng đã đủ người - server chặn thẳng từ lúc "join" (không cho vào
+ * peers/channels, không ai khác trong phòng biết gì về lượt vào hụt
+ * này - xem server.js). Cùng nền/kỹ thuật với handleRoomWaitingForTeacher()
+ * (không lộ phòng chút nào, mượt) - chỉ khác không có video/tự thử lại,
+ * vì phòng đầy thì không có gì để "chờ" cả, chỉ có thể thoát.
  */
 function roomIsBusy() {
-  signalingSocket.disconnect();
   playSound("alert");
+
+  // Che ngay lập tức - phòng hờ khoảng hở giữa lúc Swal nhập tên đóng
+  // và Swal này mở ra (đã có 1 lần snap khác ngay lúc bấm xác nhận tên
+  // rồi, đây là snap thêm cho chắc, y hệt handleRoomWaitingForTeacher).
+  snapShowLoadingBackdrop();
+
   Swal.fire({
     allowOutsideClick: false,
     allowEscapeKey: false,
-    background: swBg,
-    imageUrl: images.forbidden,
+    background: initUserPopupBg, // cùng màu bảng nhập tên
     position: "center",
-    title: "Phòng đang đầy",
-    html: renderRoomTemplate("tpl-room-busy-message", {
-      text: {
-        maxUsers: String(thisMaxRoomParticipants),
-      },
-    }),
-    showDenyButton: false,
-    confirmButtonText: `Đồng ý`,
+    width: isMobileDevice ? 380 : 440,
+    title: "PHÒNG ĐÃ ĐẦY",
+    confirmButtonText: "TRỞ VỀ",
+    // Backdrop mặc định của Swal chỉ là lớp mờ đen mỏng, lộ hết phòng
+    // phía sau - dùng đúng class gradient phủ kín màn hình mà bảng
+    // nhập tên đang dùng.
+    customClass: { container: "init-swal-backdrop" },
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
-  }).then((result) => {
-    if (result.isConfirmed) {
-      openURL("/");
-    }
+    didOpen: () => {
+      if (loadingBackdrop) loadingBackdrop.style.transition = "";
+      fadeOutLoadingBackdrop();
+
+      // Bắt click nút "TRỞ VỀ" trực tiếp, không chờ .then() (chạy sau
+      // khi Swal đã tự đóng xong, lộ phòng ra giữa chừng) - xem lý do
+      // đầy đủ ở handleRoomWaitingForTeacher().
+      const confirmBtn = Swal.getConfirmButton();
+      if (confirmBtn) {
+        confirmBtn.addEventListener(
+          "click",
+          () => {
+            snapShowLoadingBackdrop();
+            // Chủ động rời đi, không phải mất mạng - gỡ handler
+            // "disconnect" trước khi tự ngắt, tránh handleDisconnect()
+            // hiện nhầm banner "Mất kết nối".
+            signalingSocket.off("disconnect", handleDisconnect);
+            signalingSocket.disconnect();
+            openURL("/");
+          },
+          { once: true },
+        );
+      }
+    },
   });
 }
 
@@ -1912,10 +1962,21 @@ async function whoAreYou() {
 
   window.localStorage.peer_name = await getUserName();
 
+  // Tài khoản role "giaovien" (giáo viên) luôn mặc định tên "DORA
+  // NIHONGO" ở màn nhập tên này, mỗi lần tải lại trang - dù họ sửa/xoá
+  // đi để vào với tên khác lần đó, lần sau tải trang lại vẫn về đúng
+  // "DORA NIHONGO" (không đọc theo localStorage.peer_name đã lưu như
+  // bình thường). Admin/hocvien giữ nguyên hành vi cũ (nhớ tên đã nhập
+  // lần trước qua localStorage).
+  const defaultPeerName =
+    window.__authUser?.role === "giaovien"
+      ? "DORA NIHONGO"
+      : window.localStorage.peer_name || "";
+
   Swal.fire({
     allowOutsideClick: false,
     allowEscapeKey: false,
-    background: swBg,
+    background: initUserPopupBg,
     position: "center",
     input: "text",
     inputPlaceholder: "Nhập tên của bạn",
@@ -1927,9 +1988,7 @@ async function whoAreYou() {
       autocapitalize: "off",
       spellcheck: "false",
     },
-    inputValue: window.localStorage.peer_name
-      ? window.localStorage.peer_name
-      : "",
+    inputValue: defaultPeerName,
     html: initUser, // inject html
     confirmButtonText: `Vào cuộc họp`,
     showCancelButton: true,
@@ -2012,6 +2071,13 @@ async function whoAreYou() {
           usernameEmoji.classList.add("hidden");
         }
         window.localStorage.peer_name = myPeerName;
+        // Chụp lại nền TỨC THÌ ngay lúc này (trước khi biết server có
+        // chặn hay không) - không phải lúc nhận được roomWaitingForTeacher
+        // sau đó, vì lúc đó Swal nhập tên có thể đã đóng xong và lộ
+        // phòng ra trong khoảng trễ mạng chờ server phản hồi. Cùng kỹ
+        // thuật với nút "Thoát" - chấp nhận cắt ngang hiệu ứng đóng của
+        // chính Swal này để đổi lấy việc không có khoảng hở nào lộ ra.
+        snapShowLoadingBackdrop();
         whoAreYouJoin();
       }
     },
@@ -3014,7 +3080,7 @@ async function handleOnTrack(peer_id, peers) {
       const audioElement = getId(`${peer_id}___audio`);
 
       if (audioElement) {
-        attachMediaStream(audioElement, inbound);
+        attachBoostedAudioStream(audioElement, inbound);
         // Always call play() — srcObject was just assigned so the old check (!srcObject) was always false
         audioElement.play().catch((err) => {
           console.warn(
@@ -3393,6 +3459,7 @@ function handleDisconnect(reason) {
       peerAudioMediaElements[peerAudioId] &&
       peerAudioMediaElements[peerAudioId].parentNode
     ) {
+      disconnectAudioBoost(getId(peerAudioId), true);
       peerAudioMediaElements[peerAudioId].parentNode.removeChild(
         peerAudioMediaElements[peerAudioId],
       );
@@ -3498,6 +3565,7 @@ function handleRemovePeer(config) {
     peerAudioId in peerAudioMediaElements &&
     peerAudioMediaElements[peerAudioId].parentNode
   ) {
+    disconnectAudioBoost(getId(peerAudioId));
     peerAudioMediaElements[peerAudioId].parentNode.removeChild(
       peerAudioMediaElements[peerAudioId],
     );
@@ -4882,7 +4950,7 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
 
       remoteAudioWrap.appendChild(remoteAudioMedia);
       audioMediaContainer.appendChild(remoteAudioWrap);
-      attachMediaStream(remoteAudioMedia, stream);
+      attachBoostedAudioStream(remoteAudioMedia, stream);
       peerAudioMediaElements[remoteAudioMedia.id] = remoteAudioWrap;
 
       // Explicitly play audio to ensure it starts (handles autoplay policies)
@@ -4897,9 +4965,14 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       });
 
       // Change audio output if supported and audioOutputSelect is present
+      // (route to the hidden boosted-playback element when present - it's
+      // the one actually producing sound; remoteAudioMedia itself is muted)
       if (sinkId && audioOutputSelect && audioOutputSelect.value) {
         try {
-          await changeAudioDestination(remoteAudioMedia, false);
+          await changeAudioDestination(
+            remoteAudioMedia._boostedAudioElement || remoteAudioMedia,
+            false,
+          );
         } catch (e) {
           console.warn(
             "[AUDIO] changeAudioDestination failed for " + peer_name,
@@ -7003,6 +7076,114 @@ function attachMediaStream(element, stream) {
   //console.log("DEPRECATED, attachMediaStream will soon be removed.");
   element.srcObject = stream;
   console.log("Success, media stream attached", stream.getTracks());
+}
+
+/**
+ * Attach a remote peer's audio stream to an <audio> element, boosting its
+ * playback volume beyond the browser's 100% ceiling (element.volume caps at
+ * 1.0) via a Web Audio GainNode. A DynamicsCompressorNode follows the gain
+ * to guard against clipping/distortion at the boosted level.
+ *
+ * Chrome only decodes an inbound WebRTC audio track once a real
+ * <audio>/<video> element is actively consuming it - handing the raw
+ * MediaStream straight to createMediaStreamSource() without also playing it
+ * through an element produces silence in Chrome (Safari doesn't have this
+ * restriction). So `element` keeps playing the raw stream muted (to keep
+ * Chrome decoding it), while the boosted signal plays out through a second,
+ * hidden <audio> element the user actually hears.
+ *
+ * Falls back to a plain attachMediaStream() if Web Audio is unavailable or
+ * anything goes wrong.
+ * @param {HTMLAudioElement} element audio element to attach the stream to
+ * @param {MediaStream} stream remote peer's audio stream
+ */
+function attachBoostedAudioStream(element, stream) {
+  if (!element || !stream) return;
+  if (!hasAudioTrack(stream)) {
+    attachMediaStream(element, stream);
+    return;
+  }
+  try {
+    if (!remoteAudioBoostContext) {
+      remoteAudioBoostContext = new (window.AudioContext ||
+        window.webkitAudioContext)();
+    }
+    if (remoteAudioBoostContext.state === "suspended") {
+      remoteAudioBoostContext.resume().catch(() => {});
+    }
+
+    // Re-attaching (e.g. on renegotiation) - tear down the previous chain first
+    disconnectAudioBoost(element);
+
+    // Keep the raw stream attached (muted) so Chrome actually decodes it
+    element.srcObject = stream;
+    element.muted = true;
+    element.volume = 0;
+    element.play().catch(() => {});
+
+    const source = remoteAudioBoostContext.createMediaStreamSource(stream);
+    const gainNode = remoteAudioBoostContext.createGain();
+    gainNode.gain.value = REMOTE_AUDIO_GAIN;
+    const compressor = remoteAudioBoostContext.createDynamicsCompressor();
+    const destination = remoteAudioBoostContext.createMediaStreamDestination();
+
+    source.connect(gainNode);
+    gainNode.connect(compressor);
+    compressor.connect(destination);
+
+    // Hidden element that actually plays the boosted audio (reused across re-attaches)
+    let boostedElement = element._boostedAudioElement;
+    if (!boostedElement) {
+      boostedElement = document.createElement("audio");
+      boostedElement.autoplay = true;
+      boostedElement.style.display = "none";
+      // Appended inside audioMediaContainer (not document.body) so the
+      // "change output device for all participants" bulk resync
+      // (querySelectorAll("audio") in changeAudioDestination) picks it up too
+      audioMediaContainer.appendChild(boostedElement);
+      element._boostedAudioElement = boostedElement;
+    }
+    boostedElement.srcObject = destination.stream;
+    boostedElement.volume = 1.0;
+    boostedElement.play().catch(() => {});
+
+    element._audioBoost = { source, gainNode, compressor, destination };
+    console.log("Success, boosted audio stream attached", stream.getTracks());
+  } catch (err) {
+    console.warn("[AUDIO BOOST] Falling back to unboosted playback:", err);
+    element.muted = false;
+    element.volume = 1.0;
+    attachMediaStream(element, stream);
+  }
+}
+
+/**
+ * Disconnect and discard the Web Audio boost chain (if any) previously
+ * attached to an audio element via attachBoostedAudioStream(), to avoid
+ * leaking AudioContext nodes when a peer's audio element is torn down.
+ * @param {HTMLAudioElement} element
+ * @param {boolean} removeHiddenElement when true, also remove the hidden
+ *   boosted-playback <audio> element (call this on peer disconnect; leave
+ *   false on a simple re-attach/renegotiation so it can be reused).
+ */
+function disconnectAudioBoost(element, removeHiddenElement = false) {
+  if (!element) return;
+  if (element._audioBoost) {
+    const { source, gainNode, compressor } = element._audioBoost;
+    try {
+      source.disconnect();
+      gainNode.disconnect();
+      compressor.disconnect();
+    } catch (e) {
+      // already disconnected
+    }
+    element._audioBoost = null;
+  }
+  if (removeHiddenElement && element._boostedAudioElement) {
+    element._boostedAudioElement.srcObject = null;
+    element._boostedAudioElement.remove();
+    element._boostedAudioElement = null;
+  }
 }
 
 /**
@@ -11444,6 +11625,241 @@ function handleDuplicateSession() {
 }
 
 /**
+ * Học viên cố vào 1 phòng chưa từng có giáo viên/admin (hoặc đã quá 15
+ * phút kể từ lúc giáo viên/admin cuối cùng rời đi) - KHÔNG ngắt kết
+ * nối, đứng chờ ở đây. Nếu giáo viên/admin vào phòng trong lúc này,
+ * server tự báo (xem handleRoomTeacherJoined) để vào thẳng luôn, không
+ * cần bấm gì thêm - nút "TRỞ VỀ" chỉ để chủ động thoát ra nếu không
+ * muốn chờ nữa.
+ */
+// ---------------------------------------------------------
+// Video YouTube nghe tạm trong lúc chờ giáo viên (handleRoomWaitingForTeacher)
+// - chỉ cho bấm phát/dừng, không cho tua, không cho full màn hình
+// (đặc biệt iPhone/Android hay tự full màn hình khi video chạy). Cách
+// làm: nhúng qua YouTube IFrame API (điều khiển phát/dừng bằng JS) +
+// 1 lớp overlay trong suốt phủ lên TRÊN iframe để hứng click, còn
+// iframe tự nó bị pointer-events:none (xem client.css) - người dùng
+// không bao giờ chạm trực tiếp vào player YouTube thật, chỉ chạm vào
+// overlay của mình.
+// ---------------------------------------------------------
+const TEACHER_WAIT_YT_VIDEO_ID = "-pHfPJGatgE";
+let teacherWaitYtPlayer = null;
+let teacherWaitYtApiPromise = null;
+
+function loadYoutubeIframeApi() {
+  if (window.YT && window.YT.Player) return Promise.resolve();
+  if (teacherWaitYtApiPromise) return teacherWaitYtApiPromise;
+  teacherWaitYtApiPromise = new Promise((resolve) => {
+    const previous = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      if (typeof previous === "function") previous();
+      resolve();
+    };
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+  });
+  return teacherWaitYtApiPromise;
+}
+
+/**
+ * Cập nhật icon play/pause trên overlay theo trạng thái thật của
+ * player - ẩn icon đi lúc đang phát (không che video), hiện icon play
+ * lúc đang dừng.
+ * @param {number} state YT.PlayerState (1 = đang phát)
+ */
+function updateTeacherWaitYtIcon(state) {
+  const icon = document.querySelector("#teacherWaitYtOverlay i");
+  if (!icon) return;
+  const isPlaying = state === 1;
+  icon.className = isPlaying ? "fa-solid fa-pause" : "fa-solid fa-play";
+  icon.style.opacity = isPlaying ? "0" : "1";
+}
+
+async function initTeacherWaitYoutubePlayer() {
+  await loadYoutubeIframeApi();
+  const container = getId("teacherWaitYtPlayer");
+  if (!container) return; // Swal đã đóng trong lúc chờ API load xong
+
+  teacherWaitYtPlayer = new YT.Player(container, {
+    videoId: TEACHER_WAIT_YT_VIDEO_ID,
+    playerVars: {
+      autoplay: 1, // tự phát ngay khi mở, không cần bấm
+      controls: 0, // không thanh tua/nút bấm gốc của YouTube
+      disablekb: 1, // không cho phím tắt tua/full màn hình
+      fs: 0, // không nút full màn hình
+      playsinline: 1, // KHÔNG tự full màn hình trên iPhone khi phát
+      modestbranding: 1,
+      rel: 0,
+      iv_load_policy: 3,
+      // Lặp lại đúng video này khi hết - loop=1 cần kèm playlist trỏ
+      // về chính video đó mới hoạt động cho video đơn lẻ (không phải
+      // playlist thật).
+      loop: 1,
+      playlist: TEACHER_WAIT_YT_VIDEO_ID,
+    },
+    events: {
+      // Trình duyệt có thể chặn autoplay có tiếng (đặc biệt mobile) dù
+      // đã set autoplay:1 - gọi lại playVideo() ngay khi player sẵn
+      // sàng để tăng khả năng tự phát được. Nếu trình duyệt vẫn chặn,
+      // vẫn còn overlay bấm-để-phát làm phương án dự phòng.
+      onReady: (event) => event.target.playVideo(),
+      onStateChange: (event) => updateTeacherWaitYtIcon(event.data),
+    },
+  });
+
+  const overlay = getId("teacherWaitYtOverlay");
+  if (overlay) {
+    overlay.onclick = () => {
+      if (
+        !teacherWaitYtPlayer ||
+        typeof teacherWaitYtPlayer.getPlayerState !== "function"
+      )
+        return;
+      if (teacherWaitYtPlayer.getPlayerState() === 1) {
+        teacherWaitYtPlayer.pauseVideo();
+      } else {
+        teacherWaitYtPlayer.playVideo();
+      }
+    };
+  }
+}
+
+function destroyTeacherWaitYoutubePlayer() {
+  if (teacherWaitYtPlayer && typeof teacherWaitYtPlayer.destroy === "function") {
+    teacherWaitYtPlayer.destroy();
+  }
+  teacherWaitYtPlayer = null;
+}
+
+function handleRoomWaitingForTeacher() {
+  playSound("alert");
+
+  // Che ngay lập tức - giữa lúc Swal nhập tên vừa đóng (đã tự
+  // fadeOutLoadingBackdrop() từ trước) và lúc Swal chờ này thật sự mở
+  // ra có 1 khoảng trễ mạng, nếu không che thì UI phòng (trống, chưa
+  // join) sẽ lộ ra trong khoảnh khắc đó. didOpen bên dưới tự fade nó ra
+  // lại, y hệt cách Swal nhập tên đã làm.
+  snapShowLoadingBackdrop();
+
+  Swal.fire({
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    background: initUserPopupBg, // cùng màu bảng nhập tên
+    position: "center",
+    // To hơn trên máy tính, gọn hơn trên điện thoại.
+    width: isMobileDevice ? 380 : 480,
+    title: "Đợi giáo viên mở phòng...",
+    html: `
+      <div class="teacher-wait-video-wrap">
+        <div id="teacherWaitYtPlayer"></div>
+        <div id="teacherWaitYtOverlay" class="teacher-wait-yt-overlay">
+          <i class="fa-solid fa-play"></i>
+        </div>
+      </div>
+      <p class="teacher-wait-caption">Trong lúc chờ giáo viên vào phòng,<br />nghe một chút nhạc thư giãn nhé!</p>
+    `,
+    confirmButtonText: "TRỞ VỀ",
+    // Backdrop mặc định của Swal chỉ là lớp mờ đen mỏng - lộ hết phòng
+    // phía sau. Dùng đúng class gradient phủ kín màn hình mà bảng nhập
+    // tên đang dùng, để không lộ phòng chút nào (yêu cầu chính của
+    // bảng này).
+    customClass: { container: "init-swal-backdrop", popup: "teacher-wait-modal" },
+    showClass: { popup: "animate__animated animate__fadeInDown" },
+    hideClass: { popup: "animate__animated animate__fadeOutUp" },
+    willClose: () => {
+      // Giáo viên vào phòng (handleRoomTeacherJoined gọi Swal.close())
+      // hoặc bấm "TRỞ VỀ" - cả 2 trường hợp đều phải tắt video ngay,
+      // không để nó phát ngầm sau khi popup đã đóng.
+      destroyTeacherWaitYoutubePlayer();
+    },
+    didOpen: () => {
+      if (loadingBackdrop) loadingBackdrop.style.transition = "";
+      fadeOutLoadingBackdrop();
+      initTeacherWaitYoutubePlayer();
+
+      // Bắt click nút "TRỞ VỀ" TRỰC TIẾP ở đây, không chờ .then() bên
+      // dưới - .then() chỉ chạy SAU KHI hiệu ứng đóng của Swal
+      // (fadeOutUp) đã chạy xong, lúc đó phòng phía sau đã lộ ra rồi
+      // (vì Swal đã tự đóng, còn openURL("/") lại cần thêm 1 nhịp mới
+      // thật sự điều hướng đi). Chụp nền tức thì ngay lúc bấm, y hệt
+      // nút "Thoát" ở whoAreYou() đang làm, để không có khoảnh khắc
+      // nào lộ phòng ra giữa lúc bấm và lúc trang mới tải xong.
+      const confirmBtn = Swal.getConfirmButton();
+      if (confirmBtn) {
+        confirmBtn.addEventListener(
+          "click",
+          () => {
+            snapShowLoadingBackdrop();
+            // Chủ động rời đi, không phải mất mạng - gỡ handler
+            // "disconnect" trước khi tự ngắt, nếu không handleDisconnect()
+            // vẫn nổ ra và hiện banner "Mất kết nối - Đang kết nối lại
+            // với máy chủ…" trong khoảnh khắc trước khi trang điều
+            // hướng đi, dù không hề mất kết nối thật.
+            signalingSocket.off("disconnect", handleDisconnect);
+            signalingSocket.disconnect();
+            openURL("/");
+          },
+          { once: true },
+        );
+      }
+    },
+  });
+}
+
+/**
+ * Giáo viên/admin vừa vào phòng trong lúc học viên đang đứng chờ (xem
+ * handleRoomWaitingForTeacher) - tự gửi lại "join", lần này sẽ qua vì
+ * phòng đã có giáo viên/admin, không cần học viên thao tác gì.
+ */
+function handleRoomTeacherJoined(config) {
+  // Che ngay trước khi đóng Swal chờ - giữa lúc đóng và lúc phòng thật
+  // sự hiện ra (addPeer/serverInfo, có thể có độ trễ) cũng là 1
+  // khoảng hở y hệt lúc mở màn chờ. handleServerInfo() sẽ tự
+  // fadeOutLoadingBackdrop() lại khi phòng đã sẵn sàng thật sự.
+  snapShowLoadingBackdrop();
+  if (loadingBackdrop) loadingBackdrop.style.transition = "";
+  Swal.close();
+  playSound("addPeer");
+  joinToChannel();
+
+  // Học viên tự vào phòng qua đường "chờ" này không đi qua nhánh
+  // thông báo "X đã vào phòng." bình thường (nhánh đó cố tình chỉ báo
+  // cho NHỮNG NGƯỜI ĐÃ Ở SẴN trong phòng khi có người mới tới, không
+  // báo cho chính người mới vào - xem handleAddPeer). Báo riêng ở đây,
+  // với tên GIÁO VIÊN/ADMIN vừa vào (server gửi kèm trong config), chứ
+  // không phải tên chính học viên.
+  const teacherName = config?.peer_name;
+  if (teacherName) {
+    toastMessage(
+      "success",
+      `${teacherName} đã vào phòng.`,
+      "",
+      "top-end",
+      4000,
+    );
+  }
+}
+
+/**
+ * Giáo viên/admin rời phòng quá 15 phút mà chưa quay lại - học viên
+ * còn sót lại trong phòng bị tự động đuổi ra (xem
+ * scheduleTeacherGraceEviction() trong server.js).
+ */
+function handleTeacherGraceExpired() {
+  // Không hiện thông báo gì - chụp nền tức thì (che khoảng hở lộ
+  // phòng, cùng kỹ thuật snapShowLoadingBackdrop() đang dùng ở các chỗ
+  // khác) rồi về thẳng landing luôn.
+  snapShowLoadingBackdrop();
+  // Chủ động rời đi, không phải mất mạng - gỡ handler "disconnect"
+  // trước khi tự ngắt, tránh handleDisconnect() hiện nhầm banner "Mất
+  // kết nối" trong khoảnh khắc trước khi trang điều hướng đi.
+  signalingSocket.off("disconnect", handleDisconnect);
+  signalingSocket.disconnect();
+  openURL("/");
+}
+
+/**
  * You will be kicked out from the room and popup the peer name that performed this action
  * @param {object} config data
  */
@@ -12121,6 +12537,31 @@ function fadeOutLoadingBackdrop() {
     () => elemDisplay(loadingBackdrop, false),
     { once: true },
   );
+}
+
+/**
+ * Chụp lại nền phủ mờ (loading backdrop) TỨC THÌ, không transition -
+ * dùng khi cần che ngay 1 khoảng hở ngắn giữa 2 popup (Swal cũ đóng ->
+ * Swal mới mở, có độ trễ mạng ở giữa) mà không có gì che phần UI phòng
+ * (trống/chưa join) phía sau. Gọi trước khi mở popup mới - didOpen của
+ * popup đó tự fadeOutLoadingBackdrop() lại để lộ ra như bình thường.
+ * Cùng kỹ thuật với nút "Thoát" ở whoAreYou() (xem đó để biết gốc).
+ */
+function snapShowLoadingBackdrop() {
+  if (!loadingBackdrop) return;
+  loadingBackdrop.style.transition = "none";
+  elemDisplay(loadingBackdrop, true, "flex");
+  // Ép trình duyệt áp dụng transition:none ở trên trước khi đổi opacity
+  // bên dưới, nếu không nó vẫn có thể animate chung cả 2 khiến việc
+  // "chụp tức thì" không còn tức thì nữa.
+  void loadingBackdrop.offsetWidth;
+  loadingBackdrop.style.opacity = "1";
+  loadingBackdrop.style.pointerEvents = "auto";
+  // Chỉ là 1 lớp phủ trơn ở đây, không phải màn loading thật - ẩn
+  // spinner/chữ "Đang tải" đi để không đọc như đang tải, chỉ là màn
+  // hình che tạm trong chốc lát.
+  const loadingDiv = getId("loadingDiv");
+  if (loadingDiv) loadingDiv.style.display = "none";
 }
 
 /**

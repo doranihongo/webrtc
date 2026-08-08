@@ -52,6 +52,14 @@
   border-radius: 12px;
   opacity: 1;
   overflow: hidden;
+  /* Chặn cử chỉ vuốt/pan gốc của trình duyệt trên vùng video - không có
+     thì iOS/webview vẫn cho phép kéo vùng này gây rubber-band bounce lộ
+     nền phía sau (dù html/body đã overflow:hidden, touch-action là
+     thuộc tính riêng kiểm soát cử chỉ, không tự ăn theo overflow).
+     Cùng cách các phần tử kéo-thả khác trong file này đã dùng (tile tự
+     nổi, PiP) - chỉ là áp cho cả vùng sân khấu, không riêng gì phần tử
+     kéo được. */
+  touch-action: none;
   transition:
     top 500ms,
     left 500ms,

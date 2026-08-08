@@ -1,12 +1,13 @@
 /*
  * Login page — standalone stylesheet, only used by views/login.html.
+ * Thẻ 2 nửa (form + mảng màu cong) trượt qua lại giữa màn "Đăng nhập"
+ * và "Đổi mật khẩu" (bắt buộc lần đầu đăng nhập) - hiệu ứng "kéo rèm".
  * Reuses the shared "Ocean" design tokens from _tokens.css for color
  * consistency with the rest of the site, but is otherwise fully
- * self-contained (no dependency on landing.css/client.css) so it can't
- * affect or be affected by any other page.
+ * self-contained (no dependency on landing.css/client.css).
  */
 
-@import url("https://fonts.googleapis.com/css?family=Fira+Sans:600|Lato:400,700&display=swap");
+@import url("https://fonts.googleapis.com/css?family=Fira+Sans:600,700|Lato:400,700&display=swap");
 
 * {
   box-sizing: border-box;
@@ -26,175 +27,500 @@ body {
   justify-content: center;
   min-height: 100dvh;
   padding: var(--ds-space-5);
-  background: linear-gradient(to left, var(--ds-bg-1), var(--ds-bg-2));
-  color: var(--ds-text-muted);
   font-family: "Lato", sans-serif;
-  font-weight: 400;
   touch-action: none;
+  position: relative;
 }
 
-.login-card {
-  width: 100%;
-  max-width: 380px;
+/* Nền trang login - dải gradient chéo xanh đậm -> xanh dương -> xanh
+   cyan sáng theo ảnh mẫu người dùng gửi (không dùng token Ocean tối
+   thường dùng cho phần còn lại của site, vì màu trong ảnh sáng/rực hơn
+   hẳn --ds-bg-1/2). 2 lớp phủ kín màn hình xếp chồng, chỉ khác chiều
+   gradient, crossfade qua lại bằng opacity khi đổi trạng thái (login.js
+   gắn class "state-changepw" lên <body> song song với authCard) - cho
+   nền cũng "đổi chiều mượt mà" theo, giống cách logo/mảng màu cong
+   trong thẻ đã crossfade. */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  transition: opacity 0.8s ease;
+}
+
+body::before {
+  background: linear-gradient(135deg, #2b3990 0%, #1f8fc0 55%, #22d3ee 100%);
+  opacity: 1;
+}
+
+body::after {
+  background: linear-gradient(315deg, #2b3990 0%, #1f8fc0 55%, #22d3ee 100%);
+  opacity: 0;
+}
+
+body.state-changepw::before {
+  opacity: 0;
+}
+
+body.state-changepw::after {
+  opacity: 1;
+}
+
+.login-loading {
+  color: rgba(var(--ds-text-primary-rgb), 0.7);
+  font-size: 14px;
+}
+
+/* ---------- Card shell ---------- */
+.auth-card {
+  position: relative;
+  width: min(760px, 94vw);
+  height: min(500px, 88vh);
   border-radius: var(--ds-radius-xl);
   overflow: hidden;
+  background: #ffffff;
   box-shadow: var(--ds-shadow-lg);
+  display: flex;
+}
+
+/* ---------- Sliding curved color panel ("kéo rèm") ---------- */
+.auth-curve {
+  position: absolute;
+  top: -20%;
+  width: 62%;
+  height: 140%;
   background: linear-gradient(
-    135deg,
+    160deg,
     var(--ds-hero-1) 0%,
-    var(--ds-hero-2) 50%,
-    var(--ds-hero-1) 100%
+    var(--ds-hero-2) 55%,
+    var(--ds-brand-500) 100%
   );
+  border-radius: 44% 56% 63% 37% / 44% 38% 62% 56%;
+  z-index: 1;
+  transition:
+    left var(--auth-slide-duration, 0.75s) cubic-bezier(0.76, 0, 0.24, 1),
+    top var(--auth-slide-duration, 0.75s) cubic-bezier(0.76, 0, 0.24, 1);
 }
 
-.login-card-inner {
-  padding: var(--ds-space-8) var(--ds-space-6) var(--ds-space-7);
+.auth-card.state-login .auth-curve {
+  left: -20%;
 }
 
-.login-logo {
+.auth-card.state-changepw .auth-curve {
+  left: 58%;
+}
+
+/* ---------- Slots (fixed left/right halves) ---------- */
+.auth-slot {
+  position: relative;
+  z-index: 2;
+  width: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--ds-space-7) var(--ds-space-6);
+}
+
+.auth-message,
+.auth-form {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--ds-space-7) var(--ds-space-6);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition:
+    opacity 0.45s ease 0.12s,
+    transform 0.45s ease 0.12s;
+}
+
+/* login state: left = message, right = form */
+.auth-card.state-login .auth-slot-left .auth-message[data-panel="login"] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-22px, 0);
+}
+
+.auth-card.state-login .auth-slot-right .auth-form[data-panel="login"] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-18px, 0);
+}
+
+/* changepw state: left = form, right = message */
+.auth-card.state-changepw .auth-slot-left .auth-form[data-panel="changepw"] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.auth-card.state-changepw
+  .auth-slot-right
+  .auth-message[data-panel="changepw"] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(22px, 0);
+}
+
+/* ---------- Message side (sits over the colored curve) ---------- */
+.auth-message {
+  text-align: center;
+  align-items: center;
+  color: #ffffff;
+}
+
+/* ---------- Logo cố định ở góc trái, GIỮ NGUYÊN vị trí đó ở cả 2
+   trạng thái (không nhảy sang phải nữa) - chỉ đổi ảnh: logo trắng lúc
+   đăng nhập, logo Dora lúc đổi mật khẩu, crossfade qua lại bằng
+   opacity ---------- */
+.auth-logo {
+  position: absolute;
+  top: 0px;
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+
+.auth-logo-left {
+  left: var(--ds-space-5);
+}
+
+.auth-logo-right {
+  /* Vẫn neo cùng vị trí bên trái như auth-logo-left (không nhảy sang
+     phải) - chỉ khác ảnh, đổi chỗ chờ xoá theo comment cũ ở trên. */
+  left: var(--ds-space-5);
+}
+
+.auth-card.state-login .auth-logo-left {
+  opacity: 1;
+}
+
+.auth-card.state-changepw .auth-logo-right {
+  opacity: 1;
+}
+
+.auth-message h2 {
+  margin: 0 0 var(--ds-space-3);
+  font-family: "Fira Sans", sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+}
+
+.auth-message p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.85);
+  max-width: 240px;
+}
+
+/* ---------- Form side (sits over the white card background) ---------- */
+.auth-form h1 {
+  margin: 0 0 var(--ds-space-2);
+  font-family: "Fira Sans", sans-serif;
+  font-weight: 700;
+  font-size: 26px;
+  color: var(--ds-neutral-700);
+  text-transform: uppercase;
+}
+
+/* "Đăng nhập" - căn giữa + dịch nhẹ lên trên cho cân với khối form bên dưới */
+.auth-form[data-panel="login"] {
+  margin-top: -38px;
+}
+
+.auth-form[data-panel="login"] h1 {
+  text-align: center;
+}
+
+/* Cụm ô nhập - đẩy xuống 1 chút cho khỏi sát tiêu đề, đều nhau giữa
+   2 form (Đăng nhập / Đổi mật khẩu) */
+.auth-form[data-panel="login"] #loginForm,
+.auth-form[data-panel="changepw"] #changePasswordForm {
+  margin-top: var(--ds-space-4);
+}
+
+/* "Đổi mật khẩu" - căn giữa, giống "Đăng nhập" */
+.auth-form[data-panel="changepw"] h1 {
+  margin-left: 10px;
+  text-align: center;
+}
+
+.auth-form h1 + form {
+  margin-top: var(--ds-space-5);
+}
+
+/* Thông báo lỗi giờ nằm SAU form (dưới nút bấm), không phải trước
+   các ô nhập nữa - tránh làm xô lệch các ô lúc lỗi hiện ra */
+.auth-form form + .auth-error {
+  margin-top: var(--ds-space-4);
+}
+
+.auth-error {
+  display: none;
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-radius: var(--ds-radius-md);
+  background: rgba(231, 76, 60, 0.1);
+  border: 1px solid rgba(231, 76, 60, 0.3);
+  color: #c0392b;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.auth-error.is-visible {
   display: block;
-  height: 44px;
-  margin: 0 auto var(--ds-space-5);
 }
 
+.auth-field {
+  margin-bottom: var(--ds-space-4);
+}
+
+/* Nút hiện/ẩn mật khẩu (icon con mắt) - tự vẽ bằng SVG, không phụ
+   thuộc icon "reveal" có sẵn của trình duyệt (Safari/iOS không có) */
+.auth-field-password {
+  position: relative;
+}
+
+.auth-field-password input {
+  padding-right: 46px;
+}
+
+/* Edge/Chromium tự chèn icon "reveal" riêng cho input password, đè
+   lên icon con mắt tự vẽ ở trên - tắt icon có sẵn của trình duyệt đi,
+   chỉ dùng đúng 1 icon do mình tự làm (đồng nhất mọi trình duyệt) */
+.auth-field-password input::-ms-reveal,
+.auth-field-password input::-ms-clear {
+  display: none;
+}
+
+.auth-toggle-password {
+  display: none;
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border: none;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 20px 20px;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.55;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236f8fae' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+}
+
+/* Chỉ hiện icon con mắt khi ô mật khẩu có nội dung - :placeholder-shown
+   chỉ đúng khi input rỗng (đang hiện placeholder), nên rỗng thì ẩn nút */
+.auth-field-password input:not(:placeholder-shown) ~ .auth-toggle-password {
+  display: block;
+}
+
+.auth-toggle-password.is-visible {
+  opacity: 0.8;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23345da7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.6 21.6 0 0 1 5.06-6.06M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24'/%3E%3Cline x1='1' y1='1' x2='23' y2='23'/%3E%3C/svg%3E");
+}
+
+.auth-field input {
+  width: 100%;
+  height: 50px;
+  padding: 0 var(--ds-space-4);
+  border-radius: var(--ds-radius-full);
+  border: 1px solid var(--ds-neutral-100);
+  background: var(--ds-neutral-50);
+  color: var(--ds-neutral-700);
+  font-size: 17px;
+  font-family: "Lato", sans-serif;
+  transition:
+    border-color var(--ds-duration-base) var(--ds-ease-out),
+    background-color var(--ds-duration-base) var(--ds-ease-out);
+}
+
+.auth-field input::placeholder {
+  color: var(--ds-neutral-300);
+}
+
+.auth-field input:hover {
+  border-color: var(--ds-neutral-300);
+}
+
+.auth-field input:focus {
+  outline: none;
+  border-color: var(--ds-brand-500);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(var(--ds-brand-500-rgb), 0.18);
+}
+
+.auth-submit {
+  width: 100%;
+  height: 48px;
+  margin-top: var(--ds-space-2);
+  border: none;
+  border-radius: var(--ds-radius-full);
+  background: linear-gradient(
+    120deg,
+    var(--ds-hero-1),
+    var(--ds-hero-2)
+  );
+  color: #ffffff;
+  font-family: "Lato", sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(var(--ds-brand-600-rgb), 0.35);
+  transition:
+    transform var(--ds-duration-fast) var(--ds-ease-out),
+    box-shadow var(--ds-duration-base) var(--ds-ease-out),
+    opacity var(--ds-duration-base) var(--ds-ease-out);
+}
+
+.auth-submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(var(--ds-brand-600-rgb), 0.42);
+}
+
+.auth-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.auth-submit:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+/* ---------- Utility ---------- */
 .hidden {
   display: none !important;
 }
 
-.login-loading {
-  text-align: center;
-  padding: var(--ds-space-7) 0;
-  color: rgba(var(--ds-text-primary-rgb), 0.7);
-  font-size: 14px;
-}
+/* ---------- Mobile: xếp dọc thay vì 2 nửa trái-phải ----------
+ * DOM: slot-left = [login-message, changepw-form],
+ *      slot-right = [login-form, changepw-message].
+ * Với column-reverse, slot-right luôn nằm TRÊN, slot-left luôn nằm
+ * DƯỚI - đúng cả 2 trạng thái luôn (không cần đảo theo state):
+ *   - Đăng nhập: form (slot-right) trên, mảng xanh (slot-left) dưới.
+ *   - Đổi mật khẩu: mảng xanh (slot-right) trên, form (slot-left) dưới.
+ * Mảng màu cong cũng đổi trục trượt: left -> top.
+ */
+@media (max-width: 640px) {
+  .auth-card {
+    flex-direction: column-reverse;
+    width: min(400px, 92vw);
+    height: min(520px, 88vh);
+  }
 
-.login-heading {
-  text-align: center;
-  margin-bottom: var(--ds-space-7);
-}
+  /* Bỏ logo trên mobile để tiết kiệm diện tích */
+  .auth-logo {
+    display: none;
+  }
 
-.login-heading h1 {
-  margin: 0;
-  font-family: "Fira Sans", sans-serif;
-  font-weight: 600;
-  font-size: 24px;
-  line-height: 34px;
-  color: var(--ds-text-primary);
-}
+  /* Trên mobile đảo ngược chiều 2 lớp nền so với desktop (login <->
+     changepw đổi chỗ chiều gradient cho nhau) - vẫn crossfade y hệt
+     logic cũ (::before hiện lúc login, ::after hiện lúc changepw),
+     chỉ swap chiều gradient gán cho mỗi lớp. Desktop giữ nguyên 100%. */
+  body::before {
+    background: linear-gradient(315deg, #2b3990 0%, #1f8fc0 55%, #22d3ee 100%);
+  }
 
-.login-heading p {
-  margin: var(--ds-space-1) 0 0;
-  font-size: 14px;
-  color: rgba(var(--ds-text-primary-rgb), 0.7);
-}
+  body::after {
+    background: linear-gradient(135deg, #2b3990 0%, #1f8fc0 55%, #22d3ee 100%);
+  }
 
-.login-error {
-  display: none;
-  margin-bottom: var(--ds-space-5);
-  padding: var(--ds-space-3) var(--ds-space-4);
-  border-radius: var(--ds-radius-md);
-  background: rgba(231, 76, 60, 0.14);
-  border: 1px solid rgba(231, 76, 60, 0.4);
-  color: #ffd9d3;
-  font-size: 14px;
-  line-height: 1.4;
-  text-align: center;
-}
+  .auth-slot {
+    width: 100%;
+    padding: var(--ds-space-5) var(--ds-space-5);
+    transition: height var(--auth-slide-duration, 0.75s)
+      cubic-bezier(0.76, 0, 0.24, 1);
+  }
 
-.login-error.is-visible {
-  display: block;
-}
+  /* Vùng xanh bé lại (40%), vùng trắng rộng ra (60%) - đổi theo state
+     vì slot-right luôn ở trên, slot-left luôn ở dưới, nhưng bên nào
+     là mảng xanh thì đổi theo state (xem ghi chú phía trên khối này). */
+  .auth-card.state-login .auth-slot-left {
+    height: 40%;
+  }
+  .auth-card.state-login .auth-slot-right {
+    height: 60%;
+  }
+  .auth-card.state-changepw .auth-slot-left {
+    height: 60%;
+  }
+  .auth-card.state-changepw .auth-slot-right {
+    height: 40%;
+  }
 
-.login-field {
-  margin-bottom: var(--ds-space-5);
-}
+  .auth-curve {
+    top: auto;
+    left: -20%;
+    width: 140%;
+    height: 58%;
+    border-radius: 44% 38% 62% 56% / 44% 56% 63% 37%;
+  }
 
-.login-field label {
-  display: block;
-  margin-bottom: var(--ds-space-2);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  color: rgba(var(--ds-text-primary-rgb), 0.75);
-}
+  .auth-card.state-login .auth-curve {
+    left: -20%;
+    top: 68%;
+  }
 
-.login-field input {
-  width: 100%;
-  height: 48px;
-  padding: 0 var(--ds-space-4);
-  border-radius: var(--ds-radius-md);
-  border: 2px solid rgba(var(--ds-text-primary-rgb), 0.25);
-  background-color: rgba(var(--ds-overlay-rgb), 0.45);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: var(--ds-text-primary);
-  font-size: 16px;
-  font-family: "Lato", sans-serif;
-  caret-color: var(--ds-brand-500);
-  transition:
-    border-color var(--ds-duration-base) var(--ds-ease-out),
-    background-color var(--ds-duration-base) var(--ds-ease-out),
-    box-shadow var(--ds-duration-base) var(--ds-ease-out);
-}
+  .auth-card.state-changepw .auth-curve {
+    left: -20%;
+    top: -28%;
+  }
 
-.login-field input::placeholder {
-  color: rgba(var(--ds-text-primary-rgb), 0.45);
-}
+  /* Trên mobile không còn khái niệm trái/phải nữa - căn giữa, chỉ
+     dịch nhẹ lên/xuống để tránh chạm viền thẻ */
+  .auth-card.state-login .auth-slot-left .auth-message[data-panel="login"] {
+    transform: translate(0, 8px);
+  }
 
-/* Edge's built-in "reveal password" eye icon renders dark by default,
-   which nearly disappears against this dark/translucent input - invert
-   it so it reads as a light icon instead. (Other browsers don't inject
-   this icon at all, so this rule is a no-op there.) */
-.login-field input[type="password"]::-ms-reveal {
-  filter: invert(1);
-  opacity: 0.7;
-}
+  /* "Gần xong rồi!" - dư khoảng trống phía trên trong mảng xanh, dịch
+     lên cho cân */
+  .auth-card.state-changepw
+    .auth-slot-right
+    .auth-message[data-panel="changepw"] {
+    transform: translate(0, -18px);
+  }
 
-.login-field input:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-}
+  /* Cụm "Đăng nhập" - CĂN TRÊN (không center) thay vì giữa, để khi
+     thông báo lỗi hiện ra (nằm dưới nút, xem login.html) chỉ làm phần
+     dưới tràn xuống mảng xanh, không kéo cả cụm tiêu đề/ô nhập/nút
+     dịch chuyển theo. */
+  .auth-card.state-login .auth-slot-right .auth-form[data-panel="login"] {
+    justify-content: flex-start;
+    padding-top: var(--ds-space-8);
+    transform: translate(0, 0);
+  }
 
-.login-field input:focus {
-  outline: none;
-  border-color: var(--ds-brand-500);
-  background-color: rgba(var(--ds-overlay-rgb), 0.55);
-  box-shadow: 0 0 0 3px rgba(var(--ds-brand-500-rgb), 0.25);
-}
+  .auth-card.state-changepw .auth-slot-left .auth-form[data-panel="changepw"] {
+    transform: translate(0, -20px);
+  }
 
-.login-submit {
-  width: 100%;
-  height: 48px;
-  margin-top: var(--ds-space-2);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: var(--ds-radius-md);
-  background: #ffffff;
-  color: var(--ds-neutral-700);
-  font-family: "Lato", sans-serif;
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-  transition:
-    background var(--ds-duration-base) var(--ds-ease-out),
-    transform var(--ds-duration-fast) var(--ds-ease-out),
-    box-shadow var(--ds-duration-base) var(--ds-ease-out);
-}
+  .auth-form[data-panel="login"],
+  .auth-form[data-panel="changepw"] h1 {
+    margin: 0;
+  }
 
-.login-submit:hover:not(:disabled) {
-  background: var(--ds-brand-50);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-}
+  .auth-form[data-panel="changepw"] h1 {
+    text-align: center;
+  }
 
-.login-submit:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
+  .auth-message h2 {
+    font-size: 19px;
+  }
 
-.login-submit:disabled {
-  opacity: 0.6;
-  cursor: default;
+  .auth-form h1 {
+    font-size: 22px;
+  }
 }
-
