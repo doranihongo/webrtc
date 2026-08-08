@@ -21,7 +21,10 @@
     "docker:rune": "docker run -d -p 3000:3000 -v .env:/src/.env:ro --name mirotalk mirotalk/p2p:latest",
     "docker:run-vm": "docker run -d -p 3000:3000 -v .env:/src/.env:ro -v ./app/:/src/app/:ro -v ./public/:/src/public/:ro --name mirotalk mirotalk/p2p:latest",
     "docker:start": "docker start mirotalk",
-    "docker:stop": "docker stop mirotalk"
+    "docker:stop": "docker stop mirotalk",
+    "cap:add:ios": "cap add ios",
+    "cap:sync": "cap sync ios",
+    "cap:open:ios": "cap open ios"
   },
   "repository": {
     "type": "git",
@@ -43,6 +46,10 @@
   "license": "AGPL-3.0",
   "homepage": "https://github.com/miroslavpejic85/mirotalk",
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.4",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
     "@mattermost/client": "11.9.0",
     "@ngrok/ngrok": "1.7.0",
     "@sentry/node": "^10.69.0",
@@ -70,6 +77,7 @@
     "uuid": "14.0.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
     "mocha": "^11.7.6",
     "node-fetch": "^3.3.2",
     "nodemon": "^3.1.14",

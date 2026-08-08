@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- "app-store-connect" đóng gói để upload lên App Store Connect
+	     (dùng chung cho cả TestFlight lẫn App Store công khai sau này) -->
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>signingStyle</key>
+	<string>manual</string>
+	<key>stripSwiftSymbols</key>
+	<true/>
+	<key>uploadSymbols</key>
+	<true/>
+	<!-- TODO: điền Team ID thật (Apple Developer > Membership) trước khi
+	     build lần đầu - có thể thay bằng biến môi trường nếu muốn -->
+	<key>teamID</key>
+	<string>REPLACE_WITH_APPLE_TEAM_ID</string>
+</dict>
+</plist>
