@@ -287,7 +287,13 @@ async function setupRoomCodeInput() {
     roomName.value = "";
     // Không có nút xáo trộn/dán gì cho học viên - chỉ tự gõ/dán thủ
     // công (Ctrl+V) mã phòng giáo viên gửi.
-    if (genRoomButton) genRoomButton.style.display = "none";
+    if (genRoomButton) {
+      genRoomButton.style.display = "none";
+      // Nút đã ẩn nhưng ô input vẫn chừa padding-right cho nó theo CSS
+      // mặc định - gắn class này để trả padding về căn giữa lại (xem
+      // .room-input-wrap.no-gen-btn trong landing.css).
+      genRoomButton.closest(".room-input-wrap")?.classList.add("no-gen-btn");
+    }
   } else {
     shuffleText(roomName, getRandomRoomCode());
     setupGenRoomButton();

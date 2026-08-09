@@ -278,6 +278,15 @@ button,
     box-shadow 0.2s ease;
 }
 
+/* Học viên: genRoomButton bị ẩn (display:none) qua common.js, không còn
+   gì nằm đè bên phải ô input nữa - trả padding-right về bằng padding-left
+   (15px, giống .form-input gốc) để mã phòng căn giữa lại, không còn chừa
+   khoảng trống 44px trơ ra chỗ nút cũ. Chỉ áp dụng khi có class này (JS
+   gắn thêm đúng lúc ẩn nút) - admin/giáo viên (còn nút) không đổi gì. */
+.room-input-wrap.no-gen-btn .form-input {
+  padding-right: 15px;
+}
+
 .room-input-wrap .form-input:hover {
   border-color: rgba(var(--ds-brand-600-rgb), 0.6);
   background-color: rgba(var(--ds-overlay-rgb), 0.5);

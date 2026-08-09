@@ -1668,7 +1668,23 @@ io.sockets.on("connect", async (socket) => {
     // thông báo người đó "rời phòng" dù họ chưa từng thực sự ở trong
     // phòng - rất vô lý. Chặn ở đây thì không ai khác biết gì về lượt
     // vào hụt này cả.
-    if (getPeerCount(channel) >= hostCfg.maxRoomParticipants) {
+    //
+    // Trừ đi entry cũ trùng peer_uuid của CHÍNH người đang join (nếu có)
+    // trước khi so với maxRoomParticipants - đây là fix cho bug "mất
+    // mạng giữa cuộc gọi -> kết nối lại -> Phòng đã đầy": Socket.IO có
+    // thể mất tới ~45s (pingInterval 25s + pingTimeout 20s mặc định) để
+    // phát hiện 1 kết nối đã chết, nên nếu người dùng kết nối lại trong
+    // lúc đó, entry cũ của chính họ vẫn còn nằm trong peers[channel] và
+    // vô tình tính vào giới hạn phòng. Việc evict entry cũ thật sự vẫn
+    // để nguyên chỗ cũ (peer_uuid dedupe bên dưới, chạy SAU khi đã thêm
+    // peer mới) - ở đây chỉ sửa công thức đếm cho đúng, không đụng gì
+    // tới state, nên không ảnh hưởng tới race "peer count dip về 0"
+    // mà đoạn dedupe bên dưới đang tránh.
+    const staleSelfCount = peer_uuid
+      ? Object.values(peerUUIDs[channel] || {}).filter((u) => u === peer_uuid)
+          .length
+      : 0;
+    if (getPeerCount(channel) - staleSelfCount >= hostCfg.maxRoomParticipants) {
       log.debug("[" + socket.id + "] [Warning] Room Is Busy", channel);
       return socket.emit("roomIsBusy");
     }

@@ -605,6 +605,13 @@ let lastStats = null;
 // stream
 let isRNNoiseSupported = true; // Built in noise supression
 let initStream; // initial webcam stream
+// True while a hocvien's camera hardware has been paused for standing in
+// the "waiting for teacher" screen (see handleRoomWaitingForTeacher /
+// handleRoomTeacherJoined) - NOT a setting change, myVideoStatus keeps
+// whatever the user actually chose so the camera can be restored exactly
+// as configured once they really enter the room. Mic is never touched by
+// this - it stays governed by its own setting throughout the wait.
+let videoStoppedForTeacherWait = false;
 let localVideoMediaStream; // my webcam
 let localScreenMediaStream; // my screen share
 let localScreenDisplayStream; // raw getDisplayMedia stream (may include audio)
@@ -676,6 +683,35 @@ let activeMsgerParticipantDropdown = null;
 // settings
 let videoMaxFrameRate = 30;
 let screenMaxFrameRate = 30;
+
+// Bandwidth priority policy (weak-network calls): Audio > Screen share > Camera.
+// Camera/screen get an explicit bitrate ceiling because there's no cheap way
+// to ask the browser "just protect audio" - RTCRtpSender priority only
+// influences allocation, it doesn't guarantee it. Audio instead relies on
+// getting the highest `priority` of the three senders (see
+// BANDWIDTH_POLICIES below) plus a generous-but-bounded Opus target
+// (OPUS_AVERAGE_BITRATE) - native WebRTC bandwidth estimation (congestion
+// control) then adapts the *actual* transmitted bitrate up/down within that
+// ceiling on its own, per RTP packet, far more accurately than any polling
+// we could do from JS.
+const CAMERA_CONSTRAINTS_SOLO = { width: 1920, height: 1080, frameRate: 30 };
+const CAMERA_CONSTRAINTS_SHARING = { width: 1280, height: 720, frameRate: 25 };
+const CAMERA_MAX_BITRATE_SOLO = 2_000_000; // ~2Mbps
+const CAMERA_MAX_BITRATE_SHARING = 700_000; // ~700kbps
+const SCREEN_SHARE_MAX_WIDTH = 1920;
+const SCREEN_SHARE_MAX_HEIGHT = 1080;
+const SCREEN_SHARE_MAX_FPS = 25;
+const SCREEN_SHARE_MAX_BITRATE = 2_500_000; // ~2.5Mbps
+// Opus average-bitrate ceiling/target (mono, voice). 48kbps sits above the
+// 24-32kbps "sufficient for voice" floor to keep pronunciation nuance
+// audible for a kaiwa/conversation-practice app, without being wasteful.
+// This is a target the encoder aims for, not a fixed value: real congestion
+// (native WebRTC bandwidth estimation, guided by the "high" priority set on
+// the audio sender) still pulls the *actual* bitrate down under real
+// network stress - raising this ceiling only gives more headroom to use
+// when the network can afford it.
+const OPUS_AVERAGE_BITRATE = 48000;
+
 let videoQualitySelectedIndex = 0; // default HD and 30fps
 let videoFpsSelectedIndex = 1; // 30 fps
 let screenFpsSelectedIndex = 1; // 30 fps
@@ -3139,6 +3175,191 @@ async function handleOnTrack(peer_id, peers) {
 }
 
 /**
+ * Bandwidth priority policy (Audio > Screen share > Camera) applied to each
+ * RTCRtpSender via setParameters().
+ * - Audio: never degraded (priority high, no bitrate cap).
+ * - Screen: sacrifices fps first, keeps resolution (mostly static content).
+ * - Camera: sacrifices resolution first, keeps fps (a moving face just needs
+ *   to stay smooth).
+ */
+const BANDWIDTH_POLICIES = {
+  audio: { priority: "high" },
+  cameraSolo: {
+    priority: "low",
+    degradationPreference: "maintain-framerate",
+    maxBitrate: CAMERA_MAX_BITRATE_SOLO,
+  },
+  cameraSharing: {
+    priority: "low",
+    degradationPreference: "maintain-framerate",
+    maxBitrate: CAMERA_MAX_BITRATE_SHARING,
+  },
+  cameraManual: {
+    priority: "low",
+    degradationPreference: "maintain-framerate",
+  },
+  screen: {
+    priority: "high",
+    degradationPreference: "maintain-resolution",
+    maxBitrate: SCREEN_SHARE_MAX_BITRATE,
+  },
+};
+
+/**
+ * Apply a bandwidth policy (priority/degradationPreference/maxBitrate) to a
+ * single RTCRtpSender.
+ * IMPORTANT: intentionally fire-and-forget at every call site - never await
+ * this inside the track-add critical path. setParameters() can stall on some
+ * devices/browsers, and awaiting it there once blocked the next track
+ * (audio/screen) from being sent to the peer.
+ * @param {RTCRtpSender} sender
+ * @param {"audio"|"cameraSolo"|"cameraSharing"|"cameraManual"|"screen"} kind
+ */
+async function applySenderBandwidthPolicy(sender, kind) {
+  const policy = BANDWIDTH_POLICIES[kind];
+  if (!sender || !sender.track || !policy) return;
+  try {
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) {
+      params.encodings = [{}];
+    }
+    params.encodings.forEach((encoding) => {
+      encoding.priority = policy.priority;
+      encoding.networkPriority = policy.priority;
+      if (policy.maxBitrate) {
+        encoding.maxBitrate = policy.maxBitrate;
+      } else {
+        delete encoding.maxBitrate;
+      }
+    });
+    if (policy.degradationPreference) {
+      params.degradationPreference = policy.degradationPreference;
+    }
+    await sender.setParameters(params);
+  } catch (err) {
+    // setParameters() can reject if called before the transport is ready
+    // (e.g. right after addTrack, before negotiation completes) - safe to
+    // ignore here, reapplyBandwidthPoliciesToPeer() retries it right after
+    // negotiation finishes.
+    console.warn(`[BandwidthPolicy] setParameters(${kind}) skipped`, err);
+  }
+}
+
+/**
+ * Pick the camera bandwidth policy kind from current state: while the video
+ * quality Settings dropdown is left at "default" (the only reachable value -
+ * the manual picker is hidden in Settings), the camera auto-switches between
+ * the solo/sharing targets depending on whether screen share is active. A
+ * manually forced quality (if ever re-enabled) opts out of the bitrate cap.
+ * @returns {"cameraSolo"|"cameraSharing"|"cameraManual"}
+ */
+function getCameraBandwidthKind() {
+  const videoQuality = videoQualitySelect.value || "default";
+  if (videoQuality !== "default") return "cameraManual";
+  return isScreenStreaming ? "cameraSharing" : "cameraSolo";
+}
+
+/**
+ * Apply the camera bandwidth policy to a sender, auto-selecting
+ * solo/sharing/manual from current state.
+ * @param {RTCRtpSender} sender
+ */
+function applyCameraBandwidthPolicy(sender) {
+  applySenderBandwidthPolicy(sender, getCameraBandwidthKind());
+}
+
+/**
+ * Re-apply all bandwidth policies (audio/camera/screen) to every sender of a
+ * peer connection. Safe to call repeatedly. Meant to run right after
+ * negotiation succeeds (setLocalDescription() resolves, offer or answer
+ * side) since setParameters() can be rejected if called too early.
+ * @param {string} peer_id
+ */
+function reapplyBandwidthPoliciesToPeer(peer_id) {
+  const pc = peerConnections[peer_id];
+  if (!pc) return;
+  const cameraTrack = getVideoTrack(localVideoMediaStream);
+  const screenTrack = getVideoTrack(localScreenMediaStream);
+  pc.getSenders().forEach((sender) => {
+    if (!sender.track) return;
+    if (sender.track.kind === "audio") {
+      applySenderBandwidthPolicy(sender, "audio");
+    } else if (screenTrack && sender.track === screenTrack) {
+      applySenderBandwidthPolicy(sender, "screen");
+    } else if (cameraTrack && sender.track === cameraTrack) {
+      applyCameraBandwidthPolicy(sender);
+    }
+  });
+}
+
+/**
+ * Re-apply bandwidth policies to every currently connected peer - used when
+ * screen-share state flips, since that changes which camera policy
+ * (solo/sharing) should be in effect for every open connection at once.
+ */
+function reapplyBandwidthPoliciesToAllPeers() {
+  for (const peer_id in peerConnections) {
+    reapplyBandwidthPoliciesToPeer(peer_id);
+  }
+}
+
+/**
+ * Harden Opus audio against packet loss on weak networks by munging the SDP
+ * (offer and answer alike) before setLocalDescription():
+ * - useinbandfec=1: in-band FEC lets Opus self-heal dropped packets without
+ *   retransmission - fixes "hear some words, miss others" on flaky networks.
+ * - stereo=0: force mono (voice doesn't need stereo, ~50% less audio bitrate).
+ * - maxaveragebitrate=OPUS_AVERAGE_BITRATE: sets the encoder's *target*
+ *   ceiling (currently 48kbps), not a fixed value - real congestion still
+ *   pulls the actual bitrate down (native WebRTC bandwidth estimation +
+ *   the audio sender's "high" RTCRtpSender.priority, see
+ *   BANDWIDTH_POLICIES, protects it before the camera's "low" priority
+ *   encoding). Raising this just gives more headroom for pronunciation
+ *   nuance when the network can afford it, instead of capping quality at
+ *   bare-minimum-voice levels all the time.
+ * No-op (returns the original sdp) if no Opus payload type is found.
+ * @param {string} sdp
+ * @returns {string} patched sdp
+ */
+function preferOpusAudioResilience(sdp) {
+  if (!sdp) return sdp;
+  try {
+    const opusMatch = sdp.match(/a=rtpmap:(\d+) opus\/48000/i);
+    if (!opusMatch) return sdp;
+    const pt = opusMatch[1];
+
+    const setParam = (paramsStr, key, value) => {
+      const re = new RegExp(`${key}=[^;]*`);
+      if (re.test(paramsStr)) return paramsStr.replace(re, `${key}=${value}`);
+      return paramsStr ? `${paramsStr};${key}=${value}` : `${key}=${value}`;
+    };
+
+    const fmtpLineRegex = new RegExp(`(a=fmtp:${pt} )([^\r\n]*)`);
+    const fmtpMatch = sdp.match(fmtpLineRegex);
+
+    if (fmtpMatch) {
+      let params = fmtpMatch[2];
+      params = setParam(params, "useinbandfec", 1);
+      params = setParam(params, "stereo", 0);
+      params = setParam(params, "maxaveragebitrate", OPUS_AVERAGE_BITRATE);
+      return sdp.replace(fmtpLineRegex, `$1${params}`);
+    }
+
+    // No existing fmtp line for this payload type yet - insert one right
+    // after the rtpmap line, matching the SDP's own line-ending style.
+    const lineEnding = sdp.includes("\r\n") ? "\r\n" : "\n";
+    const rtpmapLineRegex = new RegExp(`(a=rtpmap:${pt} opus\\/48000[^\r\n]*)`);
+    return sdp.replace(
+      rtpmapLineRegex,
+      `$1${lineEnding}a=fmtp:${pt} useinbandfec=1;stereo=0;maxaveragebitrate=${OPUS_AVERAGE_BITRATE}`,
+    );
+  } catch (err) {
+    console.warn("[BandwidthPolicy] preferOpusAudioResilience failed", err);
+    return sdp;
+  }
+}
+
+/**
  * Add my localVideoMediaStream, localScreenMediaStream and localAudioMediaStream Tracks to connected peer
  * https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/addTrack
  * @param {string} peer_id socket.id
@@ -3168,17 +3389,23 @@ async function handleAddTracks(peer_id) {
 
   if (videoTrack) {
     console.log("[ADD VIDEO TRACK] to Peer Name [" + peer_name + "]");
-    await pc.addTrack(videoTrack, localVideoMediaStream);
+    const videoSender = await pc.addTrack(videoTrack, localVideoMediaStream);
+    applyCameraBandwidthPolicy(videoSender); // fire-and-forget, see note above
   }
 
   if (screenTrack) {
     console.log("[ADD SCREEN TRACK] to Peer Name [" + peer_name + "]");
-    await pc.addTrack(screenTrack, localScreenMediaStream);
+    const screenSender = await pc.addTrack(
+      screenTrack,
+      localScreenMediaStream,
+    );
+    applySenderBandwidthPolicy(screenSender, "screen"); // fire-and-forget
   }
 
   if (audioTrack && audioStream) {
     console.log("[ADD AUDIO TRACK] to Peer Name [" + peer_name + "]");
-    await pc.addTrack(audioTrack, audioStream);
+    const audioSender = await pc.addTrack(audioTrack, audioStream);
+    applySenderBandwidthPolicy(audioSender, "audio"); // fire-and-forget
   }
 }
 
@@ -3257,6 +3484,9 @@ async function handleRtcOffer(peer_id) {
     pc.createOffer()
       .then((local_description) => {
         console.log("Local offer description is", local_description);
+        local_description.sdp = preferOpusAudioResilience(
+          local_description.sdp,
+        );
         // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/setLocalDescription
         pc.setLocalDescription(local_description)
           .then(() => {
@@ -3265,6 +3495,7 @@ async function handleRtcOffer(peer_id) {
               session_description: local_description,
             });
             console.log("Offer setLocalDescription done!");
+            reapplyBandwidthPoliciesToPeer(peer_id);
           })
           .catch((err) => {
             console.error("[Error] offer setLocalDescription", err);
@@ -3313,6 +3544,9 @@ function handleSessionDescription(config) {
         pc.createAnswer()
           .then((local_description) => {
             console.log("Answer description is: ", local_description);
+            local_description.sdp = preferOpusAudioResilience(
+              local_description.sdp,
+            );
             // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/setLocalDescription
             pc.setLocalDescription(local_description)
               .then(() => {
@@ -3321,6 +3555,7 @@ function handleSessionDescription(config) {
                   session_description: local_description,
                 });
                 console.log("Answer setLocalDescription done!");
+                reapplyBandwidthPoliciesToPeer(peer_id);
 
                 // https://github.com/miroslavpejic85/mirotalk/issues/110
                 if (needToCreateOfferByPeer[peer_id]) {
@@ -6975,7 +7210,7 @@ function getResolutionMap() {
  * @returns {object} video constraints
  */
 function getVideoConstraints(videoQuality) {
-  const frameRate = videoMaxFrameRate || 30;
+  let frameRate = videoMaxFrameRate || 30;
 
   const resolutionMap = getResolutionMap();
 
@@ -6988,6 +7223,17 @@ function getVideoConstraints(videoQuality) {
     if (forceCamMaxResolutionAndFps) {
       width = 3840;
       height = 2160;
+    } else {
+      // Bandwidth priority policy: solo camera can afford Full HD, but while
+      // screen share is active the camera becomes a secondary PiP - drop to
+      // 720p/25fps to leave bandwidth for screen + audio (Audio > Screen >
+      // Camera).
+      const contextCap = isScreenStreaming
+        ? CAMERA_CONSTRAINTS_SHARING
+        : CAMERA_CONSTRAINTS_SOLO;
+      width = contextCap.width;
+      height = contextCap.height;
+      frameRate = Math.min(frameRate, contextCap.frameRate);
     }
   } else if (resolutionMap[videoQuality]) {
     [width, height] = resolutionMap[videoQuality];
@@ -7001,6 +7247,30 @@ function getVideoConstraints(videoQuality) {
 
   console.log("Get Video constraints", constraints);
   return constraints;
+}
+
+/**
+ * Re-apply the current (context-dependent) video constraints to whichever
+ * camera track is live right now. Called when screen-share state flips so
+ * an already-running camera steps down/up between the FHD-solo and
+ * 720p-sharing bandwidth targets immediately, instead of waiting for the
+ * next getUserMedia() call.
+ */
+async function applyContextualCameraConstraints() {
+  const videoTrack = getVideoTrack(localVideoMediaStream);
+  if (!videoTrack) return;
+  const videoQuality = videoQualitySelect.value || "default";
+  try {
+    await videoTrack.applyConstraints(getVideoConstraints(videoQuality));
+    console.log("[BandwidthPolicy] applyContextualCameraConstraints", {
+      isScreenStreaming,
+    });
+  } catch (err) {
+    console.warn(
+      "[BandwidthPolicy] applyContextualCameraConstraints failed",
+      err,
+    );
+  }
 }
 
 /**
@@ -7954,9 +8224,17 @@ async function toggleScreenSharing(init = false) {
  * Get screen share constraints
  */
 function getScreenShareConstraints() {
+  // Bandwidth priority policy: cap screen share at Full HD/25fps regardless
+  // of the source display's real resolution (sending higher than what
+  // viewers can render is pure bandwidth waste), while still honouring a
+  // *lower* fps chosen by the user in Settings.
   return {
     audio: true,
-    video: { frameRate: screenMaxFrameRate },
+    video: {
+      frameRate: Math.min(screenMaxFrameRate || 30, SCREEN_SHARE_MAX_FPS),
+      width: { max: SCREEN_SHARE_MAX_WIDTH },
+      height: { max: SCREEN_SHARE_MAX_HEIGHT },
+    },
   };
 }
 
@@ -7975,6 +8253,11 @@ async function startScreenSharing(constraints, init) {
     console.error("[ScreenShare] No video track in display stream");
     return;
   }
+  // Tell the encoder this is detail-heavy content (slides/text) - prioritize
+  // sharpness over motion smoothness.
+  try {
+    screenVideoTrack.contentHint = "detail";
+  } catch (_) {}
   const screenAudioTrack = getAudioTrack(displayStream);
   const micAudioTrack =
     myAudioStatus && hasAudioTrack(localAudioMediaStream)
@@ -7995,6 +8278,10 @@ async function startScreenSharing(constraints, init) {
     : new MediaStream([screenVideoTrack]);
   isScreenStreaming = true;
   myScreenStatus = true;
+  // Camera policy switches solo -> sharing (drop resolution, keep fps) now
+  // that screen share is taking priority. Fire-and-forget, see notes above.
+  applyContextualCameraConstraints();
+  reapplyBandwidthPoliciesToAllPeers();
   const extras = getLocalScreenExtras();
   if (extras) {
     try {
@@ -8074,6 +8361,10 @@ async function stopScreenSharing(init) {
   if (!init) adaptAspectRatio();
   isScreenStreaming = false;
   myScreenStatus = false;
+  // Camera policy switches sharing -> solo (can afford Full HD again) now
+  // that screen share stopped. Fire-and-forget, see notes above.
+  applyContextualCameraConstraints();
+  reapplyBandwidthPoliciesToAllPeers();
   if (!init) {
     emitPeersAction("screenStop");
     try {
@@ -8399,13 +8690,15 @@ async function refreshMyStreamToPeers(stream, localAudioTrackChange = false) {
     if (cameraTrack) {
       if (videoSenders.length >= 1) {
         await videoSenders[0].replaceTrack(cameraTrack);
+        applyCameraBandwidthPolicy(videoSenders[0]); // fire-and-forget
         console.log("REPLACE CAMERA TRACK TO", {
           peer_id,
           peer_name,
           cameraTrack,
         });
       } else {
-        pc.addTrack(cameraTrack, localVideoMediaStream);
+        const cameraSender = pc.addTrack(cameraTrack, localVideoMediaStream);
+        applyCameraBandwidthPolicy(cameraSender); // fire-and-forget
         await handleRtcOffer(peer_id);
         console.log("ADD CAMERA TRACK TO", { peer_id, peer_name, cameraTrack });
       }
@@ -8424,13 +8717,15 @@ async function refreshMyStreamToPeers(stream, localAudioTrackChange = false) {
     if (screenTrack) {
       if (videoSenders.length >= 2) {
         await videoSenders[1].replaceTrack(screenTrack);
+        applySenderBandwidthPolicy(videoSenders[1], "screen"); // fire-and-forget
         console.log("REPLACE SCREEN TRACK TO", {
           peer_id,
           peer_name,
           screenTrack,
         });
       } else {
-        pc.addTrack(screenTrack, localScreenMediaStream);
+        const screenSender = pc.addTrack(screenTrack, localScreenMediaStream);
+        applySenderBandwidthPolicy(screenSender, "screen"); // fire-and-forget
         await handleRtcOffer(peer_id);
         console.log("ADD SCREEN TRACK TO", { peer_id, peer_name, screenTrack });
       }
@@ -8450,13 +8745,18 @@ async function refreshMyStreamToPeers(stream, localAudioTrackChange = false) {
     if (audioTrack) {
       if (audioSender) {
         await audioSender.replaceTrack(audioTrack);
+        applySenderBandwidthPolicy(audioSender, "audio"); // fire-and-forget
         console.log("REPLACE AUDIO TRACK TO", {
           peer_id,
           peer_name,
           audioTrack,
         });
       } else {
-        pc.addTrack(audioTrack, audioStream || new MediaStream([audioTrack]));
+        const newAudioSender = pc.addTrack(
+          audioTrack,
+          audioStream || new MediaStream([audioTrack]),
+        );
+        applySenderBandwidthPolicy(newAudioSender, "audio"); // fire-and-forget
         await handleRtcOffer(peer_id);
         console.log("ADD AUDIO TRACK TO", { peer_id, peer_name, audioTrack });
       }
@@ -11894,6 +12194,20 @@ function destroyTeacherWaitYoutubePlayer() {
 function handleRoomWaitingForTeacher() {
   playSound("alert");
 
+  // Chưa thực sự vào phòng chính - dừng hẳn phần cứng camera (tắt đèn)
+  // nếu đang bật từ màn thiết lập, dù thiết lập (myVideoStatus) vẫn đang
+  // là "bật". Chỉ tạm dừng phần cứng, KHÔNG đổi thiết lập/lS config -
+  // handleRoomTeacherJoined() bật lại đúng theo thiết lập này khi giáo
+  // viên/admin vào phòng thật. Mic không đụng tới, vẫn theo thiết lập
+  // như bình thường trong lúc chờ.
+  if (myVideoStatus && getVideoTrack(localVideoMediaStream)) {
+    stopVideoTracks(localVideoMediaStream);
+    if (initStream && initStream !== localVideoMediaStream) {
+      stopVideoTracks(initStream);
+    }
+    videoStoppedForTeacherWait = true;
+  }
+
   // Che ngay lập tức - giữa lúc Swal nhập tên vừa đóng (đã tự
   // fadeOutLoadingBackdrop() từ trước) và lúc Swal chờ này thật sự mở
   // ra có 1 khoảng trễ mạng, nếu không che thì UI phòng (trống, chưa
@@ -11971,7 +12285,7 @@ function handleRoomWaitingForTeacher() {
  * handleRoomWaitingForTeacher) - tự gửi lại "join", lần này sẽ qua vì
  * phòng đã có giáo viên/admin, không cần học viên thao tác gì.
  */
-function handleRoomTeacherJoined(config) {
+async function handleRoomTeacherJoined(config) {
   // Che ngay trước khi đóng Swal chờ - giữa lúc đóng và lúc phòng thật
   // sự hiện ra (addPeer/serverInfo, có thể có độ trễ) cũng là 1
   // khoảng hở y hệt lúc mở màn chờ. handleServerInfo() sẽ tự
@@ -11980,6 +12294,26 @@ function handleRoomTeacherJoined(config) {
   if (loadingBackdrop) loadingBackdrop.style.transition = "";
   Swal.close();
   playSound("addPeer");
+
+  // Giáo viên/admin đã thật sự vào phòng - đây mới là lúc "vào phòng
+  // chính", nên nếu camera bị tạm dừng lúc đứng chờ (xem
+  // handleRoomWaitingForTeacher), bật lại NGAY TRƯỚC khi join, đúng theo
+  // thiết lập ban đầu (myVideoStatus) - không phải bật vô điều kiện, vì
+  // người dùng có thể đã chọn tắt cam từ đầu. changeLocalCamera() tự gán
+  // lại localVideoMediaStream/myVideo, an toàn gọi trước khi có bất kỳ
+  // peer connection nào (không khác gì nhánh isScreenStreaming ở
+  // whoAreYouJoin() đang làm).
+  if (videoStoppedForTeacherWait) {
+    videoStoppedForTeacherWait = false;
+    if (myVideoStatus) {
+      const deviceId = videoSelect.value || initVideoSelect.value;
+      if (deviceId) {
+        await changeLocalCamera(deviceId);
+        initStream = localVideoMediaStream;
+      }
+    }
+  }
+
   joinToChannel();
 
   // Học viên tự vào phòng qua đường "chờ" này không đi qua nhánh
