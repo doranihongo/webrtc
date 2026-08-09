@@ -6293,7 +6293,6 @@ function confirmStopRecording() {
       // handleMediaRecorderStop(), which enforces the 3s minimum and hides
       // it once the upload actually finishes) instead of closing it.
       showPPLoading("Đang tải video lên máy chủ...");
-      playSound("eject");
       recStopLoadingShownAt = performance.now();
     },
   });
@@ -9188,7 +9187,6 @@ function startDesktopRecording(options, audioMixerTracks) {
           if (!isStreamRecording) return; // already stopped through the app's own flow
           stopStreamRecording();
           showPPLoading("Đang tải video lên máy chủ...");
-          playSound("eject");
           recStopLoadingShownAt = performance.now();
         };
       });
