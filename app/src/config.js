@@ -23,6 +23,8 @@
 
 require("dotenv").config();
 
+const path = require("path");
+
 const packageJson = require("../../package.json");
 
 // Helper: parse env string to boolean
@@ -179,6 +181,33 @@ module.exports = {
   // ==========================================
   ipLookup: {
     enabled: getEnvBoolean(process.env.IP_LOOKUP_ENABLED),
+  },
+
+  // ==========================================
+  // Recording (teacher-only, relayed through VPS, uploaded to Drive)
+  // ==========================================
+  recording: {
+    enabled: getEnvBoolean(process.env.RECORDING_ENABLED, true), // ops kill-switch
+    tempDir:
+      process.env.RECORDING_TEMP_DIR ||
+      path.join(__dirname, "../../recordings-tmp"),
+    idleTimeoutMs: parseInt(process.env.RECORDING_IDLE_TIMEOUT_MS, 10) || 5 * 60 * 1000,
+    minFreeDiskGB: parseFloat(process.env.RECORDING_MIN_FREE_DISK_GB) || 5,
+    warnFreeDiskGB: parseFloat(process.env.RECORDING_WARN_FREE_DISK_GB) || 8,
+    maxChunkBytes:
+      parseInt(process.env.RECORDING_MAX_CHUNK_BYTES, 10) || 8 * 1024 * 1024,
+    maxConcurrentSessions:
+      parseInt(process.env.RECORDING_MAX_CONCURRENT_SESSIONS, 10) || 5,
+  },
+
+  // ==========================================
+  // Google Drive (personal account - recording uploads)
+  // ==========================================
+  googleDrive: {
+    clientId: process.env.GDRIVE_CLIENT_ID,
+    clientSecret: process.env.GDRIVE_CLIENT_SECRET,
+    refreshToken: process.env.GDRIVE_REFRESH_TOKEN,
+    folderId: process.env.GDRIVE_FOLDER_ID || null, // blank = My Drive root
   },
 
   // ==========================================

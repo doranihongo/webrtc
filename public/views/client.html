@@ -893,15 +893,32 @@ micro để sử dụng ứng dụng này.
                 "cursor-pointer p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg flex items-center justify-center transition-all relative bg-slate-800 hover:bg-slate-700 text-slate-200";
             }
 
-            // Record state
+            // Record state - reads the authoritative flag from client.js
+            // directly (not DOM-sniffed like the buttons above) since the
+            // recording icon's own color/class changes on a child <i>, not
+            // on oldRecord itself, so the MutationObserver below never sees
+            // it; handleMediaRecorderStart/Stop call window.updateNewControlBarUI()
+            // explicitly instead - see client.js.
             const isRecording =
-              oldRecord?.querySelector("i")?.style.color === "red";
+              typeof isStreamRecording !== "undefined" && isStreamRecording;
             if (isRecording) {
               newRecord.className =
-                "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-red-600 text-white items-center justify-center transition-all shadow-lg shadow-red-600/30";
+                "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-red-600 text-white items-center justify-center transition-all shadow-lg shadow-red-600/30 pulsate";
+              if (newRecord.getAttribute("data-state") !== "on") {
+                newRecord.innerHTML =
+                  '<i data-lucide="square" class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"></i>';
+                newRecord.setAttribute("data-state", "on");
+                if (window.lucide) window.lucide.createIcons();
+              }
             } else {
               newRecord.className =
                 "cursor-pointer hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all";
+              if (newRecord.getAttribute("data-state") !== "off") {
+                newRecord.innerHTML =
+                  '<i data-lucide="circle-dot" class="w-5 h-5 sm:w-[18px] sm:h-[18px] max-lg:landscape:w-5 max-lg:landscape:h-5"></i>';
+                newRecord.setAttribute("data-state", "off");
+                if (window.lucide) window.lucide.createIcons();
+              }
             }
 
             // PiP state
@@ -2043,7 +2060,6 @@ Ghi chú</textarea>
     <script defer src="../js/helpers.js"></script>
     <script defer src="../js/common.js"></script>
     <script defer src="../js/buttons.js"></script>
-    <script defer src="../js/fixWebmDuration.js"></script>
 
     <script defer src="../js/wakeLock.js"></script>
     <script defer src="../js/roomTemplate.js"></script>
@@ -2086,9 +2102,10 @@ Ghi chú</textarea>
       <div class="flex items-center gap-1.5 sm:gap-2">
         <!-- Call Timer -->
         <div
+          id="headerTimerBadge"
           class="bg-slate-900/90 border border-slate-800 text-slate-300 px-2 sm:px-2.5 py-1 rounded-lg font-mono text-[11px] sm:text-xs flex items-center gap-1.5 shadow-md"
         >
-          <i data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
+          <i id="headerTimerIcon" data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
           <span id="headerTimer" class="notranslate" translate="no">00:00</span>
         </div>
 

@@ -726,16 +726,29 @@ let themeCardDebounce = null;
 
 // recording
 let mediaRecorder;
-let recordedBlobs;
+let recTotalBytes = 0; // running total of recorded bytes, for the info panel only - no blob data is kept client-side (see handleMediaRecorderData)
 let audioRecorder; // helpers.js
 let recScreenStream; // screen media to recording
 let recTimer;
 let recCodecs;
 let recElapsedTime;
-let recStartTs = null;
 let isStreamRecording = false;
 let isStreamRecordingPaused = false;
 let isRecScreenStream = false;
+
+// recording -> VPS relay (chunked upload, see handleMediaRecorder/handleMediaRecorderData)
+let recSessionToken = null;
+let recSessionId = null;
+let recChunkQueue = []; // [{ index, blob, isFinal }]
+let recNextChunkIndex = 0;
+let recUploadInFlight = false;
+let recUploadPaused = false;
+let recServerPipelineOk = true; // false => this session has no recording pipeline at all (server/Drive is the only copy - nothing is kept client-side)
+let recStopRequested = false; // set before mediaRecorder.stop() so the trailing dataavailable is tagged final
+let recUploadStats = []; // rolling window of recent chunk-upload {ms, ok} samples, for weak-network backoff
+let recStopLoadingShownAt = null; // timestamp the "Đang tải..." PP loading state appeared - null when not showing it
+let recSilentStop = false; // true => stopStreamRecording() was triggered by leaving the room, not a manual "DỪNG GHI" click - save it, skip the toast
+let recFullStopResolve = null; // resolves once handleMediaRecorderStop() has fully finished (incl. the upload drain) - see stopStreamRecording()
 
 let wbCanvas = null;
 let wbIsLock = false;
@@ -1371,6 +1384,17 @@ document.addEventListener("DOMContentLoaded", function () {
   initClientPeer();
   initDocumentListeners();
   initSwipeBackGuard();
+});
+
+// Warn before an accidental tab close / reload / browser close while screen
+// sharing or recording is active - a real unload skips all JS (checkRecording()
+// only helps on the graceful in-app "leave room" path), so the in-flight
+// recording chunk (if any) would otherwise just get silently aborted.
+window.addEventListener("beforeunload", (e) => {
+  if (isScreenStreaming || isStreamRecording) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
 });
 
 /**
@@ -6246,10 +6270,32 @@ function setScreenShareBtn() {
  */
 function setRecordStreamBtn() {
   recordStreamBtn.addEventListener("click", (e) => {
-    isStreamRecording ? stopStreamRecording() : startStreamRecording();
+    isStreamRecording ? confirmStopRecording() : startStreamRecording();
   });
   recImage.addEventListener("click", (e) => {
     recordStreamBtn.click();
+  });
+}
+
+/**
+ * Confirm before stopping an in-progress recording.
+ */
+function confirmStopRecording() {
+  showPP({
+    icon: "circle-stop",
+    title: "Dừng ghi hình?",
+    desc: "Video buổi học sẽ được tải lên máy chủ.",
+    confirmText: "DỪNG GHI",
+    cancelText: "HỦY",
+    onConfirm: () => {
+      stopStreamRecording();
+      // Morph the same popup into a "please wait" state (see
+      // handleMediaRecorderStop(), which enforces the 3s minimum and hides
+      // it once the upload actually finishes) instead of closing it.
+      showPPLoading("Đang tải video lên máy chủ...");
+      playSound("eject");
+      recStopLoadingShownAt = performance.now();
+    },
   });
 }
 
@@ -8882,10 +8928,18 @@ function getAudioTrack(mediaStream) {
  * Check if recording is active, if yes,
  * on disconnect, remove peer, kick out or leave room, we going to save it
  */
-function checkRecording() {
+/**
+ * Called right before leaving the room - if a recording is in progress,
+ * stops it and waits for the save to actually finish (not just fire off
+ * mediaRecorder.stop() and immediately navigate away, which would abort
+ * whatever chunk was still mid-upload). Silent - no success toast, since
+ * the page is about to navigate away regardless.
+ */
+async function checkRecording() {
   if (isStreamRecording || myVideoPeerName.innerText.includes("REC")) {
     console.log("Going to save recording");
-    stopStreamRecording();
+    recSilentStop = true;
+    await stopStreamRecording();
   }
 }
 
@@ -8893,8 +8947,13 @@ function checkRecording() {
  * Handle recording errors
  * @param {string} error
  */
-function handleRecordingError(error, popupLog = true) {
+function handleRecordingError(
+  error,
+  popupLog = true,
+  userMessage = "Ghi hình thất bại, vui lòng thử lại.",
+) {
   console.error("Recording error", error);
+  if (popupLog) userLog("error", userMessage, 6000);
 }
 
 /**
@@ -8938,12 +8997,11 @@ function startRecordingTimer() {
   resumeRecButtons();
   recElapsedTime = 0;
   recTimer = setInterval(function printTime() {
-    if (!isStreamRecordingPaused) {
-      recElapsedTime++;
-      let recTimeElapsed = secondsToHms(recElapsedTime);
-      myVideoPeerName.innerText = myPeerName + " 🔴 REC " + recTimeElapsed;
-      recordingTime.innerText = "🔴 REC " + recTimeElapsed;
-    }
+    // recElapsedTime is rendered into #headerTimer by initTopHeaderBar()'s
+    // own tick while recording - this timer only tracks the count itself,
+    // it never touches the DOM (keeps the peer name untouched, see
+    // handleMediaRecorderStart()/Stop()).
+    if (!isStreamRecordingPaused) recElapsedTime++;
   }, 1000);
 }
 function stopRecordingTimer() {
@@ -8979,12 +9037,29 @@ function startStreamRecording() {
     userLog("warning", "Chỉ chủ phòng mới được ghi hình cuộc gọi.");
     return;
   }
-  recordedBlobs = [];
+  recTotalBytes = 0;
+
+  // Reset VPS-relay session state - each Start is a brand new session.
+  recSessionToken = null;
+  recSessionId = null;
+  recChunkQueue = [];
+  recNextChunkIndex = 0;
+  recUploadInFlight = false;
+  recUploadPaused = false;
+  recServerPipelineOk = true;
+  recStopRequested = false;
+  recUploadStats = [];
 
   // Get supported MIME types and set options
   const supportedMimeTypes = getSupportedMimeTypes();
   console.log("MediaRecorder supported options", supportedMimeTypes);
-  const options = { mimeType: supportedMimeTypes[0] };
+  // ~480p/25fps target: video ~1Mbps, audio ~112kbps Opus (within the
+  // 800kbps-1.2Mbps / 96-128kbps range agreed for the recording feature).
+  const options = {
+    mimeType: supportedMimeTypes[0],
+    videoBitsPerSecond: 1_000_000,
+    audioBitsPerSecond: 112_000,
+  };
 
   recCodecs = supportedMimeTypes[0];
 
@@ -9012,32 +9087,22 @@ function startStreamRecording() {
 }
 
 /**
- * Recording options Camera or Screen/Window for Desktop devices
+ * Confirm before starting a recording (Desktop devices). Confirming always
+ * records screen/window - see startDesktopRecording().
  * @param {MediaRecorderOptions} options - MediaRecorder options.
  * @param {array} audioMixerTracks - Array of audio tracks from the audio mixer.
  */
 function recordingOptions(options, audioMixerTracks) {
-  Swal.fire({
-    background: swBg,
-    position: "top",
-    imageUrl: images.recording,
-    title: "Tùy chọn ghi hình",
-    text: "Chọn loại ghi hình bạn muốn bắt đầu. Âm thanh sẽ được ghi từ tất cả người tham gia.",
-    showDenyButton: true,
-    showCancelButton: true,
-    cancelButtonColor: "red",
-    denyButtonColor: "green",
-    confirmButtonText: `Camera`,
-    denyButtonText: `Màn hình/Cửa sổ`,
-    cancelButtonText: `Hủy`,
-    showClass: { popup: "animate__animated animate__fadeInDown" },
-    hideClass: { popup: "animate__animated animate__fadeOutUp" },
-  }).then((result) => {
-    if (result.isConfirmed) {
-      startMobileRecording(options, audioMixerTracks);
-    } else if (result.isDenied) {
+  playSound("newMessage");
+  showPP({
+    icon: "video",
+    title: "Ghi hình buổi học?",
+    desc: "Bạn có muốn ghi hình buổi học không?",
+    confirmText: "Ghi hình",
+    cancelText: "Hủy",
+    onConfirm: () => {
       startDesktopRecording(options, audioMixerTracks);
-    }
+    },
   });
 }
 
@@ -9100,7 +9165,7 @@ function startDesktopRecording(options, audioMixerTracks) {
 
   // Define constraints for capturing the screen
   const constraints = {
-    video: { frameRate: { max: 30 } }, // Recording max 30fps
+    video: { frameRate: { ideal: 25, max: 30 } }, // ~25fps target for recording
   };
 
   // Request access to screen capture using the specified constraints
@@ -9110,6 +9175,23 @@ function startDesktopRecording(options, audioMixerTracks) {
       // Get video tracks from the screen capture stream
       const screenTracks = screenStream.getVideoTracks();
       console.log("Screen video tracks --->", screenTracks);
+
+      // The audio mixer track is separate (Web Audio, not screen capture)
+      // and stays live even after this video track ends, so the combined
+      // stream never goes fully inactive on its own - MediaRecorder would
+      // otherwise just keep "recording" silently (frozen/black video)
+      // forever after the user clicks the browser/OS's native "Stop
+      // sharing" control. Treat that the same as the app's own "DỪNG GHI":
+      // stop for real and show the same upload-in-progress popup.
+      screenTracks.forEach((track) => {
+        track.onended = () => {
+          if (!isStreamRecording) return; // already stopped through the app's own flow
+          stopStreamRecording();
+          showPPLoading("Đang tải video lên máy chủ...");
+          playSound("eject");
+          recStopLoadingShownAt = performance.now();
+        };
+      });
 
       // Create an array to combine screen tracks and audio mixer tracks
       const combinedTracks = [];
@@ -9223,18 +9305,94 @@ function toggleVideoAudioTabs(disabled = false) {
 }
 
 /**
- * Handle Media Recorder
+ * Handle Media Recorder: authorize + open a VPS recording session (over
+ * Socket.IO, where the server can trust our real socket.id) before starting
+ * MediaRecorder, then start it with a 30s timeslice so each chunk can be
+ * relayed to the server as it's produced.
+ *
+ * The VPS/Drive pipeline is the ONLY copy of the recording - nothing is
+ * buffered or saved client-side (see handleMediaRecorderData). So if the
+ * server can't open a session, recording is refused outright rather than
+ * silently "recording" data that would go nowhere.
  * @param {object} mediaRecorder
  */
-function handleMediaRecorder(mediaRecorder) {
-  // Always pass a timeslice so the browser flushes encoded chunks into
-  // recordedBlobs periodically instead of buffering the entire recording
-  // in renderer memory. This makes long (>1h) recordings stable and
-  // avoids MediaRecorder auto-stops caused by memory pressure.
-  mediaRecorder.start(1000);
+async function handleMediaRecorder(mediaRecorder) {
+  const mode = isRecScreenStream ? "screen" : "camera";
+
+  let result;
+  try {
+    result = await signalingSocket.timeout(8000).emitWithAck("recordingSessionStart", {
+      room_id: roomId,
+      peer_name: myPeerName,
+      peer_uuid: myPeerUUID,
+      mode,
+      mimeType: recCodecs,
+    });
+  } catch (err) {
+    // Infra failure (timeout/socket error) - nothing the teacher can do
+    // about it from here, so log only, no popup.
+    handleRecordingError("recordingSessionStart handshake failed: " + err, false);
+    return;
+  }
+
+  if (!result?.ok) {
+    if (result?.reason === "not_presenter") {
+      handleRecordingError(
+        "recordingSessionStart rejected: not_presenter",
+        true,
+        "Chỉ chủ phòng mới được ghi hình cuộc gọi.",
+      );
+    } else {
+      // Infra-type rejection (disk_low, disabled, too_many_sessions) -
+      // nothing the teacher can do about it from here, so log only.
+      handleRecordingError("recordingSessionStart rejected: " + result?.reason, false);
+    }
+    return;
+  }
+
+  recSessionToken = result.token;
+  recSessionId = result.sessionId;
+  recServerPipelineOk = true;
+  recNextChunkIndex = 0;
+  recChunkQueue = [];
+
+  // Always pass a 30s timeslice so the browser flushes encoded chunks
+  // periodically instead of buffering the entire recording in renderer
+  // memory. Each chunk is relayed to the VPS as it's produced (see
+  // handleMediaRecorderData/pumpRecordingChunkQueue) - nothing is kept
+  // client-side.
+  mediaRecorder.start(30000);
   mediaRecorder.addEventListener("start", handleMediaRecorderStart);
   mediaRecorder.addEventListener("dataavailable", handleMediaRecorderData);
   mediaRecorder.addEventListener("stop", handleMediaRecorderStop);
+}
+
+/**
+ * Swaps the top-right call-timer badge into/out of "recording" styling -
+ * red border/text, and the clock icon becomes a pulsing red dot. The timer
+ * VALUE itself is handled by initTopHeaderBar()'s own tick (see there).
+ * @param {boolean} active
+ */
+function setHeaderTimerRecordingState(active) {
+  const badge = getId("headerTimerBadge");
+  const icon = getId("headerTimerIcon");
+  // Frame/border/size untouched on purpose - only the time text color and
+  // the icon change. red-600 (not red-400/500) to keep it a muted red
+  // rather than a bright/neon one.
+  if (badge) {
+    badge.classList.toggle("text-red-600", active);
+    badge.classList.toggle("text-slate-300", !active);
+  }
+  if (icon) {
+    if (active) {
+      icon.outerHTML =
+        '<span id="headerTimerIcon" class="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>';
+    } else {
+      icon.outerHTML =
+        '<i id="headerTimerIcon" data-lucide="clock" class="w-3 h-3 text-slate-400"></i>';
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
 }
 
 /**
@@ -9249,10 +9407,19 @@ function handleMediaRecorderStart(event) {
   console.log("MediaRecorder started: ", event);
   isStreamRecording = true;
   const recordStreamIcon = recordStreamBtn.querySelector("i");
+  recordStreamIcon.classList.remove("fa-record-vinyl");
+  recordStreamIcon.classList.add("fa-stop", "pulsate");
   recordStreamIcon.style.setProperty("color", "#ff4500");
+  setHeaderTimerRecordingState(true);
   if (isMobileDevice) elemDisplay(swapCameraBtn, false);
-  recStartTs = performance.now();
   playSound("recStart");
+
+  // Ask the new control bar to re-sync (#newRecordBtn only reads
+  // isStreamRecording, not oldRecord's own attributes - see updateUI() in
+  // client.html), same bridge setPeerScreenStatus already uses.
+  if (typeof window.updateNewControlBarUI === "function") {
+    window.updateNewControlBarUI();
+  }
 }
 
 /**
@@ -9261,17 +9428,129 @@ function handleMediaRecorderStart(event) {
  */
 function handleMediaRecorderData(event) {
   console.log("MediaRecorder data: ", event);
-  if (event.data && event.data.size > 0) recordedBlobs.push(event.data);
+  if (!event.data || event.data.size === 0) return;
+
+  recTotalBytes += event.data.size; // for the info panel only - the chunk itself is never retained client-side
+
+  if (recServerPipelineOk) {
+    recChunkQueue.push({
+      index: recNextChunkIndex++,
+      blob: event.data,
+      isFinal: recStopRequested,
+    });
+    pumpRecordingChunkQueue();
+  }
+}
+
+/**
+ * Sequentially uploads queued recording chunks to the VPS, one at a time
+ * (waits for each ack before sending the next - guarantees byte order for
+ * the server-side append). Backs off on failure instead of dropping chunks;
+ * self-throttles based on its own recent latency/failure rate since the
+ * chunk uploader is a plain HTTP fetch, not something the WebRTC bandwidth
+ * priority policy (RTCRtpSender-based) can reach.
+ */
+function pumpRecordingChunkQueue(retryDelayMs = 0) {
+  if (recUploadInFlight || recUploadPaused || recChunkQueue.length === 0) return;
+  if (!recServerPipelineOk || !recSessionToken) return;
+
+  const send = async () => {
+    recUploadInFlight = true;
+    const item = recChunkQueue[0];
+    const startedAt = performance.now();
+    try {
+      const resp = await fetch("/recording/chunk", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "X-Recording-Session-Token": recSessionToken,
+          "X-Recording-Chunk-Index": String(item.index),
+          "X-Recording-Final": item.isFinal ? "1" : "0",
+        },
+        body: item.blob,
+      });
+      const json = await resp.json().catch(() => ({}));
+      recordChunkUploadStat(performance.now() - startedAt, resp.ok);
+
+      if (resp.ok) {
+        recChunkQueue.shift();
+        recUploadInFlight = false;
+        pumpRecordingChunkQueue();
+        return;
+      }
+
+      if (json?.reason === "session_not_found") {
+        // Server already idle-timed-out (or otherwise closed) this session.
+        // There's no local copy to fall back to, so continuing to "record"
+        // would just discard data with nothing to show for it - stop now.
+        // Infra failure, nothing the teacher can do about it, so no popup.
+        console.warn("Recording session no longer exists on server, stopping recording");
+        recServerPipelineOk = false;
+        recUploadInFlight = false;
+        if (isStreamRecording) stopStreamRecording();
+        return;
+      }
+
+      throw new Error("chunk upload rejected: " + JSON.stringify(json));
+    } catch (err) {
+      console.warn("Recording chunk upload failed, retrying", err);
+      recordChunkUploadStat(performance.now() - startedAt, false);
+      recUploadInFlight = false;
+      const backoff = weakNetworkBackoffMs();
+      if (backoff > 0) recUploadPaused = true;
+      setTimeout(() => {
+        recUploadPaused = false;
+        pumpRecordingChunkQueue();
+      }, Math.max(1000, backoff));
+    }
+  };
+
+  send();
+}
+
+/**
+ * Keep a small rolling window of recent chunk-upload outcomes and use it to
+ * detect a weak uplink (high latency / failures) so the uploader can pause
+ * itself instead of competing for bandwidth with the call.
+ */
+function recordChunkUploadStat(ms, ok) {
+  recUploadStats.push({ ms, ok });
+  if (recUploadStats.length > 5) recUploadStats.shift();
+}
+function weakNetworkBackoffMs() {
+  if (recUploadStats.length < 3) return 0;
+  const failures = recUploadStats.filter((s) => !s.ok).length;
+  const avgMs =
+    recUploadStats.reduce((sum, s) => sum + s.ms, 0) / recUploadStats.length;
+  if (failures >= 2) return 15000;
+  if (avgMs > 8000) return 8000;
+  return 0;
+}
+
+/**
+ * Waits (bounded) for the chunk queue to fully drain - used when stopping,
+ * so the teacher only has to wait for the last small chunk, not the whole
+ * Drive upload (which continues server-side in the background).
+ */
+function waitForChunkQueueDrain(timeoutMs = 15000) {
+  return new Promise((resolve) => {
+    const startedAt = performance.now();
+    const check = () => {
+      if (recChunkQueue.length === 0 || !recServerPipelineOk) return resolve();
+      if (performance.now() - startedAt > timeoutMs) return resolve();
+      setTimeout(check, 300);
+    };
+    check();
+  });
 }
 
 /**
  * Handle Media Recorder onstop event
  * @param {object} event of media recorder
  */
-function handleMediaRecorderStop(event) {
+async function handleMediaRecorderStop(event) {
   toggleVideoAudioTabs(false);
-  console.log("MediaRecorder stopped: ", event);
-  console.log("MediaRecorder Blobs: ", recordedBlobs);
+  console.log("MediaRecorder stopped: ", event, "totalBytes:", recTotalBytes);
   stopRecordingTimer();
   emitPeersAction("recStop");
   emitPeerStatus("rec", false);
@@ -9285,20 +9564,89 @@ function handleMediaRecorderStop(event) {
   }
 
   const recordStreamIcon = recordStreamBtn.querySelector("i");
+  recordStreamIcon.classList.remove("fa-stop", "pulsate");
+  recordStreamIcon.classList.add("fa-record-vinyl");
   recordStreamIcon.style.setProperty("color", "#ffffff");
-  downloadRecordedStream();
+  setHeaderTimerRecordingState(false);
+  if (!recTotalBytes) {
+    console.error("No recorded data available");
+    userLog("error", "Ghi hình thất bại: không có dữ liệu được ghi", 6000);
+  }
+
+  // Ask the new control bar to re-sync (#newRecordBtn only reads
+  // isStreamRecording, not oldRecord's own attributes - see updateUI() in
+  // client.html), same bridge setPeerScreenStatus already uses.
+  if (typeof window.updateNewControlBarUI === "function") {
+    window.updateNewControlBarUI();
+  }
 
   if (isMobileDevice) elemDisplay(swapCameraBtn, true, "block");
 
-  playSound("recStop");
+  // Give the trailing (isFinal:true) chunk a bounded chance to reach the
+  // server before reporting the outcome - the Drive upload itself continues
+  // server-side in the background regardless of what happens here.
+  if (recServerPipelineOk) {
+    await waitForChunkQueueDrain();
+
+    // If confirmStopRecording() put up the "Đang tải video lên máy chủ..."
+    // loading popup, keep it up for at least 3s total (even if the upload
+    // actually finished faster) so it doesn't just flash on screen, then
+    // close it right before showing the outcome toast below.
+    if (recStopLoadingShownAt !== null) {
+      const remainingMs = 3000 - (performance.now() - recStopLoadingShownAt);
+      if (remainingMs > 0) await new Promise((r) => setTimeout(r, remainingMs));
+      recStopLoadingShownAt = null;
+      hidePP();
+    }
+
+    if (recServerPipelineOk && recChunkQueue.length === 0) {
+      // recSilentStop: this stop was triggered by leaving the room
+      // (checkRecording()), not the teacher explicitly clicking "DỪNG GHI" -
+      // save it the same way, just without a toast nobody will see (the
+      // page is about to navigate away already).
+      if (!recSilentStop) {
+        playSound("recStop");
+        userLog("success", "Bản ghi đã được lưu trên máy chủ", 6000);
+      }
+    } else {
+      // Infra failure (didn't finish sending before stop) - nothing the
+      // teacher can do about it from here, so log only, no popup.
+      console.warn("Recording chunk queue did not drain before stop - some data may be missing");
+    }
+  }
+
+  recSilentStop = false;
+  if (recFullStopResolve) {
+    recFullStopResolve();
+    recFullStopResolve = null;
+  }
 }
 
 /**
  * Stop recording
  */
+/**
+ * @returns {Promise<void>} resolves once handleMediaRecorderStop() has
+ *   fully finished, including waiting for the upload to actually reach the
+ *   server - callers that need the recording durably saved before doing
+ *   something else (e.g. checkRecording() before navigating away on leave)
+ *   should await this instead of treating stop as instantaneous.
+ */
 function stopStreamRecording() {
-  mediaRecorder.stop();
+  // MediaRecorder.stop() always fires one last "dataavailable" (the tail
+  // data) before the "stop" event - flagging this now means that final
+  // chunk gets queued with isFinal:true so the server knows to close the file.
+  recStopRequested = true;
+  // Guard against calling stop() on an already-inactive recorder (e.g. the
+  // screen track's onended handler and a manual "DỪNG GHI" click racing
+  // each other) - MediaRecorder throws InvalidStateError otherwise.
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    mediaRecorder.stop();
+  }
   audioRecorder.stopMixedAudioStream();
+  return new Promise((resolve) => {
+    recFullStopResolve = resolve;
+  });
 }
 
 /**
@@ -9350,93 +9698,6 @@ function resumeRecording() {
     isStreamRecordingPaused = false;
     resumeRecButtons();
     console.log("Resume recording");
-  }
-}
-
-/**
- * Get WebM duration fixer function
- * @returns {Function|null}
- */
-function getWebmFixerFn() {
-  const fn = window.FixWebmDuration;
-  return typeof fn === "function" ? fn : null;
-}
-
-/**
- * Download recorded stream
- */
-async function downloadRecordedStream() {
-  try {
-    // Check if we have recorded data
-    if (!recordedBlobs || recordedBlobs.length === 0) {
-      console.error("No recorded data available");
-      userLog("error", "Ghi hình thất bại: không có dữ liệu được ghi", 6000);
-      return;
-    }
-
-    const type = recordedBlobs[0].type.includes("mp4") ? "mp4" : "webm";
-    const rawBlob = new Blob(recordedBlobs, { type: "video/" + type });
-    const recFileName = getDataTimeString() + "-REC." + type;
-    const currentDevice = isMobileDevice ? "ĐIỆN THOẠI" : "MÁY TÍNH";
-    const blobFileSize = bytesToSize(rawBlob.size);
-
-    const recordingInfo = `
-        <br/>
-        <br/>
-            <ul>
-                <li>Thời gian: ${recordingTime.innerText}</li>
-                <li>File: ${recFileName}</li>
-                <li>Codec: ${recCodecs}</li>
-                <li>Dung lượng: ${blobFileSize}</li>
-            </ul>
-        <br/>
-        `;
-    lastRecordingInfo.innerHTML = renderRoomTemplate(
-      "tpl-last-recording-info",
-      {
-        html: {
-          recordingInfo,
-        },
-      },
-    );
-    recordingTime.innerText = "";
-
-    msgHTML(
-      null,
-      null,
-      "Ghi hình",
-      `<div style="text-align: left;">
-                🔴 &nbsp; Thông tin bản ghi:
-                ${recordingInfo}
-                Vui lòng đợi xử lý, sau đó sẽ được tải xuống thiết bị ${currentDevice} của bạn.
-            </div>`,
-      "top",
-    );
-
-    // Fix WebM duration to make it seekable
-    const fixWebmDuration = async (blob) => {
-      if (type !== "webm") return blob;
-      try {
-        const fix = getWebmFixerFn();
-        const durationMs = recStartTs
-          ? performance.now() - recStartTs
-          : undefined;
-        const fixed = await fix(blob, durationMs);
-        return fixed || blob;
-      } catch (e) {
-        console.warn("WEBM duration fix failed, saving original blob:", e);
-        return blob;
-      } finally {
-        recStartTs = null;
-      }
-    };
-
-    (async () => {
-      const finalBlob = await fixWebmDuration(rawBlob);
-      saveBlobToFile(finalBlob, recFileName);
-    })();
-  } catch (err) {
-    userLog("error", "Lưu bản ghi thất bại: " + err);
   }
 }
 
@@ -12393,8 +12654,8 @@ function handleKickedOut(config) {
     },
     showClass: { popup: "animate__animated animate__fadeInDown" },
     hideClass: { popup: "animate__animated animate__fadeOutUp" },
-  }).then(() => {
-    checkRecording();
+  }).then(async () => {
+    await checkRecording();
     openURL("/");
   });
 }
@@ -12416,9 +12677,9 @@ function initExitMeeting() {
 /**
  * Leave the Room and create a new one
  */
-function leaveRoom(skipConfirm = false) {
+async function leaveRoom(skipConfirm = false) {
   if (skipConfirm) {
-    checkRecording();
+    await checkRecording();
     redirectOnLeave();
     return;
   }
@@ -12429,8 +12690,8 @@ function leaveRoom(skipConfirm = false) {
     desc: "Bạn có chắc muốn rời khỏi cuộc gọi này không?",
     confirmText: "Rời phòng",
     cancelText: "Hủy",
-    onConfirm: () => {
-      checkRecording();
+    onConfirm: async () => {
+      await checkRecording();
       redirectOnLeave();
     },
   });
@@ -12439,8 +12700,8 @@ function leaveRoom(skipConfirm = false) {
 /**
  * Exit the Room
  */
-function exitRoom() {
-  checkRecording();
+async function exitRoom() {
+  await checkRecording();
   redirectOnLeave();
 }
 
@@ -13922,12 +14183,20 @@ function initTopHeaderBar() {
   const headerTimer = getId("headerTimer");
   if (headerTimer && !topHeaderBarInterval) {
     topHeaderBarInterval = setInterval(() => {
+      // Always keeps counting the room's own duration in the background,
+      // recording or not, so switching the display back after a recording
+      // stops shows the correct continued room time instead of losing it.
       topHeaderBarTimer++;
-      // Math.floor(topHeaderBarTimer / 60) sẽ tự động tăng lên 60, 99, 100,... mà không bị reset
-      const mins = Math.floor(topHeaderBarTimer / 60)
+
+      // While recording, show the recording's elapsed time instead (see
+      // handleMediaRecorderStart()/Stop() for the badge/icon swap) -
+      // recElapsedTime is ticked by startRecordingTimer()'s own timer.
+      const seconds = isStreamRecording ? recElapsedTime : topHeaderBarTimer;
+      // Math.floor(seconds / 60) sẽ tự động tăng lên 60, 99, 100,... mà không bị reset
+      const mins = Math.floor(seconds / 60)
         .toString()
         .padStart(2, "0");
-      const secs = (topHeaderBarTimer % 60).toString().padStart(2, "0");
+      const secs = (seconds % 60).toString().padStart(2, "0");
       headerTimer.innerText = `${mins}:${secs}`;
     }, 1000);
   }
@@ -14799,6 +15068,7 @@ function showPP({
   iconWrap.className =
     "pip-suggestion-icon" + (variant !== "default" ? ` icon-${variant}` : "");
   iconEl.setAttribute("data-lucide", icon);
+  iconEl.style.animation = ""; // clear any leftover spin from showPPLoading()
 
   getId("ppTitle").textContent = title;
   getId("ppDesc").textContent = desc;
@@ -14813,6 +15083,7 @@ function showPP({
 
   confirmBtn.textContent = confirmText;
   cancelBtn.textContent = cancelText;
+  confirmBtn.style.display = ""; // clear any leftover display:none from showPPLoading()
   cancelBtn.style.display = hideCancel ? "none" : "";
 
   confirmBtn.addEventListener("click", () => {
@@ -14831,4 +15102,31 @@ function showPP({
 function hidePP() {
   const modal = getId("ppModal");
   if (modal) modal.style.display = "none";
+}
+
+/**
+ * Morphs the PP popup into a non-dismissable loading state (spinner, no
+ * buttons) - used to keep the SAME popup open across a confirm -> "please
+ * wait" transition (e.g. confirmStopRecording()) instead of closing one
+ * dialog and opening a different one.
+ * @param {string} title
+ */
+function showPPLoading(title) {
+  const modal = getId("ppModal");
+  if (!modal) return;
+
+  const iconWrap = getId("ppIconWrap");
+  const iconEl = getId("ppIcon");
+  iconWrap.className = "pip-suggestion-icon";
+  iconEl.setAttribute("data-lucide", "loader-circle");
+  iconEl.style.animation = "spin 1s linear infinite";
+
+  getId("ppTitle").textContent = title;
+  getId("ppDesc").textContent = "";
+
+  getId("ppConfirmBtn").style.display = "none";
+  getId("ppCancelBtn").style.display = "none";
+
+  modal.style.display = "flex";
+  if (window.lucide) window.lucide.createIcons({ root: modal });
 }

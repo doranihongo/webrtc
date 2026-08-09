@@ -67,6 +67,7 @@ const fs = require("fs");
 const checkXSS = require("./xss.js");
 const ServerApi = require("./api");
 const MattermostController = require("./mattermost");
+const Recording = require("./recording");
 const Validate = require("./validate");
 const HtmlInjector = require("./htmlInjector");
 const Host = require("./host");
@@ -909,6 +910,30 @@ app.post("/isRoomActive", (req, res) => {
   }
 });
 
+// Receive a ~30s recording chunk from the presenter's browser and append it
+// (in order) to that session's temp file on disk. Auth is via the opaque
+// token minted by the "recordingSessionStart" socket handshake below - a
+// plain HTTP POST has no socket.id to check isPeerPresenter against directly.
+app.post(
+  "/recording/chunk",
+  express.raw({
+    type: "application/octet-stream",
+    limit: config.recording.maxChunkBytes,
+  }),
+  async (req, res) => {
+    const token = req.get("X-Recording-Session-Token");
+    const chunkIndex = parseInt(req.get("X-Recording-Chunk-Index"), 10);
+    const isFinal = req.get("X-Recording-Final") === "1";
+    const result = await Recording.appendChunk(
+      token,
+      chunkIndex,
+      isFinal,
+      req.body,
+    );
+    res.status(result.ok ? 200 : 409).json(result);
+  },
+);
+
 // Check if Widget room active (exists)
 app.post("/isWidgetRoomActive", (req, res) => {
   const { roomId } = checkXSS(req.body);
@@ -1433,6 +1458,11 @@ server.listen(port, "0.0.0.0", async () => {
     "font-family:monospace",
   );
 
+  // Pick back up any recording temp files left behind by an ungraceful
+  // restart (no SIGTERM handler exists in this codebase - a `pm2 restart`
+  // mid-recording is a real scenario) and finish finalizing/uploading them.
+  Recording.recoverOnStartup();
+
   // https tunnel
   if (ngrokEnabled) {
     await ngrokStart();
@@ -1492,6 +1522,10 @@ io.sockets.on("connect", async (socket) => {
    */
   socket.on("disconnect", async (reason) => {
     removeIP(socket);
+    // Finalize any recording session this socket owned right away, instead
+    // of waiting out the full idle timeout - the idle timeout remains the
+    // safety net for crashes/power-loss where no disconnect ever fires.
+    Recording.finalizeForPeer(socket.id);
     for (let channel in socket.channels) {
       await removePeerFrom(channel, socket, reason);
     }
@@ -2287,6 +2321,23 @@ io.sockets.on("connect", async (socket) => {
 
       await sendToPeer(peer_id, sockets, "peerAction", data);
     }
+  });
+
+  /**
+   * Authorize the presenter to start a recording session and mint a
+   * short-lived token for the HTTP chunk-upload endpoint. Presenter check
+   * uses the real, server-controlled socket.id - see isPeerPresenter().
+   */
+  socket.on("recordingSessionStart", async (cfg, cb) => {
+    const config_ = checkXSS(cfg);
+    if (!Validate.isValidData(config_)) return cb?.({ ok: false, reason: "invalid_data" });
+
+    const { room_id, peer_name, peer_uuid, mode, mimeType } = config_;
+    const result = await Recording.startSession(
+      { room_id, peer_id: socket.id, peer_name, peer_uuid, mode, mimeType },
+      isPeerPresenter,
+    );
+    cb?.(result);
   });
 
   /**
