@@ -15145,13 +15145,11 @@ function initPipOverlayInteractions() {
     });
   });
 
-  pipEl("pipCloseBtn")?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    togglePagePip("close");
-  });
-  // pipStagePlaceholder/pipStageCloseBtn are NOT inside #pipOverlay (they
-  // stay behind in the main page as the "playing in PiP" stub) - always
-  // look them up on the main document.
+  // No in-overlay close (X) button anymore - the real PiP window already
+  // has the browser's own close control, and pipStageCloseBtn below
+  // covers the in-page fallback. pipStagePlaceholder/pipStageCloseBtn are
+  // NOT inside #pipOverlay (they stay behind in the main page as the
+  // "playing in PiP" stub) - always look them up on the main document.
   getId("pipStageCloseBtn")?.addEventListener("click", (e) => {
     e.stopPropagation();
     togglePagePip("close");
