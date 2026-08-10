@@ -1372,6 +1372,16 @@ video:fullscreen {
   opacity: 0 !important;
   pointer-events: none;
 }
+/* JS-driven backstop for :hover above - :hover can get stuck "on" if the
+   pointer leaves the PiP box abruptly (fast mouse move off-screen,
+   another window/app covering a real PiP window while the cursor is over
+   it, etc.) without a mouseleave ever firing. initPipOverlayInteractions()
+   adds this after a few seconds of no pointer movement regardless of
+   :hover state, so the controls can't stay stuck visible. */
+.pip-overlay.pip-controls-hidden .pip-overlay-bottombar {
+  opacity: 0 !important;
+  pointer-events: none;
+}
 
 .pip-overlay-ctrl-btn {
   cursor: pointer;
@@ -1420,6 +1430,9 @@ video:fullscreen {
 .pip-overlay.pip-dragging .pip-resize-handle,
 .pip-overlay.pip-resizing .pip-resize-handle {
   opacity: 1;
+}
+.pip-overlay.pip-controls-hidden .pip-resize-handle {
+  opacity: 0 !important;
 }
 .pip-resize-handle svg {
   width: 16px;

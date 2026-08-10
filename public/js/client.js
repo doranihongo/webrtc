@@ -14739,6 +14739,11 @@ let pipResizing = false;
 let pipResizeCorner = null;
 let pipSizeStart = { w: 0, h: 0 };
 
+// Backstop timer for the bottombar/resize-handles' CSS :hover show/hide -
+// see resetPipControlsHideTimer().
+let pipControlsHideTimer = null;
+const PIP_CONTROLS_HIDE_DELAY_MS = 2500;
+
 // Set only while #pipOverlay currently lives inside a real
 // documentPictureInPicture window (as opposed to in-page). Also records
 // where to put the node back on close.
@@ -14791,6 +14796,7 @@ async function setPagePip(enable) {
 
   if (enable) {
     initPipOverlayInteractions();
+    resetPipControlsHideTimer();
     // Fresh default position/size every open, same as the reference
     // remounting <FloatingRemoteVideo> each time isInPagePip flips true.
     // Also what the real PiP window is requested at, below.
@@ -14810,6 +14816,7 @@ async function setPagePip(enable) {
     updatePipStatusBadges();
     updatePipLocalControlButtons();
   } else {
+    stopPipControlsHideTimer();
     if (overlay) closeRealPipIfOpen(overlay);
     if (overlay) overlay.style.display = "none";
     if (placeholder) placeholder.classList.remove("pip-active");
@@ -14834,6 +14841,39 @@ function applyPipTransform() {
   overlay.style.width = pipSize.width + "px";
   overlay.style.height = pipSize.height + "px";
   overlay.style.transform = `translate3d(${pipPos.x}px, ${pipPos.y}px, 0)`;
+}
+
+/**
+ * Backstop for the bottombar/resize-handles' CSS :hover show/hide -
+ * :hover can get stuck "on" if the pointer leaves the PiP box abruptly
+ * (fast mouse move off-screen, another window/app covering a real PiP
+ * window while the cursor is over it, etc.) without the browser ever
+ * firing mouseleave. Force-hides via the pip-controls-hidden class after
+ * a few seconds of no pointer movement, regardless of what :hover
+ * thinks, so the controls can't get stuck visible. Called on every
+ * pointermove/pointerenter over the overlay (see
+ * initPipOverlayInteractions) - cheap no-op the rest of the time.
+ */
+function resetPipControlsHideTimer() {
+  const overlay = pipOverlayRoot;
+  if (!overlay) return;
+  clearTimeout(pipControlsHideTimer);
+  overlay.classList.remove("pip-controls-hidden");
+  if (pipDragging || pipResizing) return; // don't schedule mid-drag/resize
+  pipControlsHideTimer = setTimeout(() => {
+    if (pipDragging || pipResizing) return; // re-check, state may have changed while waiting
+    overlay.classList.add("pip-controls-hidden");
+  }, PIP_CONTROLS_HIDE_DELAY_MS);
+}
+
+/**
+ * Cancel the backstop timer and clear any forced-hidden state - called
+ * when PiP closes so nothing lingers for the next open.
+ */
+function stopPipControlsHideTimer() {
+  clearTimeout(pipControlsHideTimer);
+  pipControlsHideTimer = null;
+  if (pipOverlayRoot) pipOverlayRoot.classList.remove("pip-controls-hidden");
 }
 
 /**
@@ -15127,6 +15167,11 @@ function initPipOverlayInteractions() {
     }
   });
 
+  // Backstop for the bottombar/resize-handles' CSS :hover show/hide -
+  // reset the "hide after idle" timer on every pointer move/enter.
+  overlay.addEventListener("pointermove", resetPipControlsHideTimer);
+  overlay.addEventListener("pointerenter", resetPipControlsHideTimer);
+
   const endPipInteraction = (e) => {
     if (pipDragging) {
       pipDragging = false;
@@ -15142,6 +15187,9 @@ function initPipOverlayInteractions() {
     } catch (err) {
       /* ignore */
     }
+    // Dragging/resizing counts as activity too - restart the idle clock
+    // from the moment the interaction actually ends.
+    resetPipControlsHideTimer();
   };
   overlay.addEventListener("pointerup", endPipInteraction);
   overlay.addEventListener("pointercancel", endPipInteraction);
@@ -15187,6 +15235,13 @@ function initPipOverlayInteractions() {
   });
   pipEl("pipLeaveBtn")?.addEventListener("click", (e) => {
     e.stopPropagation();
+    // The confirm popup this triggers below renders on the main room
+    // tab/window, not inside PiP - bring it to front first (e.g. real PiP
+    // window floating while the user is on another tab/app) so the popup
+    // is actually seen instead of silently waiting in the background.
+    // Called first/synchronously, still within the real click gesture,
+    // so the browser doesn't just ignore it.
+    window.focus();
     const newLeave = document.getElementById("newLeaveBtn");
     if (newLeave) newLeave.click();
     else if (typeof leaveRoom === "function") leaveRoom();
