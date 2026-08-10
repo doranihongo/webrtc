@@ -6292,7 +6292,10 @@ function confirmStopRecording() {
       // Morph the same popup into a "please wait" state (see
       // handleMediaRecorderStop(), which enforces the 3s minimum and hides
       // it once the upload actually finishes) instead of closing it.
-      showPPLoading("Đang tải video lên máy chủ...");
+      showPPLoading(
+        "Đang tải video lên máy chủ...",
+        "Sắp xong rồi, vài giây nữa thôi...",
+      );
       recStopLoadingShownAt = performance.now();
     },
   });
@@ -9162,9 +9165,17 @@ function startDesktopRecording(options, audioMixerTracks) {
   // Get the desired frame rate for screen recording
   // screenMaxFrameRate = parseInt(screenFpsSelect.value, 10);
 
-  // Define constraints for capturing the screen
+  // Define constraints for capturing the screen. Capped at 720p so the
+  // captured resolution actually matches the ~1Mbps encode bitrate below -
+  // without this, getDisplayMedia captures the screen's real resolution
+  // (often 1080p+), which looks "sharp" from pixel density alone but is
+  // under-compressed for that bitrate (blur/blocking on any motion).
   const constraints = {
-    video: { frameRate: { ideal: 25, max: 30 } }, // ~25fps target for recording
+    video: {
+      frameRate: { ideal: 25, max: 30 }, // ~25fps target for recording
+      width: { ideal: 1280, max: 1280 },
+      height: { ideal: 720, max: 720 },
+    },
   };
 
   // Request access to screen capture using the specified constraints
@@ -9186,7 +9197,10 @@ function startDesktopRecording(options, audioMixerTracks) {
         track.onended = () => {
           if (!isStreamRecording) return; // already stopped through the app's own flow
           stopStreamRecording();
-          showPPLoading("Đang tải video lên máy chủ...");
+          showPPLoading(
+        "Đang tải video lên máy chủ...",
+        "Sắp xong rồi, vài giây nữa thôi...",
+      );
           recStopLoadingShownAt = performance.now();
         };
       });
@@ -15108,8 +15122,9 @@ function hidePP() {
  * wait" transition (e.g. confirmStopRecording()) instead of closing one
  * dialog and opening a different one.
  * @param {string} title
+ * @param {string} [desc] small subtitle line under the title
  */
-function showPPLoading(title) {
+function showPPLoading(title, desc = "") {
   const modal = getId("ppModal");
   if (!modal) return;
 
@@ -15120,7 +15135,7 @@ function showPPLoading(title) {
   iconEl.style.animation = "spin 1s linear infinite";
 
   getId("ppTitle").textContent = title;
-  getId("ppDesc").textContent = "";
+  getId("ppDesc").textContent = desc;
 
   getId("ppConfirmBtn").style.display = "none";
   getId("ppCancelBtn").style.display = "none";

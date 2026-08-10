@@ -195,7 +195,7 @@ if (supabaseCfg.url && supabaseCfg.anonKey) {
           params: {
             id: `eq.${user.id}`,
             select:
-              "role,is_first_login,password_changed_at,max_devices,expires_at",
+              "role,is_first_login,password_changed_at,max_devices,expires_at,drive_folder_id",
           },
           headers: {
             Authorization: `Bearer ${token}`,
@@ -333,6 +333,12 @@ if (supabaseCfg.url && supabaseCfg.anonKey) {
       // xem isPresenterRole/chỗ gán presenters[channel] lúc join, và
       // presenterActions bên dưới cho screenStart).
       socket.supabaseRole = role;
+      // Thư mục Drive riêng của tài khoản này (nếu admin đã set trong
+      // profiles.drive_folder_id) - dùng khi upload bản ghi hình do
+      // chính người này quay, xem recordingSessionStart bên dưới và
+      // Recording.startSession(). null/rỗng -> Recording rơi về folder
+      // mặc định (GDRIVE_FOLDER_ID trong .env), hành vi y hệt trước đây.
+      socket.supabaseDriveFolderId = profileRow.drive_folder_id || null;
 
       next();
     } catch (err) {
@@ -2334,7 +2340,15 @@ io.sockets.on("connect", async (socket) => {
 
     const { room_id, peer_name, peer_uuid, mode, mimeType } = config_;
     const result = await Recording.startSession(
-      { room_id, peer_id: socket.id, peer_name, peer_uuid, mode, mimeType },
+      {
+        room_id,
+        peer_id: socket.id,
+        peer_name,
+        peer_uuid,
+        mode,
+        mimeType,
+        driveFolderId: socket.supabaseDriveFolderId || null,
+      },
       isPeerPresenter,
     );
     cb?.(result);

@@ -134,6 +134,23 @@
     "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
+/* SweetAlert2's success icon normally paints these 2 masks with an inline
+   background-color copied from the popup's own `background` option, to
+   hide the checkmark's square-cut edges. That trick assumes an opaque
+   popup - ours (`swBg` in client.js/landing.js/login.js, alpha 0.85 over a
+   blurred backdrop) is semi-transparent, so the mask ends up as a 2nd
+   overlapping semi-transparent layer of the same color and renders
+   visibly darker/blobbier than the popup surface around it. Making the
+   masks fully transparent instead lets the real popup background show
+   through underneath, matching everywhere else on the ring. Same deal for
+   .swal2-success-fix, a 3rd patch SweetAlert2 uses to cover the gap
+   between the ring and those 2 masks. */
+.swal2-success-circular-line-left,
+.swal2-success-circular-line-right,
+.swal2-success-fix {
+  background-color: transparent !important;
+}
+
 /* Visible focus ring when navigating with keyboard. */
 :where(
   button,

@@ -106,6 +106,30 @@ body {
 }
 
 /*--------------------------------------------------------------
+# Text selection - blocked app-wide (feels like a native app, not
+# a webpage), except chat messages (own + peer) and anything with
+# a text-input field, which stay selectable/copyable as normal.
+--------------------------------------------------------------*/
+
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.msg-text,
+.msg-text * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/*--------------------------------------------------------------
 # Disconnect banner
 --------------------------------------------------------------*/
 

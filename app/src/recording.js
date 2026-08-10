@@ -88,12 +88,12 @@ function activeSessionCount() {
 /**
  * Authorize (via the real socket.id, passed in from the Socket.IO handler)
  * and open a new recording session.
- * @param {object} params room_id, peer_id (MUST be socket.id), peer_name, peer_uuid, mode, mimeType
+ * @param {object} params room_id, peer_id (MUST be socket.id), peer_name, peer_uuid, mode, mimeType, driveFolderId
  * @param {Function} isPeerPresenterFn server.js's isPeerPresenter(room_id, peer_id, peer_name, peer_uuid)
  * @returns {Promise<{ok:true, token:string, sessionId:string}|{ok:false, reason:string}>}
  */
 async function startSession(
-  { room_id, peer_id, peer_name, peer_uuid, mode, mimeType },
+  { room_id, peer_id, peer_name, peer_uuid, mode, mimeType, driveFolderId },
   isPeerPresenterFn,
 ) {
   if (!config.recording.enabled) return { ok: false, reason: "disabled" };
@@ -135,6 +135,10 @@ async function startSession(
     mode,
     mimeType: safeMimeType,
     ext,
+    // Presenter's personal Drive folder (profiles.drive_folder_id), if set -
+    // see runFinalizeAndUpload/uploadFinalizedFile. null -> upload falls
+    // back to the shared default folder (GDRIVE_FOLDER_ID in .env).
+    driveFolderId: typeof driveFolderId === "string" && driveFolderId ? driveFolderId : null,
     tempPath: tempPathFor(sessionId, ext),
     nextChunkIndex: 0,
     bytesWritten: 0,
@@ -268,7 +272,63 @@ async function finalizeSession(token, { reason } = {}) {
     room_id: session.room_id,
     startedAt: session.startedAt,
     durationMs,
+    driveFolderId: session.driveFolderId,
   });
+}
+
+// Recording file names always show Vietnam local time, regardless of the
+// server's own TZ (blank/UTC in .env) - the audience is always in Vietnam,
+// unlike server logs which follow LOGS' own TZ setting.
+const RECORDING_NAME_TZ = "Asia/Ho_Chi_Minh";
+
+/**
+ * @param {number} ms epoch ms
+ * @returns {{datePart: string, timePart: string}} e.g. { datePart: "10/8/26", timePart: "10:46AM" }
+ */
+function formatVnDateTime(ms) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: RECORDING_NAME_TZ,
+      year: "2-digit",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
+      .formatToParts(new Date(ms))
+      .map((p) => [p.type, p.value]),
+  );
+  return {
+    datePart: `${parts.day}/${parts.month}/${parts.year}`,
+    timePart: `${parts.hour}:${parts.minute}${parts.dayPeriod}`, // dayPeriod is "AM"/"PM" for en-US
+  };
+}
+
+/**
+ * Builds "10/8/26 10:46AM (1).webm" - the trailing (n) is one past the
+ * highest sequence number already used for that same calendar day (Vietnam
+ * time) in the destination Drive folder, so a 2nd recording the same day
+ * becomes (2) and stays (3) even if (2) gets deleted from Drive afterwards
+ * (see maxSequenceWithNamePrefix's doc comment). Resets to (1) the next day
+ * since the date prefix itself changes. Falls back to (1) if the Drive
+ * lookup fails (offline, API error, no folder configured) - never blocks
+ * the upload over a cosmetic detail.
+ */
+async function buildDriveFileName(startedAt, ext, driveFolderId) {
+  const { datePart, timePart } = formatVnDateTime(startedAt);
+  const datePrefix = `${datePart} `;
+  let n = 1;
+  if (drive.isConfigured()) {
+    try {
+      n = (await drive.maxSequenceWithNamePrefix(driveFolderId, datePrefix)) + 1;
+    } catch (err) {
+      log.warn("buildDriveFileName: maxSequenceWithNamePrefix failed, defaulting to (1)", {
+        error: err.message,
+      });
+    }
+  }
+  return `${datePart} ${timePart} (${n}).${ext}`;
 }
 
 /**
@@ -287,14 +347,12 @@ async function runFinalizeAndUpload(partPath, finalizedPath, meta) {
   }
   fs.promises.unlink(partPath).catch(() => {});
 
-  const driveFileName = `${meta.room_id}_${new Date(meta.startedAt)
-    .toISOString()
-    .replace(/[:.]/g, "-")}.${meta.ext}`;
+  const driveFileName = await buildDriveFileName(meta.startedAt, meta.ext, meta.driveFolderId);
 
-  await uploadFinalizedFile(finalizedPath, driveFileName, meta.mimeType);
+  await uploadFinalizedFile(finalizedPath, driveFileName, meta.mimeType, meta.driveFolderId);
 }
 
-async function uploadFinalizedFile(finalizedPath, driveFileName, mimeType) {
+async function uploadFinalizedFile(finalizedPath, driveFileName, mimeType, driveFolderId) {
   if (!drive.isConfigured()) {
     log.error(
       "Google Drive not configured (missing GDRIVE_* env vars) - keeping file on disk",
@@ -304,7 +362,7 @@ async function uploadFinalizedFile(finalizedPath, driveFileName, mimeType) {
   }
   try {
     const localSize = fs.statSync(finalizedPath).size;
-    const result = await drive.uploadFile(finalizedPath, driveFileName, mimeType);
+    const result = await drive.uploadFile(finalizedPath, driveFileName, mimeType, driveFolderId);
     if (result.size !== localSize) {
       throw new Error(`size mismatch after upload: local=${localSize} drive=${result.size}`);
     }
@@ -319,7 +377,7 @@ async function uploadFinalizedFile(finalizedPath, driveFileName, mimeType) {
       finalizedPath,
       error: err.message,
     });
-    enqueueRetry(finalizedPath, driveFileName, mimeType);
+    enqueueRetry(finalizedPath, driveFileName, mimeType, driveFolderId);
   }
 }
 
@@ -327,11 +385,12 @@ function backoffMs(attempts) {
   return Math.min(10 * 60 * 1000 * 2 ** attempts, 6 * 60 * 60 * 1000); // cap 6h
 }
 
-function enqueueRetry(finalizedPath, driveFileName, mimeType, attempts = 0) {
+function enqueueRetry(finalizedPath, driveFileName, mimeType, driveFolderId, attempts = 0) {
   pendingUploads.push({
     finalizedPath,
     driveFileName,
     mimeType,
+    driveFolderId,
     attempts,
     nextAttemptAt: Date.now() + backoffMs(attempts),
   });
@@ -356,13 +415,24 @@ async function sweepRetryQueue() {
     }
     try {
       const localSize = fs.statSync(item.finalizedPath).size;
-      const result = await drive.uploadFile(item.finalizedPath, item.driveFileName, item.mimeType);
+      const result = await drive.uploadFile(
+        item.finalizedPath,
+        item.driveFileName,
+        item.mimeType,
+        item.driveFolderId,
+      );
       if (result.size !== localSize) throw new Error("size mismatch on retry");
       fs.promises.unlink(item.finalizedPath).catch(() => {});
       log.info("Recording upload retry succeeded", { driveFileName: item.driveFileName });
     } catch (err) {
       log.error("Recording upload retry failed", { attempts: item.attempts, error: err.message });
-      enqueueRetry(item.finalizedPath, item.driveFileName, item.mimeType, item.attempts);
+      enqueueRetry(
+        item.finalizedPath,
+        item.driveFileName,
+        item.mimeType,
+        item.driveFolderId,
+        item.attempts,
+      );
     }
   }
 }
@@ -406,7 +476,10 @@ function recoverOnStartup() {
     if (file.endsWith(".finalized")) {
       const mimeType = file.endsWith(".mp4.finalized") ? "video/mp4" : "video/webm";
       log.info("recoverOnStartup: orphaned finalized recording, queuing upload", { file });
-      enqueueRetry(full, file.replace(/\.finalized$/, ""), mimeType);
+      // Which teacher's folder this belonged to is lost across a restart
+      // (same known limitation as room_id/durationMs below) - falls back to
+      // the shared default folder, same as before this feature existed.
+      enqueueRetry(full, file.replace(/\.finalized$/, ""), mimeType, null);
       continue;
     }
 
