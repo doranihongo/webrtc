@@ -79,6 +79,11 @@ function openAccountPanel() {
   accountPanelOverlay.classList.remove("hidden");
   // Luôn mở lại ở màn thông tin, không phải màn đổi mật khẩu dở dang
   showAccountInfoView();
+  // Lấy lại số thiết bị/hạn sử dụng mới nhất từ Supabase mỗi lần mở -
+  // dữ liệu này không realtime, nếu chỉ dùng window.__authUser (lấy 1
+  // lần lúc tải trang ở common.js) thì admin sửa trực tiếp trên Supabase
+  // sẽ không thấy phản ánh cho tới khi người dùng tải lại trang.
+  refreshAccountInfo();
 }
 
 function closeAccountPanel() {
@@ -219,10 +224,37 @@ if (accountLogoutBtn) {
   });
 }
 
-// Điền thông tin tài khoản ngay khi authGuard (common.js) xác thực xong
-if (window.__authReady) {
-  window.__authReady.then(async () => {
-    if (!window.__authUser) return; // authGuard đang redirect về login
+// Điền thông tin tài khoản vào bảng. Gọi lại được nhiều lần (mỗi lần mở
+// bảng) để lấy số thiết bị/hạn sử dụng mới nhất từ Supabase, thay vì chỉ
+// dùng window.__authUser đã lấy 1 lần lúc tải trang (authGuard trong
+// common.js) - nếu không thì admin sửa trực tiếp trên Supabase sẽ không
+// thấy phản ánh cho tới khi người dùng tải lại trang.
+async function refreshAccountInfo() {
+  if (!window.__authUser) return; // authGuard đang redirect về login
+
+  if (accountDisplayName) {
+    accountDisplayName.textContent = window.__authUser.displayName;
+  }
+  if (accountRole) {
+    accountRole.textContent =
+      ROLE_LABELS[window.__authUser.role] || window.__authUser.role;
+  }
+
+  // Lấy lại role/tên/max_devices/expires_at mới nhất - không chỉ số
+  // thiết bị. Nếu lỗi mạng thì im lặng giữ nguyên dữ liệu cũ (đã hiện ở
+  // trên từ window.__authUser), không làm gián đoạn người dùng.
+  const { data: profile, error: profileError } = await supabaseClient
+    .from("profiles")
+    .select("role, display_name, max_devices, expires_at")
+    .eq("id", window.__authUser.id)
+    .single();
+
+  if (!profileError && profile) {
+    window.__authUser.role = profile.role;
+    window.__authUser.displayName =
+      profile.display_name || window.__authUser.displayName;
+    window.__authUser.maxDevices = profile.max_devices;
+    window.__authUser.expiresAt = profile.expires_at;
     if (accountDisplayName) {
       accountDisplayName.textContent = window.__authUser.displayName;
     }
@@ -230,26 +262,32 @@ if (window.__authReady) {
       accountRole.textContent =
         ROLE_LABELS[window.__authUser.role] || window.__authUser.role;
     }
-    if (accountDeviceCount) {
-      const maxDevices = window.__authUser.maxDevices || 1;
-      // admin miễn giới hạn thiết bị (xem checkAccountAccess trong
-      // supabaseClient.js) - không có dữ liệu tracking thật cho role
-      // này, hiện "1/tối đa" như trước.
-      if (window.__authUser.role === "admin") {
-        accountDeviceCount.textContent = `1/${maxDevices}`;
-      } else {
-        const { data: devices, error } = await supabaseClient
-          .from("user_devices")
-          .select("id")
-          .eq("user_id", window.__authUser.id);
-        const activeCount = error ? 1 : devices?.length || 1;
-        accountDeviceCount.textContent = `${activeCount}/${maxDevices}`;
-      }
+  }
+
+  if (accountDeviceCount) {
+    const maxDevices = window.__authUser.maxDevices || 1;
+    // admin miễn giới hạn thiết bị (xem checkAccountAccess trong
+    // supabaseClient.js) - không có dữ liệu tracking thật cho role
+    // này, hiện "1/tối đa" như trước.
+    if (window.__authUser.role === "admin") {
+      accountDeviceCount.textContent = `1/${maxDevices}`;
+    } else {
+      const { data: devices, error } = await supabaseClient
+        .from("user_devices")
+        .select("id")
+        .eq("user_id", window.__authUser.id);
+      const activeCount = error ? 1 : devices?.length || 1;
+      accountDeviceCount.textContent = `${activeCount}/${maxDevices}`;
     }
-    if (accountExpiresAt) {
-      accountExpiresAt.textContent = window.__authUser.expiresAt
-        ? new Date(window.__authUser.expiresAt).toLocaleDateString("vi-VN")
-        : "Vĩnh viễn";
-    }
-  });
+  }
+  if (accountExpiresAt) {
+    accountExpiresAt.textContent = window.__authUser.expiresAt
+      ? new Date(window.__authUser.expiresAt).toLocaleDateString("vi-VN")
+      : "Vĩnh viễn";
+  }
+}
+
+// Điền thông tin tài khoản ngay khi authGuard (common.js) xác thực xong
+if (window.__authReady) {
+  window.__authReady.then(refreshAccountInfo);
 }
