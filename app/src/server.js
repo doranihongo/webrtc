@@ -562,6 +562,7 @@ const statsData = config.stats;
 // directory
 const dir = {
   public: path.join(__dirname, "../../", "public"),
+  dist: path.join(__dirname, "../../", "public/dist"),
 };
 // html views
 const views = {
@@ -703,6 +704,12 @@ const staticOptions = {
     // Add other headers if needed...
   },
 };
+
+// Serve minified js/css from public/dist first if present (npm run build output),
+// falling back to the original public/ files below when a dist file doesn't exist
+// (e.g. build was never run). Same URLs, no markup changes needed.
+app.use(express.static(dir.dist, staticOptions));
+app.use("/mattermost", express.static(dir.dist, staticOptions));
 
 // Serve static files from root (/)
 app.use(express.static(dir.public, staticOptions));

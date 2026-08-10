@@ -4,7 +4,7 @@
   "description": "A free WebRTC browser-based video call",
   "main": "server.js",
   "scripts": {
-    "build": "echo 'No build step'",
+    "build": "node scripts/build.js",
     "dev": "node app/src/server.js",
     "start": "node app/src/server.js",
     "start-dev": "nodemon app/src/server.js",
@@ -61,6 +61,7 @@
     "crypto-js": "^4.2.0",
     "dompurify": "^3.4.12",
     "dotenv": "^17.4.2",
+    "esbuild": "^0.28.2",
     "express": "^5.2.1",
     "express-openid-connect": "^3.3.0",
     "express-rate-limit": "^8.6.1",

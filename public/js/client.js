@@ -1380,7 +1380,6 @@ function countPeerConnections() {
  * Get Started...
  */
 document.addEventListener("DOMContentLoaded", function () {
-  initCursorLightEffect();
   initClientPeer();
   initDocumentListeners();
   initSwipeBackGuard();
@@ -1423,21 +1422,6 @@ function initDocumentListeners() {
         .querySelectorAll(".navbar-dropdown-content.show")
         .forEach((el) => el.classList.remove("show"));
     }
-  });
-}
-
-/**
- * Initialize cursor light effect on video container
- */
-function initCursorLightEffect() {
-  if (!videoMediaContainer || !isDesktopDevice) return;
-  videoMediaContainer.classList.add("mouse-light");
-  videoMediaContainer.addEventListener("mousemove", function (e) {
-    const rect = videoMediaContainer.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    videoMediaContainer.style.setProperty("--mouse-x", x + "%");
-    videoMediaContainer.style.setProperty("--mouse-y", y + "%");
   });
 }
 
