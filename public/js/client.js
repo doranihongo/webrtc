@@ -6481,6 +6481,11 @@ function setDocumentPiPBtn() {
  */
 async function documentPictureInPictureRestart() {
   if (!showDocumentPipBtn || !documentPictureInPicture.window) return;
+  // documentPictureInPicture.window may currently belong to the NEWER
+  // control-bar PiP (togglePagePip) instead of this feature - that one
+  // only ever mirrors a remote peer's video (never the local camera), so
+  // a local camera-device change never needs to restart it.
+  if (pipRealWindow) return;
   documentPictureInPictureClose();
   setTimeout(async () => {
     await documentPictureInPictureOpen();
@@ -6504,6 +6509,12 @@ async function documentPictureInPictureClose() {
 async function documentPictureInPictureOpen() {
   if (!showDocumentPipBtn) return;
   try {
+    // Only one documentPictureInPicture window can exist per tab - yield
+    // it if the newer control-bar PiP (togglePagePip) currently holds it.
+    if (pipRealWindow && typeof closeRealPipIfOpen === "function") {
+      closeRealPipIfOpen(pipOverlayRoot);
+      if (isInPagePip) togglePagePip("close");
+    }
     const pipWindow = await documentPictureInPicture.requestWindow({
       width: 300,
       height: 720,
@@ -8341,14 +8352,16 @@ async function startScreenSharing(constraints, init) {
     emitPeersAction("screenStart", extras);
     await loadScreenMedia();
     await refreshMyStreamToPeers(undefined, true);
-    // Suggest opening PiP right after a successful share - mirrors
-    // App.tsx: `if (!isInPagePip && remotePeer) setShowPipSuggestion(true);`
+    // Auto-open PiP right after a successful share (was: show a
+    // suggestion modal asking the user to opt in) - sharing the screen
+    // now turns PiP on by itself, paired with auto-close in
+    // stopScreenSharing below.
     if (
       typeof isInPagePip !== "undefined" &&
       !isInPagePip &&
       Object.keys(peerConnections).length >= 1
     ) {
-      showPipSuggestionModal();
+      togglePagePip("open");
     }
   }
   screenVideoTrack.onended = () => {
@@ -8379,7 +8392,11 @@ async function startScreenSharing(constraints, init) {
  * @param {boolean} init - Indicates if it's the initial screen share
  */
 async function stopScreenSharing(init) {
-  if (!init) hidePipSuggestionModal();
+  // Auto-close PiP when screen sharing stops, paired with the auto-open
+  // in startScreenSharing above.
+  if (!init && typeof isInPagePip !== "undefined" && isInPagePip) {
+    togglePagePip("close");
+  }
   const myScreenWrap = getId("myScreenWrap");
   const myScreenPinBtn = getId("myScreenPinBtn");
   if (
@@ -14696,11 +14713,20 @@ function resetSoloScreenTileVisibility() {
 // ---------------------------------------------------------------
 // In-page Picture-in-Picture (mirrors FloatingRemoteVideo.tsx)
 //
-// This is a draggable/resizable overlay INSIDE the page, not the real
-// browser documentPictureInPicture window - the control-bar button
-// only checks 'documentPictureInPicture' in window as a capability
-// GATE (matching ControlBar.tsx's supportsPip), same as the reference.
-// The older real-PiP feature (documentPiPBtn in Settings) is untouched.
+// #pipOverlay is a draggable/resizable div living in the page. When the
+// browser supports the real documentPictureInPicture window (Chrome/Edge
+// desktop), setPagePip() MOVES this exact node - same markup, same
+// buttons, same CSS files - into that real always-on-top OS window
+// instead of just showing it in-page, so the PiP UI is byte-for-byte
+// identical to the in-page version rather than a hand-rebuilt clone that
+// drifts out of sync (see [[pip-overlay-fixes]] for the history of that
+// going wrong). Falls back to the plain in-page overlay if the real
+// window can't be opened, and on browsers without the API at all (the
+// control-bar button is hidden there already, see client.html).
+// The older real-PiP feature (documentPiPBtn in Settings) is untouched,
+// aside from the two of them yielding the window to one another (see
+// closeRealPipIfOpen / setDocumentPiPBtn) since only one
+// documentPictureInPicture window can exist per tab.
 // ---------------------------------------------------------------
 
 let isInPagePip = false;
@@ -14712,6 +14738,29 @@ let pipPosStart = { x: 0, y: 0 };
 let pipResizing = false;
 let pipResizeCorner = null;
 let pipSizeStart = { w: 0, h: 0 };
+
+// Backstop timer for the bottombar/resize-handles' CSS :hover show/hide -
+// see resetPipControlsHideTimer().
+let pipControlsHideTimer = null;
+const PIP_CONTROLS_HIDE_DELAY_MS = 2500;
+
+// Set only while #pipOverlay currently lives inside a real
+// documentPictureInPicture window (as opposed to in-page). Also records
+// where to put the node back on close.
+let pipRealWindow = null;
+let pipOriginalParent = null;
+let pipOriginalNextSibling = null;
+
+// #pipOverlay itself never gets destroyed/recreated - cache the
+// reference once so lookups of things *inside* it keep working after
+// it's reparented into the PiP window's own `document` (plain
+// getId()/document.getElementById() only search the main document, so
+// they'd return null for anything inside the overlay while it's moved).
+const pipOverlayRoot = document.getElementById("pipOverlay");
+function pipEl(id) {
+  if (!pipOverlayRoot) return null;
+  return id === "pipOverlay" ? pipOverlayRoot : pipOverlayRoot.querySelector("#" + id);
+}
 
 const PIP_MIN_WIDTH = 160;
 
@@ -14733,7 +14782,7 @@ function togglePagePip(action = "toggle") {
 /**
  * @param {boolean} enable
  */
-function setPagePip(enable) {
+async function setPagePip(enable) {
   if (enable === isInPagePip) return;
   // disablePip={!remotePeer} in ControlBar.tsx
   if (enable && Object.keys(peerConnections).length < 1) return;
@@ -14742,26 +14791,33 @@ function setPagePip(enable) {
   window.isInPagePip = enable; // read by the control-bar bridge in client.html
   playSound("click");
 
-  const overlay = getId("pipOverlay");
+  const overlay = pipOverlayRoot;
   const placeholder = getId("pipStagePlaceholder");
 
   if (enable) {
     initPipOverlayInteractions();
+    resetPipControlsHideTimer();
     // Fresh default position/size every open, same as the reference
     // remounting <FloatingRemoteVideo> each time isInPagePip flips true.
+    // Also what the real PiP window is requested at, below.
     pipSize = { width: 240, height: 135 };
     pipPos = {
       x: window.innerWidth - pipSize.width - 20,
       y: window.innerHeight - pipSize.height - 20,
     };
-    applyPipTransform();
-    if (overlay) overlay.style.display = "flex";
+    const openedReal = overlay && (await tryOpenRealPagePip(overlay));
+    if (!openedReal) {
+      applyPipTransform();
+      if (overlay) overlay.style.display = "flex";
+    }
     if (placeholder) placeholder.classList.add("pip-active");
     updatePipStagePlaceholderText();
     syncPipVideoSource();
     updatePipStatusBadges();
     updatePipLocalControlButtons();
   } else {
+    stopPipControlsHideTimer();
+    if (overlay) closeRealPipIfOpen(overlay);
     if (overlay) overlay.style.display = "none";
     if (placeholder) placeholder.classList.remove("pip-active");
   }
@@ -14776,11 +14832,192 @@ function setPagePip(enable) {
 }
 
 function applyPipTransform() {
-  const overlay = getId("pipOverlay");
+  // Positioning/sizing by transform is only meaningful for the in-page
+  // fallback - the real PiP window IS the floating box (moved/resized by
+  // the OS), see tryOpenRealPagePip.
+  if (pipRealWindow) return;
+  const overlay = pipOverlayRoot;
   if (!overlay) return;
   overlay.style.width = pipSize.width + "px";
   overlay.style.height = pipSize.height + "px";
   overlay.style.transform = `translate3d(${pipPos.x}px, ${pipPos.y}px, 0)`;
+}
+
+/**
+ * Backstop for the bottombar/resize-handles' CSS :hover show/hide -
+ * :hover can get stuck "on" if the pointer leaves the PiP box abruptly
+ * (fast mouse move off-screen, another window/app covering a real PiP
+ * window while the cursor is over it, etc.) without the browser ever
+ * firing mouseleave. Force-hides via the pip-controls-hidden class after
+ * a few seconds of no pointer movement, regardless of what :hover
+ * thinks, so the controls can't get stuck visible. Called on every
+ * pointermove/pointerenter over the overlay (see
+ * initPipOverlayInteractions) - cheap no-op the rest of the time.
+ */
+function resetPipControlsHideTimer() {
+  const overlay = pipOverlayRoot;
+  if (!overlay) return;
+  clearTimeout(pipControlsHideTimer);
+  overlay.classList.remove("pip-controls-hidden");
+  if (pipDragging || pipResizing) return; // don't schedule mid-drag/resize
+  pipControlsHideTimer = setTimeout(() => {
+    if (pipDragging || pipResizing) return; // re-check, state may have changed while waiting
+    overlay.classList.add("pip-controls-hidden");
+  }, PIP_CONTROLS_HIDE_DELAY_MS);
+}
+
+/**
+ * Cancel the backstop timer and clear any forced-hidden state - called
+ * when PiP closes so nothing lingers for the next open.
+ */
+function stopPipControlsHideTimer() {
+  clearTimeout(pipControlsHideTimer);
+  pipControlsHideTimer = null;
+  if (pipOverlayRoot) pipOverlayRoot.classList.remove("pip-controls-hidden");
+}
+
+/**
+ * Move the real, live #pipOverlay node (buttons, badges and all) into a
+ * real browser documentPictureInPicture window instead of showing it
+ * in-page - so the PiP UI is exactly the in-page overlay, not a
+ * separately maintained clone.
+ * @param {HTMLElement} overlay - the #pipOverlay node (still in the page)
+ * @returns {Promise<boolean>} true if it now lives in a real PiP window
+ */
+async function tryOpenRealPagePip(overlay) {
+  if (!showDocumentPipBtn) return false;
+  try {
+    // Only one documentPictureInPicture window can exist per tab - don't
+    // fight the older Settings > PiP feature for it.
+    if (typeof documentPictureInPictureClose === "function") {
+      documentPictureInPictureClose();
+    }
+
+    const pipWindow = await documentPictureInPicture.requestWindow({
+      width: pipSize.width,
+      height: pipSize.height,
+    });
+
+    pipOriginalParent = overlay.parentNode;
+    pipOriginalNextSibling = overlay.nextSibling;
+    pipRealWindow = pipWindow;
+
+    // Load the exact same stylesheets the main page uses, instead of
+    // hand-rebuilding pip-overlay's look in a separate stylesheet -
+    // that's what kept drifting out of sync before.
+    //
+    // The icons' w-4/h-4 etc. sizing comes from Tailwind utility
+    // classes, which only exist as an actual stylesheet because the
+    // Tailwind CDN *script* generated one on the main page - re-loading
+    // that same script fresh inside the PiP window's document was
+    // tested and produces NO generated CSS at all there (the `tailwind`
+    // global exists, but it never injects a <style> tag - a documented-
+    // in-testing quirk of that browsing context, not a timing issue).
+    // Clone the utility stylesheet Tailwind already generated on the
+    // main page instead of re-running its engine here.
+    const twStyle = [...document.querySelectorAll("style")].find((s) =>
+      s.textContent.includes("--tw-"),
+    );
+    if (twStyle) {
+      const twClone = pipWindow.document.createElement("style");
+      twClone.textContent = twStyle.textContent;
+      pipWindow.document.head.append(twClone);
+    }
+    ["../css/_tokens.css", "../css/client.css", "../css/videoGrid.css"].forEach(
+      (href) => {
+        const link = pipWindow.document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = href;
+        pipWindow.document.head.append(link);
+      },
+    );
+    pipWindow.document.title = document.title;
+    // Percentage heights (overlay is set to height:100% below) only
+    // resolve against a parent with an actual height, not "auto" - html
+    // and body need it spelled out explicitly.
+    pipWindow.document.documentElement.style.height = "100%";
+    pipWindow.document.body.style.cssText = "margin:0; height:100%; overflow:hidden;";
+
+    // The window itself is now the floating box - fill it instead of the
+    // in-page fixed-position/translate3d sizing, and drop the
+    // drag/resize affordances (the OS window already moves/resizes).
+    overlay.classList.add("pip-real-window");
+    overlay.style.position = "static";
+    overlay.style.width = "100%";
+    overlay.style.height = "100%";
+    overlay.style.transform = "none";
+    overlay.querySelectorAll(".pip-resize-handle").forEach((handle) => {
+      handle.style.display = "none";
+    });
+    const videoArea = overlay.querySelector(".pip-overlay-video-area");
+    if (videoArea) videoArea.style.cursor = "default";
+
+    pipWindow.document.body.append(overlay);
+    overlay.style.display = "flex";
+
+    // Covers both the OS window's own close button and us calling
+    // .close() ourselves from closeRealPipIfOpen - either way, land the
+    // overlay back in the room instead of leaving it stranded in a
+    // window that's going away.
+    pipWindow.addEventListener("pagehide", () => {
+      if (pipRealWindow !== pipWindow) return; // already handled via closeRealPipIfOpen
+      pipRealWindow = null;
+      restoreOverlayIntoPage(overlay);
+      if (isInPagePip) togglePagePip("close");
+    });
+
+    return true;
+  } catch (err) {
+    console.warn(
+      "[PiP] Real Picture-in-Picture window failed, falling back to in-page overlay:",
+      err,
+    );
+    pipRealWindow = null;
+    return false;
+  }
+}
+
+/**
+ * Put #pipOverlay back where it came from in the main page and undo the
+ * real-window-only styling from tryOpenRealPagePip.
+ * @param {HTMLElement} overlay
+ */
+function restoreOverlayIntoPage(overlay) {
+  overlay.classList.remove("pip-real-window");
+  overlay.style.position = "";
+  overlay.style.width = "";
+  overlay.style.height = "";
+  overlay.style.transform = "";
+  overlay.querySelectorAll(".pip-resize-handle").forEach((handle) => {
+    handle.style.display = "";
+  });
+  const videoArea = overlay.querySelector(".pip-overlay-video-area");
+  if (videoArea) videoArea.style.cursor = "";
+
+  if (overlay.ownerDocument !== document) {
+    if (pipOriginalNextSibling && pipOriginalNextSibling.parentNode === pipOriginalParent) {
+      pipOriginalParent.insertBefore(overlay, pipOriginalNextSibling);
+    } else if (pipOriginalParent) {
+      pipOriginalParent.appendChild(overlay);
+    }
+  }
+  pipOriginalParent = null;
+  pipOriginalNextSibling = null;
+}
+
+/**
+ * @param {HTMLElement} overlay
+ */
+function closeRealPipIfOpen(overlay) {
+  if (!pipRealWindow) return;
+  const win = pipRealWindow;
+  pipRealWindow = null; // cleared first so win's own pagehide listener no-ops
+  restoreOverlayIntoPage(overlay);
+  try {
+    win.close();
+  } catch (err) {
+    /* ignore */
+  }
 }
 
 function updatePipStagePlaceholderText() {
@@ -14803,7 +15040,7 @@ function updatePipStagePlaceholderText() {
  * same MediaStream can play in more than one <video> element at once.
  */
 function syncPipVideoSource() {
-  const pipVideo = getId("pipVideo");
+  const pipVideo = pipEl("pipVideo");
   if (!pipVideo || !videoMediaContainer) return;
   let sourceVideo = null;
   for (const child of videoMediaContainer.children) {
@@ -14827,7 +15064,7 @@ function syncPipVideoSource() {
  * VideoPlayer.tsx's isPipMode branch.
  */
 function updatePipStatusBadges() {
-  const overlay = getId("pipOverlay");
+  const overlay = pipOverlayRoot;
   if (!overlay) return;
   const peerId = Object.keys(peerConnections)[0];
   const isScreenActive = !!(
@@ -14853,9 +15090,9 @@ function updatePipStatusBadges() {
  * localAudioMuted/localVideoOff/localScreenSharing button states.
  */
 function updatePipLocalControlButtons() {
-  const audioBtnEl = getId("pipAudioBtn");
-  const videoBtnEl = getId("pipVideoBtn");
-  const screenBtnEl = getId("pipScreenBtn");
+  const audioBtnEl = pipEl("pipAudioBtn");
+  const videoBtnEl = pipEl("pipVideoBtn");
+  const screenBtnEl = pipEl("pipScreenBtn");
   if (audioBtnEl) {
     audioBtnEl.classList.toggle("pip-active-state", !myAudioStatus);
   }
@@ -14875,11 +15112,33 @@ function updatePipLocalControlButtons() {
  * Wire up drag/resize/buttons for the PiP overlay once (idempotent).
  */
 function initPipOverlayInteractions() {
-  const overlay = getId("pipOverlay");
+  const overlay = pipOverlayRoot;
   if (!overlay || overlay.dataset.pipReady) return;
   overlay.dataset.pipReady = "1";
 
+  // Lock zoom while the pointer is over PiP - Ctrl+wheel (and trackpad
+  // pinch-zoom, which Chrome/Edge deliver as a synthetic Ctrl+wheel) would
+  // otherwise zoom the whole page and throw off the overlay's fixed-pixel
+  // positioning/size. touch-action:none in CSS already blocks pinch-zoom
+  // as a touch gesture; this covers the desktop wheel/trackpad path.
+  // Works in both in-page and real-PiP-window mode since it's bound to
+  // the same live node either way.
+  overlay.addEventListener(
+    "wheel",
+    (e) => {
+      if (e.ctrlKey) e.preventDefault();
+    },
+    { passive: false },
+  );
+  // Safari's non-standard pinch-zoom gesture events - doesn't go through
+  // "wheel" there, so needs its own listeners.
+  overlay.addEventListener("gesturestart", (e) => e.preventDefault());
+  overlay.addEventListener("gesturechange", (e) => e.preventDefault());
+
   overlay.addEventListener("pointerdown", (e) => {
+    // Real PiP window: the OS itself handles moving/resizing, our
+    // in-page drag simulation doesn't apply (see tryOpenRealPagePip).
+    if (pipRealWindow) return;
     if (e.target.closest(".no-drag")) return;
     if (e.button !== 0 && e.pointerType === "mouse") return;
     pipDragging = true;
@@ -14908,6 +15167,11 @@ function initPipOverlayInteractions() {
     }
   });
 
+  // Backstop for the bottombar/resize-handles' CSS :hover show/hide -
+  // reset the "hide after idle" timer on every pointer move/enter.
+  overlay.addEventListener("pointermove", resetPipControlsHideTimer);
+  overlay.addEventListener("pointerenter", resetPipControlsHideTimer);
+
   const endPipInteraction = (e) => {
     if (pipDragging) {
       pipDragging = false;
@@ -14923,12 +15187,16 @@ function initPipOverlayInteractions() {
     } catch (err) {
       /* ignore */
     }
+    // Dragging/resizing counts as activity too - restart the idle clock
+    // from the moment the interaction actually ends.
+    resetPipControlsHideTimer();
   };
   overlay.addEventListener("pointerup", endPipInteraction);
   overlay.addEventListener("pointercancel", endPipInteraction);
 
   overlay.querySelectorAll(".pip-resize-handle").forEach((handle) => {
     handle.addEventListener("pointerdown", (e) => {
+      if (pipRealWindow) return; // hidden in real mode, but guard anyway
       e.stopPropagation();
       pipResizing = true;
       pipResizeCorner = handle.dataset.corner;
@@ -14944,28 +15212,36 @@ function initPipOverlayInteractions() {
     });
   });
 
-  getId("pipCloseBtn")?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    togglePagePip("close");
-  });
+  // No in-overlay close (X) button anymore - the real PiP window already
+  // has the browser's own close control, and pipStageCloseBtn below
+  // covers the in-page fallback. pipStagePlaceholder/pipStageCloseBtn are
+  // NOT inside #pipOverlay (they stay behind in the main page as the
+  // "playing in PiP" stub) - always look them up on the main document.
   getId("pipStageCloseBtn")?.addEventListener("click", (e) => {
     e.stopPropagation();
     togglePagePip("close");
   });
-  getId("pipAudioBtn")?.addEventListener("click", (e) => {
+  pipEl("pipAudioBtn")?.addEventListener("click", (e) => {
     e.stopPropagation();
     audioBtn?.click();
   });
-  getId("pipVideoBtn")?.addEventListener("click", (e) => {
+  pipEl("pipVideoBtn")?.addEventListener("click", (e) => {
     e.stopPropagation();
     videoBtn?.click();
   });
-  getId("pipScreenBtn")?.addEventListener("click", (e) => {
+  pipEl("pipScreenBtn")?.addEventListener("click", (e) => {
     e.stopPropagation();
     screenShareBtn?.click();
   });
-  getId("pipLeaveBtn")?.addEventListener("click", (e) => {
+  pipEl("pipLeaveBtn")?.addEventListener("click", (e) => {
     e.stopPropagation();
+    // The confirm popup this triggers below renders on the main room
+    // tab/window, not inside PiP - bring it to front first (e.g. real PiP
+    // window floating while the user is on another tab/app) so the popup
+    // is actually seen instead of silently waiting in the background.
+    // Called first/synchronously, still within the real click gesture,
+    // so the browser doesn't just ignore it.
+    window.focus();
     const newLeave = document.getElementById("newLeaveBtn");
     if (newLeave) newLeave.click();
     else if (typeof leaveRoom === "function") leaveRoom();
