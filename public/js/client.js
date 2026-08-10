@@ -8352,14 +8352,16 @@ async function startScreenSharing(constraints, init) {
     emitPeersAction("screenStart", extras);
     await loadScreenMedia();
     await refreshMyStreamToPeers(undefined, true);
-    // Suggest opening PiP right after a successful share - mirrors
-    // App.tsx: `if (!isInPagePip && remotePeer) setShowPipSuggestion(true);`
+    // Auto-open PiP right after a successful share (was: show a
+    // suggestion modal asking the user to opt in) - sharing the screen
+    // now turns PiP on by itself, paired with auto-close in
+    // stopScreenSharing below.
     if (
       typeof isInPagePip !== "undefined" &&
       !isInPagePip &&
       Object.keys(peerConnections).length >= 1
     ) {
-      showPipSuggestionModal();
+      togglePagePip("open");
     }
   }
   screenVideoTrack.onended = () => {
@@ -8390,7 +8392,11 @@ async function startScreenSharing(constraints, init) {
  * @param {boolean} init - Indicates if it's the initial screen share
  */
 async function stopScreenSharing(init) {
-  if (!init) hidePipSuggestionModal();
+  // Auto-close PiP when screen sharing stops, paired with the auto-open
+  // in startScreenSharing above.
+  if (!init && typeof isInPagePip !== "undefined" && isInPagePip) {
+    togglePagePip("close");
+  }
   const myScreenWrap = getId("myScreenWrap");
   const myScreenPinBtn = getId("myScreenPinBtn");
   if (
