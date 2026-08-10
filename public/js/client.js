@@ -15076,6 +15076,25 @@ function initPipOverlayInteractions() {
   if (!overlay || overlay.dataset.pipReady) return;
   overlay.dataset.pipReady = "1";
 
+  // Lock zoom while the pointer is over PiP - Ctrl+wheel (and trackpad
+  // pinch-zoom, which Chrome/Edge deliver as a synthetic Ctrl+wheel) would
+  // otherwise zoom the whole page and throw off the overlay's fixed-pixel
+  // positioning/size. touch-action:none in CSS already blocks pinch-zoom
+  // as a touch gesture; this covers the desktop wheel/trackpad path.
+  // Works in both in-page and real-PiP-window mode since it's bound to
+  // the same live node either way.
+  overlay.addEventListener(
+    "wheel",
+    (e) => {
+      if (e.ctrlKey) e.preventDefault();
+    },
+    { passive: false },
+  );
+  // Safari's non-standard pinch-zoom gesture events - doesn't go through
+  // "wheel" there, so needs its own listeners.
+  overlay.addEventListener("gesturestart", (e) => e.preventDefault());
+  overlay.addEventListener("gesturechange", (e) => e.preventDefault());
+
   overlay.addEventListener("pointerdown", (e) => {
     // Real PiP window: the OS itself handles moving/resizing, our
     // in-page drag simulation doesn't apply (see tryOpenRealPagePip).
