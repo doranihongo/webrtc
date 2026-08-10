@@ -9307,18 +9307,12 @@ function notifyRecording(fromId, from, fromAvatar, action) {
   };
   handleDataChannelChat(chatMessage);
   if (!showChatOnMessage) {
-    const recAgree =
-      action != "Stop"
-        ? "Sự có mặt của bạn đồng nghĩa với việc bạn đồng ý được ghi hình"
-        : "";
     toastMessage(
       null,
       null,
       `${from}
             <br /><br />
-            <span>${msg}</span>
-            <br /><br />
-            ${recAgree}`,
+            <span>${msg}</span>`,
       "top-end",
       6000,
     );
@@ -15231,6 +15225,12 @@ function initPipOverlayInteractions() {
   });
   pipEl("pipScreenBtn")?.addEventListener("click", (e) => {
     e.stopPropagation();
+    // Same reasoning as pipLeaveBtn below: stopping screen share auto-closes
+    // PiP (see stopScreenSharing) and jumps back to the main room page, but
+    // that only matters if the main tab/window is actually in front - bring
+    // it forward first, synchronously, while still inside the real click
+    // gesture, so the browser doesn't ignore it.
+    window.focus();
     screenShareBtn?.click();
   });
   pipEl("pipLeaveBtn")?.addEventListener("click", (e) => {
