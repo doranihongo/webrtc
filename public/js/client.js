@@ -14856,13 +14856,27 @@ async function tryOpenRealPagePip(overlay) {
     pipOriginalNextSibling = overlay.nextSibling;
     pipRealWindow = pipWindow;
 
-    // Load the exact same stylesheets (and Tailwind's JIT engine, for
-    // the w-4/h-4 etc. utility classes on the icons) the main page uses,
-    // instead of hand-rebuilding pip-overlay's look in a separate
-    // stylesheet - that's what kept drifting out of sync before.
-    const twScript = pipWindow.document.createElement("script");
-    twScript.src = "https://cdn.tailwindcss.com";
-    pipWindow.document.head.append(twScript);
+    // Load the exact same stylesheets the main page uses, instead of
+    // hand-rebuilding pip-overlay's look in a separate stylesheet -
+    // that's what kept drifting out of sync before.
+    //
+    // The icons' w-4/h-4 etc. sizing comes from Tailwind utility
+    // classes, which only exist as an actual stylesheet because the
+    // Tailwind CDN *script* generated one on the main page - re-loading
+    // that same script fresh inside the PiP window's document was
+    // tested and produces NO generated CSS at all there (the `tailwind`
+    // global exists, but it never injects a <style> tag - a documented-
+    // in-testing quirk of that browsing context, not a timing issue).
+    // Clone the utility stylesheet Tailwind already generated on the
+    // main page instead of re-running its engine here.
+    const twStyle = [...document.querySelectorAll("style")].find((s) =>
+      s.textContent.includes("--tw-"),
+    );
+    if (twStyle) {
+      const twClone = pipWindow.document.createElement("style");
+      twClone.textContent = twStyle.textContent;
+      pipWindow.document.head.append(twClone);
+    }
     ["../css/_tokens.css", "../css/client.css", "../css/videoGrid.css"].forEach(
       (href) => {
         const link = pipWindow.document.createElement("link");
