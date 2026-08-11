@@ -30,6 +30,53 @@ const supabaseClient = window.supabase.createClient(
   SUPABASE_ANON_KEY,
 );
 
+// ---------------------------------------------------------
+// Đồng bộ access token hiện tại ra 1 cookie riêng (KHÔNG phải cơ chế
+// đăng nhập chính - session thật vẫn nằm trong localStorage như cũ,
+// Supabase SDK tự quản lý). Cookie này CHỈ để server (Express) tự xác
+// minh được lúc phục vụ HTML/JS/CSS, chặn người CHƯA đăng nhập tải
+// được code của các trang sau /login (xem middleware chặn theo
+// "sb_page_token" trong server.js) - trước đây authGuard chỉ là lớp
+// chặn giao diện, server vẫn gửi file cho bất kỳ ai gọi tới URL.
+//
+// Không dùng cookie httpOnly vì không có endpoint đăng nhập phía server
+// để set nó - JS phía client (SDK Supabase) là nơi duy nhất biết lúc
+// nào session đổi (đăng nhập, tự refresh token, đăng xuất).
+// ---------------------------------------------------------
+const AUTH_PAGE_COOKIE_NAME = "sb_page_token";
+
+function syncAuthCookieValue(accessToken) {
+  if (accessToken) {
+    // max-age 1h khớp thời hạn mặc định của access token Supabase -
+    // token hết hạn thật thì cookie cũng tự hết theo, không cần đồng bộ
+    // ngược mỗi khi hết hạn.
+    document.cookie = `${AUTH_PAGE_COOKIE_NAME}=${accessToken}; path=/; max-age=3600; SameSite=Lax`;
+  } else {
+    document.cookie = `${AUTH_PAGE_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
+  }
+}
+
+/**
+ * Đọc lại session hiện tại và đồng bộ cookie ngay - dùng ở những chỗ
+ * cần chắc chắn cookie đã cập nhật TRƯỚC khi điều hướng sang trang khác
+ * (vd: login.js ngay trước khi chuyển hướng sau khi đăng nhập xong),
+ * không phụ thuộc độ trễ của onAuthStateChange bên dưới.
+ */
+async function syncAuthCookie() {
+  const {
+    data: { session },
+  } = await supabaseClient.auth.getSession();
+  syncAuthCookieValue(session?.access_token || null);
+}
+
+// Tự đồng bộ mỗi khi trạng thái đăng nhập đổi - đăng nhập, tự refresh
+// token (Supabase SDK tự làm ngầm), đăng xuất. Cũng tự fire 1 lần lúc
+// mới subscribe với session hiện có (khôi phục từ localStorage nếu có),
+// nên hầu hết các trang không cần tự gọi syncAuthCookie() thủ công.
+supabaseClient.auth.onAuthStateChange((_event, session) => {
+  syncAuthCookieValue(session?.access_token || null);
+});
+
 /**
  * true nếu lỗi này nghĩa là Supabase đã XÁC NHẬN RÕ RÀNG token/session
  * không còn hợp lệ (401/403 từ chính server) - KHÔNG phải lỗi mạng/

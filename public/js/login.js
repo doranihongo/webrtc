@@ -219,6 +219,10 @@ async function handleSignedIn(user, accessToken) {
   }
 
   localStorage.removeItem(changepwPendingKey(user.id));
+  // Đảm bảo cookie "sb_page_token" (server dùng để chặn người chưa đăng
+  // nhập - xem supabaseClient.js/server.js) đã cập nhật TRƯỚC khi rời
+  // trang, không phụ thuộc độ trễ của onAuthStateChange.
+  await syncAuthCookie();
   window.location.href = getRedirectTarget();
 }
 
@@ -348,6 +352,7 @@ if (changePasswordForm) {
         );
       }
 
+      await syncAuthCookie();
       window.location.href = getRedirectTarget();
     } catch (err) {
       showError(changePasswordError, translateAuthError(err.message));

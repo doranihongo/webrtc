@@ -696,6 +696,140 @@ if (ipWhitelist.enabled && !trustProxy) {
 app.use(helmet.noSniff()); // Enable content type sniffing prevention
 app.use(applyEmbedHeaders); // Apply iframe embedding restrictions (CSP frame-ancestors / X-Frame-Options)
 
+/**
+ * Chặn người CHƯA đăng nhập tải được HTML/JS/CSS của các trang sau
+ * /login (kaiwa, phòng học...) - trước đây các file này được
+ * express.static (đăng ký ngay dưới đây) phục vụ công khai cho BẤT KỲ
+ * ai gọi tới URL, authGuard phía client (common.js) chỉ redirect SAU
+ * khi trang đã tải xong - người chưa có tài khoản vẫn xem được toàn bộ
+ * source (View Source/curl) trước khi bị đá đi. Đây là lớp chặn thật ở
+ * server, dựa vào cookie "sb_page_token" mà supabaseClient.js tự đồng
+ * bộ từ access token Supabase (xem syncAuthCookie ở đó) mỗi khi trạng
+ * thái đăng nhập đổi.
+ *
+ * Nhẹ hơn lớp verify đầy đủ của Socket.IO (phía trên) - chỉ xác minh
+ * token còn hợp lệ với Supabase (đúng là 1 tài khoản thật, đang đăng
+ * nhập), KHÔNG tra lại role/hạn dùng/giới hạn thiết bị - những cái đó
+ * đã được lớp Socket.IO lo cho tính năng thật rồi, ở đây chỉ cần biết
+ * "có phải người có tài khoản không" để quyết định có cho tải code hay
+ * không. Kết quả được cache vài chục giây để không phải gọi Supabase
+ * cho MỌI request JS/CSS/ảnh của cùng 1 lần tải trang.
+ *
+ * Chỉ áp cho GET/HEAD (tải trang/asset) - không đụng tới các route
+ * POST/API khác, những route đó đã có cơ chế auth riêng của nó.
+ *
+ * Bỏ qua hoàn toàn nếu SUPABASE_URL/ANON_KEY chưa cấu hình - giống hệt
+ * lớp Socket.IO ở trên, tránh khoá cứng app của người khác dùng lại
+ * code này mà chưa set up Supabase.
+ */
+const PAGE_AUTH_WHITELIST_EXACT = new Set([
+  "/login",
+  "/manifest.json",
+  "/sw.js",
+  "/favicon.ico",
+  "/robots.txt",
+]);
+const PAGE_AUTH_WHITELIST_PREFIXES = [
+  "/css/login.css",
+  "/css/_tokens.css",
+  "/js/supabaseClient.js",
+  "/js/login.js",
+  "/images/", // logo/icon dùng trên cả trang login - không phải "code"
+  "/sounds/", // âm thanh - không phải "code"
+  apiBasePath, // API riêng, có cơ chế auth khác (JWT token/apikey)
+];
+
+function isPageAuthWhitelisted(urlPath) {
+  if (PAGE_AUTH_WHITELIST_EXACT.has(urlPath)) return true;
+  return PAGE_AUTH_WHITELIST_PREFIXES.some((prefix) =>
+    urlPath.startsWith(prefix),
+  );
+}
+
+function getCookieValue(req, name) {
+  const header = req.headers.cookie;
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    if (part.slice(0, idx).trim() === name) {
+      return decodeURIComponent(part.slice(idx + 1).trim());
+    }
+  }
+  return null;
+}
+
+// token -> { ok: boolean, validUntil: ms epoch }
+const pageAuthCache = new Map();
+const PAGE_AUTH_CACHE_TTL_MS = 60 * 1000;
+
+async function isPageAuthTokenValid(token) {
+  const now = Date.now();
+  const cached = pageAuthCache.get(token);
+  if (cached && cached.validUntil > now) return cached.ok;
+
+  let ok = false;
+  try {
+    const { data: user } = await axios.get(`${supabaseCfg.url}/auth/v1/user`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: supabaseCfg.anonKey,
+      },
+      timeout: 5000,
+    });
+    ok = !!user?.id;
+  } catch (err) {
+    ok = false;
+  }
+
+  // Dọn bớt entry hết hạn mỗi khi cache hơi lớn - app nhỏ, không cần
+  // cấu trúc cache phức tạp hơn (LRU...) cho việc này.
+  if (pageAuthCache.size > 500) {
+    for (const [key, val] of pageAuthCache) {
+      if (val.validUntil <= now) pageAuthCache.delete(key);
+    }
+  }
+  pageAuthCache.set(token, { ok, validUntil: now + PAGE_AUTH_CACHE_TTL_MS });
+  return ok;
+}
+
+if (supabaseCfg.url && supabaseCfg.anonKey) {
+  app.use(async (req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    if (isPageAuthWhitelisted(req.path)) return next();
+
+    const token = getCookieValue(req, "sb_page_token");
+    const ok = token ? await isPageAuthTokenValid(token) : false;
+    if (ok) return next();
+
+    // Điều hướng trình duyệt thật (gõ URL/bấm link) -> đá về /login kèm
+    // đường quay lại, giống hệt authGuard phía client vẫn làm. Các
+    // request khác (JS/CSS/ảnh do <script>/<link> tự tải) -> 401 gọn,
+    // không cần trải nghiệm đẹp vì lẽ ra không xảy ra với người đã đăng
+    // nhập thật (cookie luôn có sẵn từ lúc đó).
+    //
+    // Dùng Sec-Fetch-Mode trước (mọi trình duyệt hiện đại đều gửi,
+    // phân biệt CHÍNH XÁC "navigate" với "cors"/"no-cors" của
+    // script/link/img) - chỉ fallback về Accept header (đòi hỏi có
+    // "text/html" cụ thể, không chỉ chấp nhận "*/*" như curl mặc định)
+    // cho request không có header đó (curl, trình duyệt rất cũ...).
+    const secFetchMode = req.headers["sec-fetch-mode"];
+    const isNavigation = secFetchMode
+      ? secFetchMode === "navigate"
+      : (req.headers.accept || "").includes("text/html");
+    if (isNavigation) {
+      return res.redirect(
+        "/login?redirect=" + encodeURIComponent(req.originalUrl),
+      );
+    }
+    return res.status(401).end();
+  });
+} else {
+  log.warn(
+    "[Auth] SUPABASE_URL/SUPABASE_ANON_KEY chưa được cấu hình - bỏ qua chặn tải trang/code cho người chưa đăng nhập.",
+  );
+}
+
 // Use all static files from the public folder
 const staticOptions = {
   setHeaders: (res, filePath) => {
