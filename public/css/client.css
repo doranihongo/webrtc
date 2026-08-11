@@ -43,7 +43,25 @@
   --bottom-btns-flex-direction: row;
 
   /* Ocean theme (default) - colors only, same structural roles as before */
-  --body-bg: radial-gradient(var(--ds-bg-elevated), var(--ds-bg-deep));
+  /* Đè lại (chỉ trong phạm vi client.html - _tokens.css load trước nên
+     :root ở đây thắng) 4 token bề mặt tối bằng bản thân sáng hơn 1-2
+     bậc, vẫn lấy nguyên trong bảng "Ocean" - theo yêu cầu "trong cuộc
+     họp đang hơi tối". Kéo theo sáng hơn tự động: cài đặt (#mySettings),
+     ô camera tắt (.videoPlaceholder), trò chuyện/bảng trắng (--msger-bg/
+     --wb-bg), popup/toast (swBg trong client.js đổi tương ứng), v.v. -
+     tất cả những chỗ đó vốn đã dùng chung 4 token này. */
+  --ds-bg-deep: var(--ds-neutral-700); /* #16324f, trước #0b1a2e */
+  --ds-bg-deep-rgb: 22, 50, 79;
+  --ds-bg-panel: var(--ds-border); /* #24406b, trước #16324f */
+  --ds-bg-panel-rgb: 36, 64, 107;
+  --ds-bg-elevated: var(--ds-border-strong); /* #3c6693, trước #1c3b5c */
+  --ds-bg-1: var(--ds-border); /* #24406b, trước #0e2038 */
+  --ds-bg-1-rgb: 36, 64, 107;
+
+  /* Nền chính trong cuộc gọi (video grid, các khung...) - đổi điểm dừng
+     ngoài từ --ds-bg-deep (tối) sang --ds-border-strong/--ds-neutral-700
+     (sáng hơn) để đồng bộ với trang chủ kaiwa. */
+  --body-bg: radial-gradient(var(--ds-border-strong), var(--ds-neutral-700));
   --msger-bg: radial-gradient(var(--ds-bg-elevated), var(--ds-bg-deep));
   --msger-private-bg: radial-gradient(var(--ds-bg-elevated), var(--ds-bg-deep));
   --wb-bg: radial-gradient(var(--ds-bg-elevated), var(--ds-bg-deep));
@@ -160,7 +178,7 @@ textarea,
   padding: 11px 22px 11px 16px;
   background: linear-gradient(
     135deg,
-    rgba(28, 28, 32, 0.82),
+    rgba(var(--ds-bg-panel-rgb), 0.82),
     rgba(var(--ds-bg-1-rgb), 0.9)
   );
   backdrop-filter: blur(18px) saturate(160%);
@@ -274,11 +292,13 @@ textarea,
   justify-content: center;
   /* Cùng gradient nền của trang landing (đổi từ màu phẳng var(--ds-bg-2)
      trước đây), theo yêu cầu cho 2 màn "load vào phòng" và "nhập tên
-     trước khi vào phòng" cùng 1 nền. */
+     trước khi vào phòng" cùng 1 nền. Điểm dừng tối/giữa đổi sang
+     --ds-neutral-700/--ds-border (sáng hơn) để đồng bộ với trang chủ
+     kaiwa - xem landing.css cho cùng thay đổi. */
   background: linear-gradient(
     315deg,
-    var(--ds-bg-2) 0%,
-    var(--ds-bg-1) 45%,
+    var(--ds-neutral-700) 0%,
+    var(--ds-border) 45%,
     var(--ds-hero-1) 100%
   );
   opacity: 1;
@@ -362,14 +382,16 @@ textarea,
 /* Fully opaque backdrop for the pre-join dialog - the room behind it
    must never show through. Scoped to this one Swal via customClass.container
    so other Swal dialogs in the app keep their normal (lighter) backdrop.
-   Cùng gradient nền trang landing (đổi từ màu phẳng trước đây) - đây mới
-   đúng là "cái nền" (không phải khung nhập tên, khung vẫn giữ swBg như
-   mọi Swal khác). */
+   Cùng gradient nền trang landing (đổi từ màu phẳng trước đây), điểm
+   dừng tối/giữa đổi sang --ds-neutral-700/--ds-border (sáng hơn, đồng
+   bộ trang chủ kaiwa) - đây mới đúng là "cái nền" (không phải khung
+   nhập tên/chờ giáo viên, 2 khung đó có màu riêng bên dưới,
+   .init-modal-size/.teacher-wait-modal). */
 .init-swal-backdrop {
   background: linear-gradient(
     315deg,
-    var(--ds-bg-2) 0%,
-    var(--ds-bg-1) 45%,
+    var(--ds-neutral-700) 0%,
+    var(--ds-border) 45%,
     var(--ds-hero-1) 100%
   ) !important;
 }
@@ -1895,200 +1917,10 @@ textarea,
   border-top: 1px solid rgba(var(--ds-text-primary-rgb), 0.12);
 }
 
-.msg-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
 .msg-footer {
   display: flex;
   flex-direction: column;
   margin-top: 6px;
-}
-
-.msg-actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border-radius: 10px;
-  background: var(--body-bg) !important;
-}
-
-.reaction-picker {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 6px;
-  border-radius: 12px;
-  border: var(--border);
-  background: rgba(var(--ds-bg-1-rgb), 0.95);
-  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.22);
-}
-
-.reaction-emoji-btn {
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 10px;
-  padding: 0;
-  font-size: 18px;
-  line-height: 1;
-  background: rgba(var(--ds-text-primary-rgb), 0.12);
-  cursor: pointer;
-}
-
-.reaction-emoji-btn:hover {
-  transform: translateY(-1px);
-  background: rgba(var(--ds-text-primary-rgb), 0.22);
-}
-
-.reaction-emoji-btn:focus {
-  outline: 2px solid rgba(102, 170, 255, 0.6);
-  outline-offset: 2px;
-}
-
-.reaction-toggle-btn {
-  font-size: 16px;
-}
-
-.message-reactions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
-}
-
-.reaction-badge {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 32px;
-  height: 24px;
-  padding: 1px 5px;
-  border-radius: 999px;
-  background: rgba(var(--ds-text-primary-rgb), 0.12);
-  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.2);
-  font-size: 11px;
-  line-height: 1.2;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  user-select: none;
-}
-
-.reaction-badge:hover {
-  background: rgba(var(--ds-text-primary-rgb), 0.18);
-  border-color: rgba(var(--ds-text-primary-rgb), 0.32);
-  transform: translateY(-1px);
-}
-
-.reaction-badge:active {
-  transform: translateY(1px) scale(0.97);
-}
-
-.reaction-badge.my-reaction {
-  background: rgba(53, 125, 255, 0.3);
-  border-color: rgba(102, 170, 255, 0.8);
-  font-weight: 500;
-}
-
-.reaction-badge.my-reaction:hover {
-  background: rgba(53, 125, 255, 0.4);
-  border-color: rgba(102, 170, 255, 1);
-}
-
-.reaction-badge::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: 999px;
-  border: 1px solid rgba(102, 170, 255, 0.5);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.reaction-badge.my-reaction::before {
-  opacity: 1;
-}
-
-/* Hover tooltip listing reactor names removed per no-tooltips-anywhere
-   request (was .reaction-badge:hover::after using content:attr(data-peers)) */
-
-/* Mobile optimizations for emoji reactions */
-@media (max-width: 768px) {
-  .reaction-emoji-btn {
-    width: 30px;
-    height: 30px;
-    font-size: 16px;
-  }
-
-  .msg-actions button {
-    width: 34px;
-    height: 34px;
-  }
-
-  .reaction-picker {
-    gap: 6px;
-    padding: 6px;
-  }
-
-  .reaction-badge {
-    min-width: 26px;
-    height: 20px;
-    padding: 0 4px;
-    font-size: 10px;
-  }
-}
-
-@media (max-width: 768px) and (hover: none) {
-  .reaction-emoji-btn:hover {
-    transform: none;
-    background: rgba(var(--ds-text-primary-rgb), 0.12);
-  }
-
-  .reaction-emoji-btn:active {
-    transform: scale(1.15) translateY(-3px);
-    background: rgba(var(--ds-text-primary-rgb), 0.25);
-  }
-
-  .reaction-badge:hover {
-    transform: none;
-  }
-
-  .reaction-badge:active {
-    transform: scale(0.95);
-  }
-}
-
-@media (max-width: 600px) {
-  .reaction-emoji-btn {
-    width: 26px;
-    height: 26px;
-    font-size: 14px;
-  }
-
-  .msg-actions {
-    gap: 6px;
-  }
-
-  .msg-actions button {
-    width: 30px;
-    height: 30px;
-  }
-
-  .reaction-badge {
-    min-width: 24px;
-    height: 18px;
-    padding: 0 3px;
-    font-size: 10px;
-  }
 }
 
 .msg-text iframe {
@@ -4132,9 +3964,11 @@ input:checked + .slider:before {
    Cancel/deny are intentionally left at SweetAlert2's own default gray -
    a couple of dialogs set an explicit red/green cancelButtonColor/
    denyButtonColor for a destructive/alternate action, and those inline
-   colors must keep winning. */
+   colors must keep winning. brand-700 (tối nhất) đổi sang brand-500
+   (sáng nhất) - trên nền popup đã sáng lên (initUserPopupBg...), nút
+   brand-700 cũ bị chìm/khó nhìn (vd nút "Vào cuộc họp"). */
 .swal2-styled.swal2-confirm {
-  background-color: var(--ds-brand-700) !important;
+  background-color: var(--ds-brand-500) !important;
   color: var(--ds-cta-text) !important;
 }
 .swal2-styled.swal2-confirm:hover {
@@ -5529,61 +5363,6 @@ body {
 
 .b-yellow {
   color: #d4a017 !important;
-}
-
-/* AI Typing Indicator */
-.ai-typing-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  margin: 8px 0;
-  float: left;
-  clear: both;
-}
-
-.ai-typing-indicator .typing-dots {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(var(--ds-text-primary-rgb), 0.06);
-  border: 1px solid rgba(var(--ds-text-primary-rgb), 0.06);
-  border-radius: 16px;
-  padding: 12px 18px;
-  backdrop-filter: blur(8px);
-}
-
-.ai-typing-indicator .typing-dots span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: rgba(var(--ds-text-primary-rgb), 0.5);
-  animation: typingBounce 1.4s infinite ease-in-out both;
-}
-
-.ai-typing-indicator .typing-dots span:nth-child(1) {
-  animation-delay: -0.32s;
-}
-
-.ai-typing-indicator .typing-dots span:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-.ai-typing-indicator .typing-dots span:nth-child(3) {
-  animation-delay: 0s;
-}
-
-@keyframes typingBounce {
-  0%,
-  80%,
-  100% {
-    transform: scale(0.6);
-    opacity: 0.4;
-  }
-  40% {
-    transform: scale(1);
-    opacity: 1;
-  }
 }
 
 /*--------------------------------------------------------------

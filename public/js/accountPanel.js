@@ -77,6 +77,9 @@ document.querySelectorAll(".account-toggle-password").forEach((btn) => {
 
 function openAccountPanel() {
   accountPanelOverlay.classList.remove("hidden");
+  // Khoá cuộn/vuốt trang nền phía sau trong lúc bảng đang mở - không
+  // thì trên mobile vẫn vuốt/cuộn được trang chủ đằng sau lớp phủ.
+  document.body.classList.add("account-panel-open");
   // Luôn mở lại ở màn thông tin, không phải màn đổi mật khẩu dở dang
   showAccountInfoView();
   // Lấy lại số thiết bị/hạn sử dụng mới nhất từ Supabase mỗi lần mở -
@@ -88,6 +91,7 @@ function openAccountPanel() {
 
 function closeAccountPanel() {
   accountPanelOverlay.classList.add("hidden");
+  document.body.classList.remove("account-panel-open");
 }
 
 function showAccountInfoView() {
@@ -119,7 +123,9 @@ if (accountPanelClose) {
   accountPanelClose.addEventListener("click", closeAccountPanel);
 }
 if (accountPanelOverlay) {
-  // Bấm ra ngoài (nền tối) để đóng - giống hệt UserProfileSidebar bên kanji
+  // Bấm chuột ra ngoài (nền tối) vẫn đóng bảng như cũ - chỉ khoá
+  // cuộn/vuốt trang nền (xem .account-panel-open ở topbar.css), không
+  // khoá việc bấm ra ngoài để đóng.
   accountPanelOverlay.addEventListener("click", (e) => {
     if (e.target === accountPanelOverlay) closeAccountPanel();
   });

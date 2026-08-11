@@ -1013,11 +1013,13 @@ video:fullscreen {
   /* Floating glass control, positioned over the stage/video - stays a
      fixed dark-glass style in both themes (like the caption overlay and
      PiP controls) rather than following the site theme, so it stays
-     legible over arbitrary video content underneath it. */
+     legible over arbitrary video content underneath it. Nền/viền dùng
+     giá trị cứng (không qua --ds-bg-* vì cố tình không theo theme) -
+     nhưng vẫn nâng sáng lên 1 bậc cho đồng bộ với phần còn lại. */
   color: rgba(255, 255, 255, 0.7);
-  background: rgba(11, 26, 46, 0.85);
+  background: rgba(22, 50, 79, 0.85);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(36, 64, 107, 0.8);
+  border: 1px solid rgba(60, 102, 147, 0.8);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
   cursor: pointer;
   transition:
@@ -1026,9 +1028,9 @@ video:fullscreen {
     border-color 0.15s ease;
 }
 .fullscreen-corner-btn:hover {
-  background: #16324f;
+  background: #24406b;
   color: #fff;
-  border-color: rgba(60, 102, 147, 0.9);
+  border-color: rgba(75, 180, 222, 0.6);
 }
 /* Hard guarantee on top of the JS isMobileDevice gate: any touch-primary
    device (no real mouse) must never show this button, full stop. */
@@ -1036,6 +1038,69 @@ video:fullscreen {
   .fullscreen-corner-btn {
     display: none !important;
   }
+}
+
+/* "Trang chủ" (kaiwa) trong khi vẫn gọi - góc dưới-trái, chỉ giaovien/
+   admin trên desktop (gate ở JS, xem setGoHomeCornerBtn trong
+   client.js). Cùng công thức "glass control" với .fullscreen-corner-btn
+   ở trên, chỉ khác 2 điểm: nằm bên trái (left thay right) và viền/hover
+   màu xanh lá để phân biệt rõ 2 nút khác chức năng. */
+.go-home-corner-btn {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: rgba(134, 239, 172, 0.85);
+  background: rgba(22, 50, 79, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(74, 222, 128, 0.5);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.go-home-corner-btn:hover {
+  background: #16321f;
+  color: #86efac;
+  border-color: rgba(74, 222, 128, 0.8);
+}
+@media (hover: none) and (pointer: coarse) {
+  .go-home-corner-btn {
+    display: none !important;
+  }
+}
+
+/* Overlay hiện trang chủ kaiwa đè lên trang gọi (xem client.html) - KHÔNG
+   phải điều hướng, chỉ ẩn/hiện 1 iframe, nên cuộc gọi (WebRTC/audio)
+   phía dưới không hề bị gián đoạn lúc đang xem. z-index cao hơn mọi thứ
+   khác trong trang gọi, kể cả .fullscreen-corner-btn/.go-home-corner-btn
+   (z-index: 40) và các popup Swal (z-index mặc định ~1060) - đủ cao để
+   luôn nổi trên cùng khi hiện. */
+.kaiwa-overlay-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  background: #0e2038;
+}
+.kaiwa-overlay-frame iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+/* Banner "mất kết nối" phải luôn nổi trên overlay kaiwa ở trên - nếu
+   rớt mạng đúng lúc giáo viên đang xem kaiwa vẫn phải thấy cảnh báo. */
+.disconnect-banner {
+  z-index: 100001;
 }
 
 /* Screen-share / record / PiP control-bar buttons are meant to be

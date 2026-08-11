@@ -26,14 +26,61 @@
   /* Không bo góc/cắt - giống cách logo hiển thị ở màn đăng nhập
      (auth-logo trong login.css: object-fit contain, không
      border-radius). Chữ "DORA NIHONGO" cạnh logo đã bỏ, chỉ còn logo. */
-  height: 26px;
+  height: 30px;
   width: auto;
   object-fit: contain;
   flex-shrink: 0;
-  /* File ảnh logo có khoảng trong mờ phía trên nên dù box đã center
+}
+
+/* Logo + mũi tên "<" về trang chủ (kaiwa) - gộp chung 1 link, di chuột
+   vào đâu trong 2 thứ cũng bấm được, không phải 2 vùng bấm riêng. Không
+   viền/nền lúc bình thường - chỉ hiện viền bo góc sáng lên khi hover,
+   để báo cả cụm là 1 nút bấm được. */
+.top-bar-home-link {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: var(--ds-space-1) var(--ds-space-2);
+  margin: calc(var(--ds-space-1) * -1) calc(var(--ds-space-2) * -1);
+  border-radius: var(--ds-radius-md);
+  border: 2px solid transparent;
+  text-decoration: none;
+  /* File ảnh logo có khoảng trong mờ phía trên nên dù cả cụm đã center
      theo align-items của .top-bar, mắt vẫn thấy nó thấp hơn avatar -
-     đẩy lên thêm cho thẳng hàng thị giác với accountAvatar. */
+     đẩy cả cụm (icon + logo cùng lúc, để 2 thứ vẫn thẳng hàng với
+     nhau) lên thêm cho thẳng hàng thị giác với accountAvatar. */
   transform: translateY(-8px);
+  transition:
+    border-color var(--ds-duration-base) var(--ds-ease-out),
+    background var(--ds-duration-base) var(--ds-ease-out);
+}
+
+.top-bar-home-link:hover {
+  border-color: rgba(var(--ds-brand-500-rgb), 0.45);
+  background: rgba(var(--ds-text-primary-rgb), 0.08);
+}
+
+.top-bar-home-link:focus-visible {
+  outline: 2px solid var(--ds-brand-500);
+  outline-offset: 2px;
+}
+
+.top-bar-back-icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  color: var(--ds-text-primary);
+  opacity: 0.75;
+  /* Glyph mũi tên của Font Awesome hơi lệch lên trên trong dòng chữ của
+     nó, dù đã align-items:center với logo - đẩy xuống thêm chút cho
+     khớp tâm logo. */
+  position: relative;
+  top: 3px;
+  transition: opacity var(--ds-duration-base) var(--ds-ease-out);
+}
+
+.top-bar-home-link:hover .top-bar-back-icon {
+  opacity: 1;
 }
 
 .account-btn {
@@ -73,25 +120,12 @@
   display: block;
 }
 
-/* ---------- Bottom bar ---------- */
-/* Chỉ còn icon GitHub (đã bỏ logo + chữ bản quyền) - đẩy hẳn sang phải
-   thay vì space-between (không còn phần tử bên trái để "between" nữa). */
-.bottom-bar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: var(--ds-space-4) var(--ds-space-6);
-}
-
-.bottom-bar-github {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(var(--ds-text-primary-rgb), 0.3);
-}
-
 /* ---------- Account panel ---------- */
+/* .account-btn/.account-avatar phía trên + toàn bộ khối account-panel*
+   dưới đây giờ phục vụ trang chủ kaiwa (kaiwa/index.html load lại đúng
+   file CSS này) - landing.html không còn dùng nữa (đã bỏ accountBtn +
+   accountPanelOverlay + .bottom-bar/.bottom-bar-github, icon GitHub đã
+   chuyển sang footer của kaiwa dưới dạng Tailwind class). */
 .hidden {
   display: none !important;
 }
@@ -104,6 +138,17 @@
   backdrop-filter: blur(2px);
   display: flex;
   justify-content: flex-end;
+  /* Nền phía sau đã khoá cuộn qua .account-panel-open trên <body> - chặn
+     luôn touch-scroll ngay trên chính lớp phủ này (vùng ngoài .account-panel),
+     để vuốt ở đó không kéo/rung trang nền theo kiểu "cuộn dội" trên mobile. */
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+/* Khoá cuộn/vuốt trang nền trong lúc bảng tài khoản đang mở (xem
+   accountPanel.js openAccountPanel/closeAccountPanel). */
+body.account-panel-open {
+  overflow: hidden;
 }
 
 /* Trượt vào từ phải mỗi lần overlay hết "hidden" - animation tự phát
@@ -123,12 +168,16 @@
   width: 100%;
   max-width: 380px;
   height: 100%;
-  background: var(--ds-bg-deep);
+  background: var(--ds-bg-panel);
   border-left: 1px solid var(--ds-border);
   display: flex;
   flex-direction: column;
   box-shadow: var(--ds-shadow-lg);
   animation: accountPanelSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  /* .account-panel-overlay chặn touch-action ở lớp phủ (nền) - trả lại
+     cuộn dọc bình thường bên trong chính bảng này (accountPanelBody vẫn
+     cần cuộn được khi nội dung dài, form đổi mật khẩu...). */
+  touch-action: pan-y;
 }
 
 /* Trên mobile panel chiếm gần hết chiều rộng màn hình nên viền này nằm

@@ -2,6 +2,28 @@
 <html lang="vi" class="auth-pending">
   <head>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // Đè lại đúng 4 sắc tối nhất của thang "slate" (Tailwind) bằng màu
+      // trong bảng "Ocean" của app (sáng hơn hẳn bản gốc) - để mọi
+      // bg-slate-700/800/900/950 (thẻ mã phòng/thời gian/số người ở
+      // trên, thanh nút điều khiển ở dưới...) tự động sáng lên theo,
+      // không phải sửa từng class. Không đụng slate-100..600 (dùng cho
+      // chữ, không phải nền) nên chữ không đổi màu.
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              slate: {
+                700: "#3c6693",
+                800: "#24406b",
+                900: "#16324f",
+                950: "#0e2038",
+              },
+            },
+          },
+        },
+      };
+    </script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
       /* Ẩn trang cho tới khi common.js (authGuard) xác nhận đã đăng
@@ -667,8 +689,7 @@ micro để sử dụng ứng dụng này.
         <!-- PiP Mode -->
         <button
           id="newPipBtn"
-          style="opacity: 0.5; pointer-events: none"
-          class="cursor-not-allowed hidden md:flex opacity-50 p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all"
+          class="hidden md:flex p-2.5 sm:p-2.5 max-lg:landscape:p-2 rounded-xl max-lg:landscape:rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 items-center justify-center transition-all"
         >
           <i
             data-lucide="picture-in-picture"
@@ -1614,6 +1635,28 @@ micro để sử dụng ứng dụng này.
       <i class="fas fa-expand-alt"></i>
     </button>
 
+    <!-- Desktop-only, giaovien/admin-only floating button (bottom-left) -
+    xem trang chủ kaiwa trong khi vẫn đang gọi (mở kaiwaOverlayFrame bên
+    dưới), không rời/điều hướng trang gọi nên âm thanh không gián đoạn.
+    Shown/hidden via JS (isMobileDevice + role). -->
+    <button
+      id="goHomeCornerBtn"
+      class="go-home-corner-btn"
+      style="display: none"
+    >
+      <i class="fas fa-house"></i>
+    </button>
+
+    <!-- Overlay hiện trang chủ kaiwa đè lên trang gọi khi bấm
+    #goHomeCornerBtn - KHÔNG phải điều hướng, chỉ 1 iframe ẩn/hiện, nên
+    cuộc gọi (WebRTC/audio) phía dưới không hề bị gián đoạn. src gắn
+    động trong client.js (kèm ?embed=call&room=... để kaiwa biết đang
+    nhúng trong cuộc gọi). Ẩn đi khi kaiwa gửi postMessage
+    "dora:returnToCall" (bấm nút "QUAY LẠI PHÒNG HỌC" bên trong). -->
+    <div id="kaiwaOverlayFrame" class="kaiwa-overlay-frame" style="display: none">
+      <iframe id="kaiwaOverlayIframe" title="Trang chủ"></iframe>
+    </div>
+
     <!-- In-page PiP: shown in the main stage instead of the video while
     the floating PiP window (below) is open - mirrors App.tsx's
     isInPagePip placeholder branch (icon + text + close button). -->
@@ -1861,24 +1904,6 @@ micro để sử dụng ứng dụng này.
         </div>
         <div class="msg-footer">
           <span data-template-text="messageTime"></span>
-          <div
-            class="msg-actions"
-            data-template-html="messageActions"
-            style="display: none"
-          ></div>
-          <div class="message-reactions" style="display: none"></div>
-        </div>
-      </div>
-    </template>
-
-    <template id="tpl-ai-typing-indicator">
-      <div data-template-attr-id="typingIndicatorId" class="msg left-msg">
-        <div class="ai-typing-indicator">
-          <div class="typing-dots">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
         </div>
       </div>
     </template>
