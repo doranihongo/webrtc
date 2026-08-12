@@ -6387,13 +6387,10 @@ async function openKaiwaOverlay() {
       // trường hợp đó xảy ra.
     }
   }
-  // Tự bật PiP luôn - đây là click thật của người dùng nên trình duyệt
-  // luôn cho phép mở PiP (khác trường hợp gọi từ 1 sự kiện mạng không
-  // có "user activation"). Dùng đúng hàm nút PiP thật đang gọi
-  // (togglePagePip, xem newPip?.addEventListener trong client.html) -
-  // hàm này tự bỏ qua nếu PiP đã bật rồi hoặc đang ở phòng 1 mình
-  // (setPagePip), không cần tự kiểm tra thêm ở đây.
-  if (typeof togglePagePip === "function") togglePagePip("open");
+  // Không tự bật PiP nữa khi mở overlay này - chỉ hiện overlay trang chủ
+  // đè lên trang gọi, PiP (nếu người dùng muốn) vẫn bật thủ công qua
+  // đúng nút PiP riêng (togglePagePip, xem newPip?.addEventListener
+  // trong client.html, hoặc nút "PiP" trong nav kaiwa - dora:togglePip).
   elemDisplay(kaiwaOverlayFrame, true, "flex");
 }
 
@@ -6401,13 +6398,23 @@ function closeKaiwaOverlay() {
   elemDisplay(kaiwaOverlayFrame, false);
 }
 
-// Nhận lệnh "quay lại cuộc gọi" từ kaiwa (đang chạy trong
-// #kaiwaOverlayIframe ở trên) - kiểm tra origin để chắc chắn tin nhắn
-// đến từ chính domain của mình trước khi xử lý.
+// Nhận lệnh từ kaiwa (đang chạy trong #kaiwaOverlayIframe ở trên) - kiểm
+// tra origin để chắc chắn tin nhắn đến từ chính domain của mình trước khi
+// xử lý. "dora:returnToCall" = quay lại cuộc gọi (đóng overlay này).
+// "dora:togglePip" = nút "PiP" trong nav kaiwa - bật/tắt cửa sổ nổi thật
+// mà KHÔNG đóng overlay (để vẫn xem/duyệt trang chủ trong lúc video nổi).
+// "dora:requestPipState" = kaiwa vừa mount, xin lại trạng thái PiP hiện
+// tại (Home.tsx tô nút "PiP" màu xanh nếu đang bật) - trả lời qua
+// sendPipStateToKaiwa() (cũng tự gọi mỗi khi trạng thái đổi, xem cuối
+// setPagePip).
 window.addEventListener("message", (event) => {
   if (event.origin !== window.location.origin) return;
   if (event.data?.type === "dora:returnToCall") {
     closeKaiwaOverlay();
+  } else if (event.data?.type === "dora:togglePip") {
+    if (typeof togglePagePip === "function") togglePagePip("toggle");
+  } else if (event.data?.type === "dora:requestPipState") {
+    sendPipStateToKaiwa();
   }
 });
 
@@ -14809,6 +14816,21 @@ async function setPagePip(enable) {
   if (typeof window.updateNewControlBarUI === "function") {
     window.updateNewControlBarUI();
   }
+
+  sendPipStateToKaiwa();
+}
+
+// Báo trạng thái PiP hiện tại cho overlay trang chủ kaiwa (nếu đã tải) -
+// để nút "PiP" trong nav của nó (xem Home.tsx) tô đúng màu xanh khi đang
+// bật, giống hệt newPipBtn trong thanh điều khiển. Gọi mỗi khi trạng thái
+// đổi (cuối setPagePip) và khi kaiwa mới mount/xin lại (event "message"
+// "dora:requestPipState" phía dưới).
+function sendPipStateToKaiwa() {
+  if (!kaiwaOverlayIframe?.contentWindow) return;
+  kaiwaOverlayIframe.contentWindow.postMessage(
+    { type: "dora:pipState", active: !!isInPagePip },
+    window.location.origin,
+  );
 }
 
 function applyPipTransform() {

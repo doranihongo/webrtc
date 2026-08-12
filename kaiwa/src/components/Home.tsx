@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BookOpen, ChevronRight, MessageCircle, Lock, Unlock, Library, Users, Wrench, Repeat, Headphones, Mic, X, Film, PlayCircle, Video } from 'lucide-react';
+import { BookOpen, ChevronRight, MessageCircle, Lock, Unlock, Library, Users, Wrench, Repeat, Headphones, Mic, X, Film, PlayCircle, Video, PictureInPicture } from 'lucide-react';
 import { useCourses } from '../context/CoursesContext';
 import KaiwaModal from './KaiwaModal';
 import DictationModal from './DictationModal';
@@ -46,10 +46,24 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
   // link này (nếu có) vẫn thấy nút "Phòng học" bình thường.
   const [isEmbeddedInCall, setIsEmbeddedInCall] = useState(false);
   const [userRole, setUserRole] = useState<string | undefined>(undefined);
+  // Trạng thái PiP thật bên trang gọi (client.js) - chỉ có ý nghĩa khi
+  // isEmbeddedInCall, đồng bộ qua postMessage "dora:pipState" (xem
+  // useEffect bên dưới + sendPipStateToKaiwa trong public/js/client.js).
+  const [isPipActive, setIsPipActive] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setIsEmbeddedInCall(params.get('embed') === 'call');
+    const embedded = params.get('embed') === 'call';
+    setIsEmbeddedInCall(embedded);
+
+    // Nhúng trong cuộc gọi - ẩn nút tài khoản tĩnh (#kaiwaAccountWidget,
+    // xem kaiwa/index.html), nó đè đúng chỗ 2 nút PiP/quay-lại-phòng-học
+    // mới thêm trong nav và không cần thiết khi chỉ ghé trang chủ tạm
+    // giữa lúc gọi.
+    if (embedded) {
+      const widget = document.getElementById('kaiwaAccountWidget');
+      if (widget) widget.style.display = 'none';
+    }
 
     const w = window as any;
     const applyRole = () => setUserRole(w.__authUser?.role);
@@ -62,6 +76,25 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
 
   const showReturnToCall =
     isEmbeddedInCall && (userRole === 'giaovien' || userRole === 'admin');
+
+  // Đồng bộ trạng thái nút "PiP": xin trạng thái hiện tại ngay khi nút
+  // này bắt đầu hiện (overlay có thể đã tải ngầm từ trước, nên PiP có
+  // thể đã bật sẵn), rồi lắng nghe mọi lần đổi trạng thái tiếp theo (bật
+  // qua nút thật trong phòng gọi, hoặc tắt qua nút X cửa sổ PiP thật...).
+  useEffect(() => {
+    if (!showReturnToCall) return;
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'dora:pipState') {
+        setIsPipActive(!!event.data.active);
+      }
+    };
+    window.addEventListener('message', onMessage);
+    window.parent.postMessage({ type: 'dora:requestPipState' }, window.location.origin);
+
+    return () => window.removeEventListener('message', onMessage);
+  }, [showReturnToCall]);
 
   useEffect(() => {
     if (isHiddenByOverlay) return;
@@ -83,6 +116,39 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
              <div className="flex items-center gap-3 text-blue-700">
                <img src="https://i.ibb.co/GvC0pFmy/Logo-tr-ng.png" alt="DORA" className="h-8 object-contain -mt-[5px]" />
              </div>
+
+             {/* Nhúng trong cuộc gọi (embed=call) - thay vì nút tài khoản
+                 (bị ẩn ở useEffect trên), hiện 2 nút nhanh: "PiP" (bật/tắt
+                 cửa sổ nổi qua postMessage "dora:togglePip", không rời
+                 trang chủ) và icon máy quay (quay lại phòng học ngay,
+                 cùng "dora:returnToCall" với nút thẻ gradient bên dưới -
+                 nháy animate-pulse giống thẻ đó để luôn nổi bật). Nút PiP
+                 cố tình giữ NGUYÊN màu sắc/hình dáng của newPipBtn thật
+                 trong thanh điều khiển phòng gọi (client.html) - icon
+                 vuông, nền slate khi tắt, xanh dương khi bật - để người
+                 dùng nhận ra ngay đây là cùng 1 nút, không phải nút mới lạ. */}
+             {showReturnToCall && (
+               <div className="flex items-center gap-2">
+                 <button
+                    onClick={() => window.parent.postMessage({ type: 'dora:togglePip' }, window.location.origin)}
+                    title={isPipActive ? 'Tắt cửa sổ nổi (PiP)' : 'Bật cửa sổ nổi (PiP)'}
+                    className={`flex items-center justify-center p-2.5 rounded-xl transition-all ${
+                      isPipActive
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white/10 hover:bg-white/20 text-white'
+                    }`}
+                 >
+                    <PictureInPicture className="w-5 h-5" />
+                 </button>
+                 <button
+                    onClick={() => window.parent.postMessage({ type: 'dora:returnToCall' }, window.location.origin)}
+                    title="Quay lại phòng học"
+                    className="flex items-center justify-center w-9 h-9 rounded-xl text-white bg-[linear-gradient(135deg,#3b82f6_0%,#a855f7_35%,#ec4899_65%,#f97316_100%)] shadow-md hover:brightness-110 transition-all animate-pulse"
+                 >
+                    <Video className="w-4 h-4" />
+                 </button>
+               </div>
+             )}
           </div>
        </nav>
 

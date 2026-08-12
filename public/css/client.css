@@ -3950,6 +3950,18 @@ input:checked + .slider:before {
   backdrop-filter: blur(12px);
 }
 
+/* Toast-style notifications (peer joined/left, hand raised, weak
+   connection, v.v. - mọi chỗ gọi Swal.fire/Swal.mixin với toast:true
+   trong client.js) - vẫn giữ nguyên khung thẻ (nền swBg + viền, set ở
+   trên/inline), chỉ bỏ riêng box-shadow: nó là vệt bóng mờ lan rộng
+   40px phía dưới/quanh khung (rgba đen 0.4) mà .swal2-popup phía trên
+   áp cho MỌI popup - ở khung toast nhỏ, vệt mờ đó nổi rõ thành 1 lớp
+   nền mờ riêng dưới khung, không đẹp. Popup/dialog lớn khác vẫn giữ
+   nguyên box-shadow đó (không bị ảnh hưởng, rule này chỉ khớp toast). */
+.swal2-toast {
+  box-shadow: none !important;
+}
+
 .swal2-popup .swal2-styled {
   border-radius: 12px !important;
 }
