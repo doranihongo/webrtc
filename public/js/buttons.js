@@ -48,7 +48,6 @@ let buttons = {
     showVideoPipBtn: true,
     showKickOutBtn: true,
     showShareVideoAudioBtn: true,
-    showGeoLocationBtn: true,
   },
   local: {
     showVideoPipBtn: true,

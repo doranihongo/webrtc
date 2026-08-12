@@ -570,6 +570,7 @@ const views = {
   landing: path.join(__dirname, "../../", "public/views/landing.html"),
   login: path.join(__dirname, "../../", "public/views/login.html"),
   stunTurn: path.join(__dirname, "../../", "public/views/testStunTurn.html"),
+  kaiwa: path.join(__dirname, "../../", "public/kaiwa/index.html"),
 };
 
 // Branding configuration
@@ -886,13 +887,20 @@ app.get("/login", (req, res) => {
   res.sendFile(views.login);
 });
 
-// main page
+// main page - trang kaiwa (trang chủ sau đăng nhập)
 app.get("/", OIDCAuth, (req, res) => {
   if (!OIDC.enabled && hostCfg.protected) {
     hostCfg.authenticated = false;
     res.redirect("/login");
+  } else if (!fs.existsSync(views.kaiwa)) {
+    // public/kaiwa/ chưa được build (npm run build:kaiwa) - báo rõ thay vì 404 khó hiểu
+    res
+      .status(503)
+      .send(
+        "Trang kaiwa chưa được build. Chạy `npm run build:kaiwa` rồi tải lại trang.",
+      );
   } else {
-    return htmlInjector.injectHtml(views.landing, res);
+    res.sendFile(views.kaiwa);
   }
 });
 
@@ -1062,6 +1070,10 @@ app.get("/join/", async (req, res) => {
     } else {
       return htmlInjector.injectHtml(views.landing, res);
     }
+  } else {
+    // Không có query nào - trang nhập mã phòng bình thường (trước đây là
+    // trang chủ "/", giờ "/" là trang kaiwa - xem route "/" phía trên).
+    return htmlInjector.injectHtml(views.landing, res);
   }
 });
 
@@ -1072,12 +1084,12 @@ app.get("/join/:roomId", function (req, res) {
 
   if (!roomId) {
     log.warn("/join/:roomId empty", roomId);
-    return res.redirect("/");
+    return res.redirect("/join");
   }
 
   if (!Validate.isValidRoomName(roomId)) {
     log.warn("/join/:roomId invalid", roomId);
-    return res.redirect("/");
+    return res.redirect("/join");
   }
 
   const allowRoomAccess = isAllowedRoomAccess(
@@ -1093,13 +1105,13 @@ app.get("/join/:roomId", function (req, res) {
   } else if (OIDC.enabled || hostCfg.protected) {
     htmlInjector.injectHtml(views.login, res);
   } else {
-    res.redirect("/");
+    res.redirect("/join");
   }
 });
 
 // Not specified correctly the room id
 app.get("/join/\\*", function (req, res) {
-  res.redirect("/");
+  res.redirect("/join");
 });
 
 // UI buttons configuration
@@ -2144,7 +2156,7 @@ io.sockets.on("connect", async (socket) => {
   /**
    * Relay commands to peers or specific peer in the same room
    * @param {Object} cfg - The configuration object containing command details.
-   * @param {string} cfg.action - The action to be performed (e.g., 'geoLocation').
+   * @param {string} cfg.action - The action to be performed.
    * @param {boolean} cfg.send_to_all - Whether to send the command to all peers in the room.
    * @param {Object} cfg.data - The data associated with the command.
    */
@@ -2160,7 +2172,7 @@ io.sockets.on("connect", async (socket) => {
     log.debug("cmd", config);
 
     // Only the presenter can do this actions
-    const presenterActions = ["geoLocation"];
+    const presenterActions = [];
     if (presenterActions.some((v) => action === v)) {
       // Authorize using the server-controlled socket.id, not the
       // client-supplied peer_id, to prevent role spoofing.

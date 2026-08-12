@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="vi" class="no-js auth-pending">
+  <head>
+    <style>
+      html.auth-pending body { visibility: hidden; }
+    </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <title>DORA KAIWA</title>
+    <meta name="author" content="DORA KAIWA" />
+
+    <meta name="theme-color" content="#0b1a2e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="DORA KAIWA" />
+    <link rel="manifest" href='data:application/manifest+json;utf-8,{"name":"DORA KAIWA","short_name":"DORA KAIWA","start_url":"/","display":"standalone","background_color":"%230b1a2e","theme_color":"%230b1a2e","icons":[{"src":"/images/dora-logo.png","sizes":"32x32","type":"image/png"},{"src":"/images/dora-logo.png","sizes":"256x256","type":"image/png","purpose":"any"}]}' />
+
+    <link rel="icon" type="image/png" href="/images/dora-logo.png" />
+    <link rel="apple-touch-icon" href="/images/dora-logo.png" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://doranihongo.com/" />
+    <meta property="og:title" content="DORA KAIWA" />
+    <meta property="og:image" content="https://doranihongo.com/images/dora-logo.png" />
+    <meta property="og:site_name" content="DORA KAIWA" />
+
+    <!-- fa-solid icons dùng trong bảng tài khoản (accountPanel.js) -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css"
+    />
+    <!-- Design tokens + CSS nút/bảng tài khoản - dùng lại y hệt landing.html -->
+    <link rel="stylesheet" href="/css/_tokens.css" />
+    <link rel="stylesheet" href="/css/topbar.css" />
+    <style>
+      body {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+      input, textarea, [contenteditable] {
+        -webkit-user-select: auto !important;
+        -khtml-user-select: auto !important;
+        -moz-user-select: auto !important;
+        -ms-user-select: auto !important;
+        user-select: auto !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- Nút tài khoản + bảng thông tin - port y hệt landing.html
+         (accountBtn/accountPanelOverlay, cùng id, cùng accountPanel.js
+         điều khiển). Đặt tĩnh ngoài #root (không phải component React)
+         vì accountPanel.js đọc document.getElementById(...) ngay khi
+         script chạy - phải chắc chắn các thẻ này đã có sẵn trong HTML
+         gốc, không phụ thuộc thời điểm React mount xong hay chưa.
+         position:fixed để luôn nổi ở góc trên-phải, đúng chỗ nav bar
+         (h-16 = 64px) trong Home.tsx đang chừa trống bên phải logo. -->
+    <div id="kaiwaAccountWidget" style="position: fixed; top: 12px; right: 24px; z-index: 10000;">
+      <button id="accountBtn" class="account-btn" aria-label="Tài khoản">
+        <img id="accountAvatar" class="account-avatar" alt="Avatar" />
+      </button>
+    </div>
+
+    <div id="accountPanelOverlay" class="account-panel-overlay hidden" style="z-index: 10000;">
+      <div id="accountPanel" class="account-panel">
+        <div class="account-panel-header">
+          <h2><i class="fa-solid fa-user"></i> Tài khoản của tôi</h2>
+          <button
+            id="accountPanelClose"
+            class="account-panel-close"
+            aria-label="Đóng"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="account-panel-body">
+          <!-- Popup "Thành công!" - hiện đè lên, tự ẩn sau 2.5s -->
+          <div id="accountSuccessPopup" class="account-success-popup hidden">
+            <div class="account-success-card">
+              <div class="account-success-icon">
+                <i class="fa-solid fa-circle-check"></i>
+              </div>
+              <h3>Thành công!</h3>
+              <p>Mật khẩu của bạn đã được thay đổi.</p>
+            </div>
+          </div>
+
+          <div id="accountInfoView">
+            <div class="account-field">
+              <label>TÀI KHOẢN</label>
+              <div id="accountDisplayName" class="account-field-value">-</div>
+            </div>
+            <div class="account-field">
+              <label>Vai trò</label>
+              <div id="accountRole" class="account-field-value">-</div>
+            </div>
+            <div class="account-field">
+              <label>Số lượng thiết bị</label>
+              <div id="accountDeviceCount" class="account-field-value">-</div>
+            </div>
+            <div class="account-field">
+              <label>Hạn sử dụng</label>
+              <div id="accountExpiresAt" class="account-field-value">-</div>
+            </div>
+            <button
+              id="accountChangePasswordBtn"
+              type="button"
+              class="account-secondary-btn"
+            >
+              <i class="fa-solid fa-key"></i> Đổi mật khẩu
+            </button>
+          </div>
+
+          <div id="accountChangePasswordView" class="hidden">
+            <div class="account-panel-subheader">
+              <h3>Đổi mật khẩu</h3>
+              <button id="accountChangePasswordBack" type="button">
+                Quay lại
+              </button>
+            </div>
+            <div
+              id="accountChangePasswordError"
+              class="account-error"
+              role="alert"
+            ></div>
+            <form id="accountChangePasswordForm" novalidate>
+              <div class="account-field">
+                <label for="accountOldPassword">Mật khẩu hiện tại</label>
+                <div class="account-field-input-wrap">
+                  <input
+                    id="accountOldPassword"
+                    type="password"
+                    placeholder=" "
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="account-toggle-password"
+                    data-target="accountOldPassword"
+                    aria-label="Hiện mật khẩu"
+                  >
+                    <i class="fa-solid fa-eye"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="account-field">
+                <label for="accountNewPassword">Mật khẩu mới</label>
+                <div class="account-field-input-wrap">
+                  <input
+                    id="accountNewPassword"
+                    type="password"
+                    placeholder=" "
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="account-toggle-password"
+                    data-target="accountNewPassword"
+                    aria-label="Hiện mật khẩu"
+                  >
+                    <i class="fa-solid fa-eye"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="account-field">
+                <label for="accountConfirmPassword"
+                  >Nhập lại mật khẩu mới</label
+                >
+                <div class="account-field-input-wrap">
+                  <input
+                    id="accountConfirmPassword"
+                    type="password"
+                    placeholder=" "
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="account-toggle-password"
+                    data-target="accountConfirmPassword"
+                    aria-label="Hiện mật khẩu"
+                  >
+                    <i class="fa-solid fa-eye"></i>
+                  </button>
+                </div>
+              </div>
+              <button
+                id="accountChangePasswordSubmit"
+                type="submit"
+                class="account-primary-btn"
+              >
+                Lưu thay đổi
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div class="account-panel-footer">
+          <button id="accountLogoutBtn" type="button" class="account-logout-btn">
+            <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/xss/dist/xss.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11.4.8"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="/js/supabaseClient.js"></script>
+    <script defer src="/js/utils.js"></script>
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/accountPanel.js"></script>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Chặn chuột phải
+      document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+      });
+
+      // Chặn kéo thả
+      document.addEventListener('dragstart', function(e) {
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+        }
+      });
+
+      // Chặn copy
+      document.addEventListener('copy', function(e) {
+        const active = document.activeElement;
+        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+          return;
+        }
+        e.preventDefault();
+      });
+
+      // Chặn phím tắt
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'F12' || e.keyCode === 123) {
+          e.preventDefault();
+        }
+        
+        if (e.ctrlKey || e.metaKey) {
+          if (e.key === 'u' || e.key === 'U' || e.keyCode === 85) {
+            e.preventDefault(); // Ctrl + U
+          }
+          if (e.key === 's' || e.key === 'S' || e.keyCode === 83) {
+            e.preventDefault(); // Ctrl + S
+          }
+          if (e.key === 'p' || e.key === 'P' || e.keyCode === 80) {
+            // Cho phép in nếu muốn, nhưng yêu cầu chặn Ctrl+P.
+            e.preventDefault(); // Ctrl + P
+          }
+          if (e.shiftKey) {
+            if (e.key === 'i' || e.key === 'I' || e.keyCode === 73 || 
+                e.key === 'c' || e.key === 'C' || e.keyCode === 67 || 
+                e.key === 'j' || e.key === 'J' || e.keyCode === 74) {
+              e.preventDefault(); // DevTools
+            }
+          }
+        }
+      });
+    </script>
+  </body>
+</html>

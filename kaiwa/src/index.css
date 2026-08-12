@@ -1,0 +1,321 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+JP:wght@300;400;500;700;900&family=Klee+One:wght@400;600&family=Outfit:wght@500;600;700;800&family=Baloo+2:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@theme {
+  --color-zinc-50: oklch(98.5% 0 0);
+  --color-zinc-100: oklch(96.7% 0.001 286.375);
+  --color-zinc-200: oklch(92% 0.004 286.32);
+  --color-zinc-400: oklch(70.5% 0.015 286.067);
+  --color-zinc-500: oklch(55.2% 0.016 285.938);
+  --color-zinc-600: oklch(44.2% 0.017 285.786);
+  --color-zinc-800: oklch(27.4% 0.006 286.033);
+  --color-zinc-900: oklch(21% 0.006 285.885);
+  --color-white: #fff;
+  --color-zen-black: #1a1a1a;
+  --color-zen-white: #ffffff;
+
+  /* Đè lại nguyên thang "blue" mặc định của Tailwind bằng đúng bảng màu
+     "Ocean" bên web gọi điện (public/css/_tokens.css: --ds-brand-*) -
+     để mọi class blue-50..blue-900 đang dùng khắp Home.tsx (và các
+     component con) tự động ra đúng tông xanh lam-ngả-cyan của app gọi
+     điện, không cần sửa từng class. Chỉ 50/100/300/500/600/700 là lấy
+     đúng giá trị token gốc; 200/400/800/900/950 nội suy thêm cho đủ
+     thang, không có token gốc tương ứng. */
+  --color-blue-50: #eef6fb;
+  --color-blue-100: #d3e9f5;
+  --color-blue-200: #a9d8ec;
+  --color-blue-300: #7fcbea;
+  --color-blue-400: #63c0e2;
+  --color-blue-500: #4bb4de;
+  --color-blue-600: #3b8ac4;
+  --color-blue-700: #345da7;
+  --color-blue-800: #2a4a86;
+  --color-blue-900: #1f3766;
+  --color-blue-950: #16284a;
+
+  /* Bề mặt "card tối" giống hệt app gọi điện (--ds-bg-elevated/
+     --ds-bg-panel/--ds-border/--ds-border-strong trong _tokens.css) -
+     dùng cho card khóa học/công cụ/tài nguyên thay vì nền trắng, để
+     đồng bộ với bảng "Tài khoản của tôi" đã có sẵn (topbar.css). */
+  --color-surface: #1c3b5c; /* card nổi trên nền trang, = --ds-bg-elevated */
+  --color-surface-panel: #16324f; /* card lồng bên trong 1 card khác, = --ds-bg-panel */
+  --color-surface-border: #24406b; /* = --ds-border */
+  --color-surface-border-strong: #3c6693; /* = --ds-border-strong */
+
+  /* Đè thang bo góc/đổ bóng mặc định của Tailwind bằng đúng thang của
+     app gọi điện (--ds-radius-*/--ds-shadow-* trong _tokens.css) - các
+     card/nút đang "tròn" hơn hẳn (rounded-3xl mặc định = 24px) so với
+     phong cách "vuông vắn" của app gọi điện (bo góc lớn nhất chỉ 20px,
+     nút chính chỉ 8px). Đổi ở đây để mọi rounded-xl/2xl/3xl và
+     shadow-md/lg/xl/2xl khắp kaiwa (Home.tsx lẫn các modal con) tự động
+     khớp, không cần sửa từng class. rounded-md/rounded-lg mặc định của
+     Tailwind (6px/8px) đã trùng sẵn với ds-radius-sm/nút .button bên
+     kia nên không cần đổi.
+  */
+  --radius-xl: 0.625rem; /* 10px, = --ds-radius-md */
+  --radius-2xl: 0.875rem; /* 14px, = --ds-radius-lg */
+  --radius-3xl: 1.25rem; /* 20px, = --ds-radius-xl (mức bo góc lớn nhất bên app gọi điện) */
+
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.22); /* = --ds-shadow-md */
+  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.32); /* = --ds-shadow-lg */
+  --shadow-xl: 0 20px 48px rgba(0, 0, 0, 0.32); /* Ocean chỉ có 3 mức, cap ở mức lg */
+  --shadow-2xl: 0 20px 48px rgba(0, 0, 0, 0.4);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-baloo: "Baloo 2", cursive;
+  --font-klee: "Klee One", sans-serif;
+  --font-jp: "Noto Sans JP", sans-serif;
+}
+
+/* CSS TÙY CHỈNH CHO THẺ MÀU TRONG CÂU CHUYỆN KANJI */
+.story-content red { color: #ef4444; font-weight: bold; }
+.story-content blue { color: #3b82f6; font-weight: bold; }
+.story-content green { color: #22c55e; font-weight: bold; }
+.story-content yellow { color: #eab308; font-weight: bold; }
+.story-content b { font-weight: 900; color: #111827; }
+
+
+@layer base {
+  button, [role="button"], a {
+    cursor: pointer;
+  }
+}
+
+body {
+  font-family: var(--font-sans);
+  /* Cùng công thức gradient chéo với trang /join (landing.css), điểm
+     dừng sáng nhất (100%) lấy ĐÚNG màu "vùng sáng" của join
+     (--ds-hero-1/--ds-brand-700 #345da7) - để 2 trang nhìn cùng 1 tông.
+     Điểm dừng tối nhất (0%) đổi từ --ds-bg-2 (rất tối, join đang dùng)
+     sang --ds-neutral-700/--ds-bg-panel #16324f - sáng hơn hẳn để vùng
+     tối trên trang chủ không bị tối quá. Kaiwa không load _tokens.css
+     cho phần body này (chỉ topbar.css dùng token, xem index.html) nên
+     ghi thẳng hex cho chắc. */
+  background: linear-gradient(315deg, #16324f 0%, #24406b 45%, #345da7 100%);
+  background-attachment: fixed;
+  color: var(--color-zen-black);
+}
+
+.font-jp {
+  font-family: var(--font-jp);
+}
+
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background-color: var(--color-zinc-200); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: var(--color-zinc-400); }
+
+@keyframes drawStroke {
+  0% { stroke-dashoffset: 500; opacity: 0; }
+  10% { opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 1; }
+}
+
+@keyframes fadeInNumber {
+  to { opacity: 0.7; }
+}
+
+.stroke-anim-path {
+  fill: none;
+  stroke: #18181b; 
+  stroke-width: 4px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 500;
+  stroke-dashoffset: 500;
+  opacity: 0;
+  animation-name: drawStroke;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+}
+
+.stroke-number {
+  font-size: 8px;
+  fill: #999;
+  font-family: sans-serif;
+  opacity: 0;
+  animation: fadeInNumber 0.5s forwards;
+}
+
+[transform-style="preserve-3d"] {
+  perspective: 1000px;
+}
+.exit-left { transform: translateX(-150%) rotate(-15deg); opacity: 0; transition: all 0.4s ease-in; }
+.exit-right { transform: translateX(150%) rotate(15deg); opacity: 0; transition: all 0.4s ease-in; }
+
+button:focus {
+  outline: none;
+}
+
+.plyr {
+  height: 100%;
+  --plyr-color-main: #2563eb;
+}
+
+/* Lớp phủ bảo vệ chặn click vào iframe của YouTube (tiêu đề, avatar kênh...) */
+.plyr__video-wrapper iframe {
+  pointer-events: none !important;
+}
+
+/* Chỉ hiển thị âm lượng trên máy tính */
+@media (max-width: 768px) {
+  .plyr__controls .plyr__volume,
+  .plyr__controls [data-plyr="mute"] {
+    display: none !important;
+  }
+}
+
+@media print {
+  @page { 
+    size: A4 portrait; 
+    margin: 0; 
+  }
+
+  /* 1. ẨN TOÀN BỘ MỌI THỨ TRÊN TRANG (Bao gồm cả trang chủ) */
+  body * {
+    visibility: hidden;
+  }
+
+  /* 2. CHỈ HIỂN THỊ DUY NHẤT POPUP KANJI VÀ CÁC THÀNH PHẦN CON */
+  #kanji-maker-print-root, 
+  #kanji-maker-print-root * {
+    visibility: visible;
+  }
+
+  /* 3. KÉO POPUP LÊN GÓC TRÊN CÙNG BÊN TRÁI ĐỂ IN */
+  #kanji-maker-print-root {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    background-color: white !important;
+  }
+
+  /* Reset cấu trúc nền cực mạnh để trình duyệt đếm trang */
+  html, body {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    background-color: white !important;
+  }
+
+  /* Ẩn thanh công cụ và các nút bấm khi in */
+  .no-print {
+    display: none !important;
+  }
+
+  /* --- CÁC ĐOẠN CSS CŨ CỦA BẠN (.print-container, .a4-wrapper, .a4-page...) GIỮ NGUYÊN BÊN DƯỚI NÀY --- */
+  
+  main, .print-container {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important; 
+    width: 100% !important;
+    box-shadow: none !important;
+  }
+
+  .a4-wrapper {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    zoom: 1 !important;
+  }
+
+  .a4-page {
+    width: 210mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    margin: 0 !important;
+    page-break-after: always !important;
+    page-break-inside: avoid !important;
+    break-after: page !important;
+    break-inside: avoid !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  * {
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Ép container thành Block */
+  main, .print-container {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important; 
+    width: 100% !important;
+    box-shadow: none !important;
+  }
+
+  .a4-wrapper {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    zoom: 1 !important;
+  }
+
+  /* Đưa A4 về chuẩn 297mm và ngắt trang */
+  .a4-page {
+    width: 210mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    margin: 0 !important;
+    page-break-after: always !important;
+    page-break-inside: avoid !important;
+    break-after: page !important;
+    break-inside: avoid !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .a4-page:last-child,
+  .a4-wrapper:last-child .a4-page {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* KHÓA CHẶT FOOTER CHỐNG BÓNG MA */
+  .a4-page footer {
+    position: static !important;
+    transform: none !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    z-index: auto !important;
+  }
+  
+  .a4-page footer input {
+    display: none !important;
+  }
+
+  .a4-page footer,
+  .a4-page footer * {
+    opacity: 1 !important;
+  }
+}
+
+html, body {
+  overscroll-behavior: none;
+}
+
+.global-lock { overflow: hidden !important; }

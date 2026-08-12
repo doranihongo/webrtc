@@ -143,7 +143,6 @@ const images = {
   avatar: "../images/dora-logo.png",
   recording: "../images/recording.png",
   poster: "../images/loader.gif",
-  geoLocation: "../images/geolocation.png",
 }; // nice free icon: https://www.iconfinder.com
 
 const className = {
@@ -163,7 +162,6 @@ const className = {
   fullScreen: "fas fa-expand",
   fsOn: "fas fa-compress-alt",
   fsOff: "fas fa-expand-alt",
-  geoLocation: "fas fa-location-dot",
   shareVideoAudio: "fab fa-youtube",
   kickOut: "fas fa-sign-out-alt",
   chatOn: "fas fa-comment",
@@ -297,6 +295,9 @@ const shareRoomBtn = getId("shareRoomBtn");
 const recordStreamBtn = getId("recordStreamBtn");
 const fullScreenBtn = getId("fullScreenBtn");
 const fullScreenCornerBtn = getId("fullScreenCornerBtn");
+const goHomeCornerBtn = getId("goHomeCornerBtn");
+const kaiwaOverlayFrame = getId("kaiwaOverlayFrame");
+const kaiwaOverlayIframe = getId("kaiwaOverlayIframe");
 const chatRoomBtn = getId("chatRoomBtn");
 
 const documentPiPBtn = getId("documentPiPBtn");
@@ -451,8 +452,6 @@ const switchPinChatByDefault = getId("switchPinChatByDefault");
 const keepAwakeButton = getId("keepAwakeButton");
 const switchKeepAwake = getId("switchKeepAwake");
 
-const switchPushToTalk = getId("switchPushToTalk");
-
 const audioInputSelect = getId("audioSource");
 const audioOutputSelect = getId("audioOutput");
 const audioOutputDiv = getId("audioOutputDiv");
@@ -461,7 +460,6 @@ const videoQualitySelect = getId("videoQuality");
 const videoFpsSelect = getId("videoFps");
 const videoFpsDiv = getId("videoFpsDiv");
 const screenFpsSelect = getId("screenFps");
-const pushToTalkDiv = getId("pushToTalkDiv");
 const recImage = getId("recImage");
 const pauseRecBtn = getId("pauseRecBtn");
 const resumeRecBtn = getId("resumeRecBtn");
@@ -526,12 +524,12 @@ const useAvatarSvg = true; // if false the cam-Off avatar = images.avatar
 let thisMaxRoomParticipants = 2;
 
 // misc
-let swBg = "rgba(11, 26, 46, 0.85)"; // swAlert background color
+let swBg = "rgba(22, 50, 79, 0.85)"; // swAlert background color, = --ds-bg-panel (trước --ds-bg-deep, sáng hơn)
 // Riêng khung "nhập tên trước khi vào phòng" - sáng hơn swBg 1 chút
 // (vẫn tối) để không bị chìm quá trên nền gradient phía sau
 // (.init-swal-backdrop). Không đổi swBg trực tiếp vì nó dùng chung cho
 // mọi Swal khác trong app.
-const initUserPopupBg = "rgba(28, 59, 92, 0.92)"; // --ds-bg-elevated
+const initUserPopupBg = "rgba(60, 102, 147, 0.92)"; // --ds-border-strong (trước --ds-bg-elevated, sáng hơn)
 let isDocumentOnFullScreen = false;
 let isToggleExtraBtnClicked = false;
 // DiceBear styles used for the "Đổi ảnh đại diện" dialog's random avatar
@@ -720,8 +718,6 @@ let thisRoomPassword = null;
 let isRoomLocked = false;
 let isKeepButtonsVisible = false;
 
-let isPushToTalkActive = false;
-let isSpaceDown = false;
 let themeCardDebounce = null;
 
 // recording
@@ -1551,6 +1547,13 @@ async function sendToDataChannel(config) {
 async function handleConnect() {
   console.log("03. Connected to signaling server");
 
+  // Kết nối lại được rồi - huỷ hẹn giờ "bỏ cuộc" (nếu có) của
+  // handleDisconnect(), không tự chuyển về /join nữa.
+  if (disconnectGiveUpTimer) {
+    clearTimeout(disconnectGiveUpTimer);
+    disconnectGiveUpTimer = null;
+  }
+
   hideDisconnectBanner();
   myPeerId = signalingSocket.id;
   console.log("04. My peer id [ " + myPeerId + " ]");
@@ -1723,7 +1726,7 @@ function roomIsBusy() {
             // hiện nhầm banner "Mất kết nối".
             signalingSocket.off("disconnect", handleDisconnect);
             signalingSocket.disconnect();
-            openURL("/");
+            openURL("/join");
           },
           { once: true },
         );
@@ -2856,6 +2859,14 @@ async function handleAddPeer(config) {
   // This uses the existing peerName signaling path.
   emitMyPeerProfile();
 
+  // Có người vừa vào phòng trong khi PiP đang mở ở trạng thái "Đợi
+  // người tham gia..." (mở lúc đang 1 mình) - cập nhật lại ngay, không
+  // đợi tới lần đổi trạng thái cam/mic kế tiếp mới tự refresh.
+  if (typeof isInPagePip !== "undefined" && isInPagePip) {
+    updatePipStatusBadges();
+    syncPipVideoSource();
+  }
+
   console.log("iceServers", iceServers[0]);
 
   // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection
@@ -3437,9 +3448,6 @@ async function handleRTCDataChannels(peer_id) {
               case "chat":
                 handleDataChannelChat(dataMessage);
                 break;
-              case "chatReaction":
-                handleDataChannelChatReaction(dataMessage);
-                break;
               case "micVolume":
                 handlePeerVolume(dataMessage);
                 break;
@@ -3652,6 +3660,12 @@ async function flushIceCandidates(peer_id) {
   }
 }
 
+// Mất mạng quá lâu (không tự kết nối lại được) thì bỏ cuộc, về /join -
+// xem handleDisconnect()/handleConnect() bên dưới. socket.io tự thử lại
+// vô hạn theo mặc định, không có ngưỡng "bỏ cuộc" nào trước đây.
+const DISCONNECT_GIVE_UP_MS = 120000; // 120 giây
+let disconnectGiveUpTimer = null;
+
 /**
  * Disconnected from Signaling Server.
  * Tear down all of our peer connections and remove all the media divs.
@@ -3662,6 +3676,17 @@ function handleDisconnect(reason) {
 
   showDisconnectBanner();
   checkRecording();
+
+  // Đã có hẹn giờ "bỏ cuộc" đang chạy rồi (vd rớt mạng nhiều lần liên
+  // tiếp) thì không hẹn chồng thêm cái mới - giữ nguyên đồng hồ cũ.
+  if (!disconnectGiveUpTimer) {
+    disconnectGiveUpTimer = setTimeout(() => {
+      disconnectGiveUpTimer = null;
+      // Vẫn đang mất kết nối sau ngần ấy thời gian - không còn gì để
+      // "chờ" nữa, tự rời về màn nhập mã phòng.
+      openURL("/join");
+    }, DISCONNECT_GIVE_UP_MS);
+  }
 
   for (const peer_id in peerConnections) {
     const peerScreenId = peer_id + "___screen";
@@ -3841,6 +3866,14 @@ function handleRemovePeer(config) {
   delete peerVideoMediaElements[peerVideoId];
   delete peerAudioMediaElements[peerAudioId];
   delete allPeers[peer_id];
+
+  // Người vừa rời có thể là người cuối cùng - nếu PiP đang mở, cập
+  // nhật lại ngay để quay về "Đợi người tham gia..." khi phòng chỉ còn
+  // lại 1 mình, thay vì đứng hình ở khung hình cuối của người đã rời.
+  if (typeof isInPagePip !== "undefined" && isInPagePip) {
+    updatePipStatusBadges();
+    syncPipVideoSource();
+  }
 
   playSound("removePeer");
 
@@ -6101,6 +6134,7 @@ function manageButtons() {
   setRecordStreamBtn();
   setScreenShareBtn();
   setFullScreenBtn();
+  setGoHomeCornerBtn();
   setChatRoomBtn();
 
   // setRoomEmojiButton();
@@ -6156,25 +6190,6 @@ function setAudioBtn() {
   audioBtn.addEventListener("click", (e) => {
     handleAudio(e, false);
   });
-
-  document.onkeydown = (e) => {
-    if (!isPushToTalkActive || isChatRoomVisible) return;
-    if (e.code === "Space") {
-      if (isSpaceDown) return; // prevent multiple call
-      handleAudio(audioBtn, false, true);
-      isSpaceDown = true;
-      console.log("Push-to-talk: audio ON");
-    }
-  };
-  document.onkeyup = (e) => {
-    e.preventDefault();
-    if (!isPushToTalkActive || isChatRoomVisible) return;
-    if (e.code === "Space") {
-      handleAudio(audioBtn, false, false);
-      isSpaceDown = false;
-      console.log("Push-to-talk: audio OFF");
-    }
-  };
 }
 
 /**
@@ -6327,6 +6342,95 @@ function setFullScreenBtn() {
     elemDisplay(fullScreenCornerBtn, false);
   }
 }
+
+/**
+ * Nút "Trang chủ" (kaiwa) trong khi vẫn gọi - chỉ desktop + role
+ * giaovien/admin (đây chỉ là lớp tiện lợi UI, không phải bảo mật, nên
+ * gate ở client là đủ - giống các gate role khác trong file này).
+ * Bấm vào hiện kaiwa đè lên qua #kaiwaOverlayFrame (iframe, KHÔNG điều
+ * hướng thật) nên cuộc gọi phía dưới không hề bị gián đoạn. Bên trong
+ * kaiwa (Home.tsx) tự nhận biết đang nhúng qua ?embed=call và đổi nút
+ * "Phòng học" thành "QUAY LẠI PHÒNG HỌC", gửi postMessage để đóng lại
+ * overlay này khi bấm - xem listener "message" bên dưới.
+ */
+function setGoHomeCornerBtn() {
+  if (!goHomeCornerBtn || !kaiwaOverlayFrame || !kaiwaOverlayIframe) return;
+
+  const role = window.__authUser?.role;
+  const isTeacherOrAdmin = role === "giaovien" || role === "admin";
+
+  if (!isTeacherOrAdmin || isMobileDevice) {
+    elemDisplay(goHomeCornerBtn, false);
+    return;
+  }
+
+  elemDisplay(goHomeCornerBtn, true, "flex");
+
+  // Tải ngầm sẵn từ lúc này - lần đầu bấm nút không phải chờ kaiwa
+  // tải/mount xong mới thấy gì.
+  if (!kaiwaOverlayIframe.src) {
+    kaiwaOverlayIframe.src = `/?embed=call&room=${encodeURIComponent(roomId)}`;
+  }
+
+  goHomeCornerBtn.addEventListener("click", openKaiwaOverlay);
+}
+
+async function openKaiwaOverlay() {
+  // Full-screen thật (nếu đang bật) sẽ che mất overlay này (nó nằm
+  // ngoài phần tử đang full-screen) - thoát full-screen trước.
+  if (document.fullscreenElement) {
+    try {
+      await document.exitFullscreen();
+    } catch (err) {
+      // Bỏ qua - vài trình duyệt/hoàn cảnh không cho exitFullscreen()
+      // theo lập trình, overlay vẫn cứ hiện, chỉ là có thể bị che nếu
+      // trường hợp đó xảy ra.
+    }
+  }
+  // Không tự bật PiP nữa khi mở overlay này - chỉ hiện overlay trang chủ
+  // đè lên trang gọi, PiP (nếu người dùng muốn) vẫn bật thủ công qua
+  // đúng nút PiP riêng (togglePagePip, xem newPip?.addEventListener
+  // trong client.html, hoặc nút "PiP" trong nav kaiwa - dora:togglePip).
+  elemDisplay(kaiwaOverlayFrame, true, "flex");
+}
+
+function closeKaiwaOverlay() {
+  elemDisplay(kaiwaOverlayFrame, false);
+}
+
+// Nhận lệnh từ kaiwa (đang chạy trong #kaiwaOverlayIframe ở trên) - kiểm
+// tra origin để chắc chắn tin nhắn đến từ chính domain của mình trước khi
+// xử lý. "dora:returnToCall" = quay lại cuộc gọi (đóng overlay này).
+// "dora:togglePip" = nút "PiP" trong nav kaiwa - bật/tắt cửa sổ nổi thật
+// mà KHÔNG đóng overlay (để vẫn xem/duyệt trang chủ trong lúc video nổi).
+// "dora:requestPipState" = kaiwa vừa mount, xin lại trạng thái PiP hiện
+// tại (Home.tsx tô nút "PiP" màu xanh nếu đang bật) - trả lời qua
+// sendPipStateToKaiwa() (cũng tự gọi mỗi khi trạng thái đổi, xem cuối
+// setPagePip).
+window.addEventListener("message", (event) => {
+  if (event.origin !== window.location.origin) return;
+  if (event.data?.type === "dora:returnToCall") {
+    closeKaiwaOverlay();
+  } else if (event.data?.type === "dora:togglePip") {
+    if (typeof togglePagePip === "function") togglePagePip("toggle");
+  } else if (event.data?.type === "dora:requestPipState") {
+    sendPipStateToKaiwa();
+  }
+});
+
+// Icon "trở về màn chính" trên cửa sổ PiP (cạnh nút X) không phải phần
+// tử của trang mình (do trình duyệt tự vẽ trên cửa sổ PiP thật) nên
+// không gắn click listener trực tiếp được - nhưng bấm vào nó luôn kéo
+// tab/cửa sổ chính lên trước (focus lại), trong khi PiP vẫn còn mở
+// (khác nút X - đóng hẳn PiP, xử lý riêng ở "pagehide"/"unload" phía
+// trên, KHÔNG đóng overlay này). Dùng đúng khác biệt đó: tab chính được
+// focus lại trong lúc PiP vẫn đang mở => đóng overlay trang chủ.
+window.addEventListener("focus", () => {
+  if (documentPictureInPicture?.window) {
+    closeKaiwaOverlay();
+  }
+});
+
 function setChatRoomBtn() {
   // Mặc định luôn là chat public
   setActiveConversation("public");
@@ -6642,6 +6746,9 @@ async function documentPictureInPictureOpen() {
     pipWindow.addEventListener("unload", () => {
       videoObserver.disconnect();
       documentObserver.disconnect();
+      // Lưu ý: KHÔNG đóng overlay trang chủ kaiwa ở đây - đây là nút X
+      // đóng hẳn PiP, chỉ nên đóng mỗi PiP. Đóng overlay khi "trở về" là
+      // ở listener "focus" riêng (xem gần setGoHomeCornerBtn).
     });
   } catch (err) {
     userLog("warning", err.message, 6000);
@@ -6721,9 +6828,6 @@ function setMySettingsBtn() {
   // No IP address row in the "Mạng" tab on mobile - not something
   // people need to see there on a phone.
   if (isMobileDevice) elemDisplay(getId("networkIpRow"), false);
-
-  // Push-to-talk setting row was removed - isPushToTalkActive stays false,
-  // so the spacebar shortcut in setAudioBtn() just never activates.
 
   // Recording pause/resume
   pauseRecBtn.addEventListener("click", (e) => {
@@ -9916,15 +10020,11 @@ function appendMessage(
   // getImg is a user-controlled URL; use a temporary id and setAttribute
   // after insertion to avoid double-decode XSS via insertAdjacentHTML.
   const msgAvatarTmpId = `msg-av-${chatMessagesId}`;
-  let messageActionsHTML = ``;
 
   const msgHTML = renderRoomTemplate("tpl-msger-chat-message", {
     text: {
       senderName: truncateDisplayName(getFrom),
       messageTime: time,
-    },
-    html: {
-      messageActions: messageActionsHTML,
     },
     attrs: {
       messageContainerId: `msg-${chatMessagesId}`,
@@ -10183,38 +10283,6 @@ function processMessage(message) {
       }
     })
     .join("");
-}
-
-/**
- * Stream message
- * @param {string} element
- * @param {string} message
- * @param {integer} speed
- */
-function streamMessage(element, message, speed = 100) {
-  const parts = processMessage(message);
-  const words = parts.split(" ");
-
-  let textBuffer = "";
-  let wordIndex = 0;
-
-  const interval = setInterval(() => {
-    if (wordIndex < words.length) {
-      textBuffer += words[wordIndex] + " ";
-      element.innerHTML = textBuffer;
-      wordIndex++;
-    } else {
-      clearInterval(interval);
-      highlightCodeBlocks(element);
-    }
-  }, speed);
-
-  function highlightCodeBlocks(element) {
-    const codeBlocks = element.querySelectorAll("pre code");
-    codeBlocks.forEach((block) => {
-      hljs.highlightElement(block);
-    });
-  }
 }
 
 function closeAllMsgerParticipantDropdownMenus() {
@@ -10654,31 +10722,6 @@ function handleDataChannelChat(dataMessage) {
     // sẵn xem chat rồi thì không cần báo nữa.
     playSound("raiseHand");
   }
-}
-
-/**
- * Show AI typing indicator animation in the chat
- * @param {string} aiName
- */
-function showAITypingIndicator(aiName) {
-  const existing = getId(`ai-typing-${aiName}`);
-  if (existing) return;
-  const typingHTML = renderRoomTemplate("tpl-ai-typing-indicator", {
-    attrs: {
-      typingIndicatorId: `ai-typing-${aiName}`,
-    },
-  });
-  msgerChat.insertAdjacentHTML("beforeend", typingHTML);
-  msgerChat.scrollTop = msgerChat.scrollHeight;
-}
-
-/**
- * Hide AI typing indicator animation from the chat
- * @param {string} aiName
- */
-function hideAITypingIndicator(aiName) {
-  const indicator = getId(`ai-typing-${aiName}`);
-  if (indicator) indicator.remove();
 }
 
 /**
@@ -11490,40 +11533,6 @@ function handleMessage(message) {
       break;
   }
 }
-
-/**
- * Handle incoming chat reactions.
- * @param {object} data
- */
-function handleChatReaction(data) {
-  if (!data) return;
-
-  const rawMsgId = String(data.msg_id || "").trim();
-  const msgId = rawMsgId.replace(/[^a-zA-Z0-9:_-]/g, "");
-  const emoji = filterXSS(data.emoji || "");
-  const peerName = filterXSS(data.peer_name || "");
-  const action = data.action === "remove" ? "remove" : "add";
-
-  if (!msgId || !emoji || !peerName) return;
-  if (!CHAT_REACTION_EMOJIS.includes(emoji)) return;
-
-  const messageElement = getChatMessageElement(msgId);
-  if (!messageElement) return;
-
-  applyReactionToElement(messageElement, emoji, peerName, action);
-}
-
-document.addEventListener("click", (event) => {
-  const target = event.target;
-  if (
-    target?.closest(".reaction-picker") ||
-    target?.closest(".reaction-toggle-btn")
-  )
-    return;
-  msgerChat
-    ?.querySelectorAll(".reaction-picker")
-    .forEach((picker) => picker.remove());
-});
 
 function getRoomEmojiPlacement() {
   const viewportWidth = Math.max(window.innerWidth || 0, 320);
@@ -14288,11 +14297,13 @@ function updateTopHeaderPeerCount() {
       waitingCard.style.display = "flex";
       waitingCard.className =
         "Camera bg-slate-900/60 border-2 border-dashed border-slate-800 rounded-2xl flex flex-col items-center justify-center p-6 text-center w-full h-full";
+      // PiP giờ dùng được kể cả khi đang 1 mình (hiện "Đợi người tham
+      // gia..." bên trong PiP) - không còn làm mờ/khoá nút nữa.
       const pipBtn = document.getElementById("newPipBtn");
       if (pipBtn) {
-        pipBtn.style.opacity = "0.5";
-        pipBtn.style.pointerEvents = "none";
-        pipBtn.classList.add("opacity-50", "cursor-not-allowed");
+        pipBtn.style.opacity = "1";
+        pipBtn.style.pointerEvents = "auto";
+        pipBtn.classList.remove("opacity-50", "cursor-not-allowed");
       }
     }
   }
@@ -14762,8 +14773,6 @@ function togglePagePip(action = "toggle") {
  */
 async function setPagePip(enable) {
   if (enable === isInPagePip) return;
-  // disablePip={!remotePeer} in ControlBar.tsx
-  if (enable && Object.keys(peerConnections).length < 1) return;
 
   isInPagePip = enable;
   window.isInPagePip = enable; // read by the control-bar bridge in client.html
@@ -14807,6 +14816,21 @@ async function setPagePip(enable) {
   if (typeof window.updateNewControlBarUI === "function") {
     window.updateNewControlBarUI();
   }
+
+  sendPipStateToKaiwa();
+}
+
+// Báo trạng thái PiP hiện tại cho overlay trang chủ kaiwa (nếu đã tải) -
+// để nút "PiP" trong nav của nó (xem Home.tsx) tô đúng màu xanh khi đang
+// bật, giống hệt newPipBtn trong thanh điều khiển. Gọi mỗi khi trạng thái
+// đổi (cuối setPagePip) và khi kaiwa mới mount/xin lại (event "message"
+// "dora:requestPipState" phía dưới).
+function sendPipStateToKaiwa() {
+  if (!kaiwaOverlayIframe?.contentWindow) return;
+  kaiwaOverlayIframe.contentWindow.postMessage(
+    { type: "dora:pipState", active: !!isInPagePip },
+    window.location.origin,
+  );
 }
 
 function applyPipTransform() {
@@ -14942,6 +14966,9 @@ async function tryOpenRealPagePip(overlay) {
       pipRealWindow = null;
       restoreOverlayIntoPage(overlay);
       if (isInPagePip) togglePagePip("close");
+      // Lưu ý: KHÔNG đóng overlay trang chủ kaiwa ở đây - đây là nút X
+      // đóng hẳn PiP, chỉ nên đóng mỗi PiP. Đóng overlay khi "trở về" là
+      // ở listener "focus" riêng (xem gần setGoHomeCornerBtn).
     });
 
     return true;
@@ -15045,6 +15072,21 @@ function updatePipStatusBadges() {
   const overlay = pipOverlayRoot;
   if (!overlay) return;
   const peerId = Object.keys(peerConnections)[0];
+  const offText = pipEl("pipVideoOffText");
+
+  // Đang ở phòng 1 mình (chưa ai vào) - không có video của ai để so
+  // sánh trạng thái cam/mic cả, chỉ cần hiện "Đợi người tham gia..."
+  // giống hệt giao diện "Camera đang tắt" (dùng lại đúng chỗ hiện chữ
+  // đó, .pip-camera-off-text), chỉ đổi nội dung chữ.
+  if (!peerId) {
+    if (offText) offText.textContent = "Đợi người tham gia...";
+    overlay.classList.add("pip-video-off");
+    overlay.classList.remove("pip-remote-screen-sharing", "pip-remote-audio-off");
+    return;
+  }
+
+  if (offText) offText.textContent = "Camera đang tắt";
+
   const isScreenActive = !!(
     peerId &&
     allPeers[peerId] &&
@@ -15215,6 +15257,9 @@ function initPipOverlayInteractions() {
     // it forward first, synchronously, while still inside the real click
     // gesture, so the browser doesn't ignore it.
     window.focus();
+    // Đang xem trang chủ kaiwa (overlay) thì đóng lại luôn - bấm share/tắt
+    // share từ PiP nghĩa là muốn chú ý quay lại phòng gọi.
+    closeKaiwaOverlay();
     screenShareBtn?.click();
   });
   pipEl("pipLeaveBtn")?.addEventListener("click", (e) => {
@@ -15226,6 +15271,10 @@ function initPipOverlayInteractions() {
     // Called first/synchronously, still within the real click gesture,
     // so the browser doesn't just ignore it.
     window.focus();
+    // Đang xem trang chủ kaiwa (overlay) thì đóng lại luôn - popup xác
+    // nhận rời phòng cần hiện trên đúng giao diện phòng gọi, không phải
+    // đè lên trang kaiwa.
+    closeKaiwaOverlay();
     const newLeave = document.getElementById("newLeaveBtn");
     if (newLeave) newLeave.click();
     else if (typeof leaveRoom === "function") leaveRoom();
