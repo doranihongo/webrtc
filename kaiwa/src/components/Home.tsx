@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BookOpen, ChevronRight, MessageCircle, Lock, Unlock, Library, Users, Wrench, Repeat, Headphones, Mic, X, Film, PlayCircle, Video, PictureInPicture } from 'lucide-react';
+import { BookOpen, ChevronRight, MessageCircle, MessagesSquare, Lock, Unlock, Library, Users, Wrench, Repeat, Headphones, Mic, X, Film, PlayCircle, Video, PictureInPicture } from 'lucide-react';
 import { useCourses } from '../context/CoursesContext';
 import KaiwaModal from './KaiwaModal';
 import DictationModal from './DictationModal';
@@ -109,6 +109,20 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
     };
   }, [showLogoutConfirm, showContactPopup, showProfileMenu, isDocsModalOpen, activeToolModal, isHiddenByOverlay]);
 
+  // #kaiwaAccountWidget nổi cố định z-index 10000 (xem kaiwa/index.html) -
+  // cao hơn mọi popup full-screen của Home (Shadowing/Nghe chính tả/Luyện
+  // phát âm dùng z-[500]/z-[200], Tài liệu tham khảo z-[200]), nên đè lên
+  // đúng góc trên-phải của các popup này (chỗ nút đóng). Ẩn nút đi trong
+  // lúc 1 trong các popup đó đang mở, hiện lại khi đóng - trừ khi vẫn
+  // đang nhúng trong cuộc gọi (embed=call, widget đã bị ẩn hẳn ở effect
+  // phía trên rồi, không được hiện nhầm lại).
+  useEffect(() => {
+    if (isEmbeddedInCall) return;
+    const widget = document.getElementById('kaiwaAccountWidget');
+    if (!widget) return;
+    widget.style.display = (isDocsModalOpen || activeToolModal) ? 'none' : '';
+  }, [isDocsModalOpen, activeToolModal, isEmbeddedInCall]);
+
   return (
     <div className={`min-h-screen flex flex-col font-sans ${showLogoutConfirm ? 'h-screen overflow-hidden' : ''}`}>
        <nav className="h-16 px-6 flex flex-shrink-0 items-center justify-between border-b border-white/10 bg-white/5 backdrop-blur-md z-50 sticky top-0">
@@ -192,7 +206,7 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
           <section className="flex flex-col gap-8">
              <div className="border-b border-white/10 pb-4">
                  <h2 className="text-2xl md:text-3xl font-bold font-sans text-white flex items-center gap-3 uppercase">
-                   <BookOpen className="w-8 h-8 text-blue-200" />
+                   <MessagesSquare className="w-8 h-8 text-blue-200" />
                    KAIWA TIẾNG NHẬT
                  </h2>
                  <p className="text-[#8fb0ce] mt-2 font-medium">Thành thạo trong 3 tháng</p>
@@ -265,7 +279,11 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
              </div>
           </section>
 
-          {/* Tools Section */}
+          {/* Tools + Resources Section - ẩn khi đang nhúng trong cuộc gọi
+              (embed=call): chỉ ghé trang chủ tạm để xem khóa học/buổi học,
+              không cần các mục này, đỡ phải cuộn nhiều. */}
+          {!isEmbeddedInCall && (
+            <>
           <section className="bg-surface p-6 md:p-8 rounded-3xl border border-surface-border shadow-sm relative overflow-hidden">
              <div className="border-b border-surface-border pb-4 mb-6">
                 <h3 className="text-lg font-bold text-white uppercase flex items-center gap-2.5">
@@ -299,7 +317,6 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
              </div>
           </section>
 
-          {/* Resources & Community Section */}
           <section className="bg-surface p-6 md:p-8 rounded-3xl border border-surface-border shadow-sm relative overflow-hidden">
              <div className="border-b border-surface-border pb-4 mb-6">
                 <h3 className="text-lg font-bold text-white uppercase">Tài nguyên & Cộng đồng</h3>
@@ -333,6 +350,8 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
                    })}
                  </div>
           </section>
+            </>
+          )}
        </main>
        
        <footer className="py-6 sm:h-14 sm:py-0 flex-shrink-0 px-6 border-t border-white/10 flex flex-col-reverse sm:flex-row items-center justify-between gap-4 text-[#8fb0ce] text-xs font-semibold tracking-widest mt-auto">
@@ -448,7 +467,7 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
                         </a>
 
                         <a href="https://www.facebook.com/groups/thithujlptmienphi" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-xl border border-surface-border hover:border-purple-400/40 hover:bg-purple-500/10 transition-all group">
-                            <div className="w-10 h-10 bg-orange-500/15 text-orange-400 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center flex-shrink-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                                     <circle cx="9" cy="7" r="4"></circle>
