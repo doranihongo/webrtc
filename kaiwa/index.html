@@ -50,6 +50,16 @@
         -ms-user-select: auto !important;
         user-select: auto !important;
       }
+      /* Nhúng trong cuộc gọi (?embed=call - client.js mở iframe này khi
+         giáo viên/admin bấm nút "Trang chủ" góc dưới-trái trong phòng gọi):
+         nút tài khoản (#kaiwaAccountWidget) bị ẩn HẲN ở cấp CSS, đè cả
+         inline style nếu JS nào đó sau này cố hiện lại - không bao giờ được
+         đè lên cụm nút "PiP"/"Quay lại phòng học" ở góc trên-phải nav
+         (Home.tsx/CallControls). Class embed-call do script inline gắn lên
+         <html> ngay khi trang vừa load (xem dưới #kaiwaAccountWidget). */
+      html.embed-call #kaiwaAccountWidget {
+        display: none !important;
+      }
     </style>
   </head>
   <body>
@@ -68,6 +78,22 @@
         <img id="accountAvatar" class="account-avatar" alt="Avatar" />
       </button>
     </div>
+    <script>
+      // Nhúng trong cuộc gọi (?embed=call - client.js mở iframe này khi
+      // giáo viên/admin bấm nút "Trang chủ" góc dưới-trái trong phòng gọi,
+      // xem setGoHomeCornerBtn trong public/js/client.js): ẩn NGAY nút tài
+      // khoản tĩnh ở cấp HTML (gắn class embed-call lên <html> + display:none
+      // trực tiếp), TRƯỚC cả khi React mount - chắc chắn nó không bao giờ
+      // hiện đè lên cụm nút "PiP"/"Quay lại phòng học" ở góc trên-phải nav.
+      // Home.tsx/App.tsx cũng tự ẩn lại qua useEffect khi mount (lớp phòng
+      // hờ), script này là lớp chắc ăn tuyệt đối, không phụ thuộc thời điểm
+      // mount hay bundle JS cũ/mới.
+      if (new URLSearchParams(window.location.search).get("embed") === "call") {
+        document.documentElement.classList.add("embed-call");
+        var kaiwaAccountWidget = document.getElementById("kaiwaAccountWidget");
+        if (kaiwaAccountWidget) kaiwaAccountWidget.style.display = "none";
+      }
+    </script>
 
     <div id="accountPanelOverlay" class="account-panel-overlay hidden" style="z-index: 10000;">
       <div id="accountPanel" class="account-panel">

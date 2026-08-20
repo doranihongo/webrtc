@@ -3,6 +3,7 @@ import { BookOpen, ChevronRight, MessageCircle, MessagesSquare, Lock, Unlock, Li
 import { useCourses } from '../context/CoursesContext';
 import KaiwaModal from './KaiwaModal';
 import DictationModal from './DictationModal';
+import YoutubeShadowingModal from './YoutubeShadowingModal';
 
 const LEARNING_TOOLS = [
   {
@@ -18,10 +19,10 @@ const LEARNING_TOOLS = [
     icon: Headphones,
   },
   {
-    id: 'LUYỆN PHÁT ÂM',
-    title: 'LUYỆN PHÁT ÂM',
-    subtitle: 'SỬA PHÁT ÂM CHUẨN',
-    icon: Mic,
+    id: 'SHADOWING_YT',
+    title: 'NGHE PODCAST',
+    subtitle: 'NGHE & SHADOWING',
+    icon: Film,
   },
 ];
 
@@ -382,19 +383,24 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
 
        {/* Dictation Modal */}
        <DictationModal
-          isOpen={activeToolModal === 'NGHE CHÍNH TẢ'} 
-          onClose={() => setActiveToolModal(null)} 
+          isOpen={activeToolModal === 'NGHE CHÍNH TẢ'}
+          onClose={() => setActiveToolModal(null)}
+       />
+
+       {/* Shadowing Youtube Modal */}
+       <YoutubeShadowingModal
+          isOpen={activeToolModal === 'SHADOWING_YT'}
+          onClose={() => setActiveToolModal(null)}
        />
 
        {/* Tool Modal (Placeholder for other tools) */}
-       {activeToolModal && activeToolModal !== 'SHADOWING' && activeToolModal !== 'NGHE CHÍNH TẢ' && (
+       {activeToolModal && activeToolModal !== 'SHADOWING' && activeToolModal !== 'NGHE CHÍNH TẢ' && activeToolModal !== 'SHADOWING_YT' && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setActiveToolModal(null)}>
              <div className="bg-surface rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-surface-border flex flex-col min-h-[380px]" onClick={e => e.stopPropagation()}>
                 <div className="p-5 border-b border-surface-border flex justify-between items-center bg-surface-panel">
                     <h3 className="text-base font-bold text-white uppercase flex items-center gap-2.5">
                        {activeToolModal === 'SHADOWING' && <Repeat className="w-5 h-5 text-indigo-400" />}
                        {activeToolModal === 'NGHE CHÍNH TẢ' && <Headphones className="w-5 h-5 text-emerald-400" />}
-                       {activeToolModal === 'LUYỆN PHÁT ÂM' && <Mic className="w-5 h-5 text-amber-400" />}
                        {activeToolModal}
                     </h3>
                     <button onClick={() => setActiveToolModal(null)} className="text-[#8fb0ce] hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors">
@@ -406,7 +412,6 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
                    <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4">
                       {activeToolModal === 'SHADOWING' && <Repeat className="w-8 h-8" />}
                       {activeToolModal === 'NGHE CHÍNH TẢ' && <Headphones className="w-8 h-8" />}
-                      {activeToolModal === 'LUYỆN PHÁT ÂM' && <Mic className="w-8 h-8" />}
                    </div>
                    <h4 className="text-lg font-bold text-white mb-2">Công cụ {activeToolModal}</h4>
                    <p className="text-sm text-[#8fb0ce] font-medium max-w-md">

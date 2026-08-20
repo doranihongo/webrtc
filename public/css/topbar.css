@@ -180,11 +180,15 @@ body.account-panel-open {
   touch-action: pan-y;
 }
 
-/* Trên mobile panel chiếm gần hết chiều rộng màn hình nên viền này nằm
-   sát mép, nhìn như 1 vệt xanh dọc theo cạnh - bỏ trên mobile, giữ
-   nguyên desktop. */
+/* Trên mobile panel chiếm trọn màn hình (không còn giữ max-width: 380px
+   như desktop) - vừa để viền dọc khỏi nằm sát mép nhìn như 1 vệt xanh (lý
+   do cũ), vừa để đúng yêu cầu "toàn màn hình" trên điện thoại: bỏ max-width
+   thì mới thật sự phủ hết bề ngang trên các máy màn hình rộng hơn 380px
+   (iPhone Pro Max, Android cỡ lớn...), chứ chỉ bỏ border-left thôi vẫn
+   chừa 1 dải nền tối bên trái trên các máy đó. */
 @media (max-width: 640px) {
   .account-panel {
+    max-width: 100%;
     border-left: none;
   }
 }

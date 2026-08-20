@@ -808,8 +808,8 @@ micro để sử dụng ứng dụng này.
           });
 
           // Site tooltips (Tippy.js), not native browser title tooltips.
-          // Scoped on purpose to just the control bar buttons, the two
-          // fullscreen buttons, and the chat "share video/audio" button -
+          // Scoped on purpose to just the control bar buttons, the
+          // fullscreen button, and the chat "share video/audio" button -
           // short, static labels rather than state-dependent text.
           if (typeof tippy === "function") {
             const tip = (el, content) => {
@@ -830,7 +830,6 @@ micro để sử dụng ứng dụng này.
             tip(newSettings, "Cài đặt");
             tip(newLeave, "Rời cuộc gọi");
             tip(document.getElementById("msgerVideoUrlBtn"), "Chia sẻ video/audio");
-            tip(document.getElementById("fullScreenCornerBtn"), "Toàn màn hình");
           }
 
           const updateUI = () => {
@@ -1623,17 +1622,6 @@ micro để sử dụng ứng dụng này.
         </button>
       </div>
     </div>
-
-    <!-- Desktop-only floating button (bottom-right) toggling the browser's
-    own full-screen mode - separate from the "Toàn màn hình" item tucked
-    inside the "..." dropdown menu. Shown/hidden via JS (isMobileDevice). -->
-    <button
-      id="fullScreenCornerBtn"
-      class="fullscreen-corner-btn"
-      style="display: none"
-    >
-      <i class="fas fa-expand-alt"></i>
-    </button>
 
     <!-- Desktop-only, giaovien/admin-only floating button (bottom-left) -
     xem trang chủ kaiwa trong khi vẫn đang gọi (mở kaiwaOverlayFrame bên

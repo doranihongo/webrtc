@@ -294,7 +294,6 @@ const usernameEmoji = getId("usernameEmoji");
 const shareRoomBtn = getId("shareRoomBtn");
 const recordStreamBtn = getId("recordStreamBtn");
 const fullScreenBtn = getId("fullScreenBtn");
-const fullScreenCornerBtn = getId("fullScreenCornerBtn");
 const goHomeCornerBtn = getId("goHomeCornerBtn");
 const kaiwaOverlayFrame = getId("kaiwaOverlayFrame");
 const kaiwaOverlayIframe = getId("kaiwaOverlayIframe");
@@ -6320,26 +6319,13 @@ function setFullScreenBtn() {
       if (!fullscreenElement) {
         fullScreenIcon.className = className.fsOff;
         isDocumentOnFullScreen = false;
-        if (fullScreenCornerBtn) {
-          const cornerIcon = fullScreenCornerBtn.querySelector("i");
-          if (cornerIcon) cornerIcon.className = className.fsOff;
-        }
       }
     });
     fullScreenBtn.addEventListener("click", (e) => {
       toggleFullScreen();
     });
-    // Desktop-only floating twin of fullScreenBtn, fixed at the
-    // bottom-right corner of the page instead of tucked in the "..." menu.
-    if (fullScreenCornerBtn && !isMobileDevice) {
-      elemDisplay(fullScreenCornerBtn, true, "flex");
-      fullScreenCornerBtn.addEventListener("click", (e) => {
-        toggleFullScreen();
-      });
-    }
   } else {
     elemDisplay(fullScreenBtn, false);
-    elemDisplay(fullScreenCornerBtn, false);
   }
 }
 
@@ -8774,17 +8760,14 @@ async function setMyVideoStatusTrue() {
 function toggleFullScreen() {
   playSound("click");
   const fullScreenIcon = fullScreenBtn.querySelector("i");
-  const cornerIcon = fullScreenCornerBtn?.querySelector("i");
   if (!document.fullscreenElement) {
     document.documentElement.requestFullscreen();
     fullScreenIcon.className = className.fsOn;
-    if (cornerIcon) cornerIcon.className = className.fsOn;
     isDocumentOnFullScreen = true;
   } else {
     if (document.exitFullscreen) {
       document.exitFullscreen();
       fullScreenIcon.className = className.fsOff;
-      if (cornerIcon) cornerIcon.className = className.fsOff;
       isDocumentOnFullScreen = false;
     }
   }

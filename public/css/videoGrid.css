@@ -996,55 +996,17 @@ video:fullscreen {
 }
 
 /*--------------------------------------------------------------
-# Desktop-only browser full-screen corner button
+# Desktop-only, role-gated floating corner button
 --------------------------------------------------------------*/
 
-.fullscreen-corner-btn {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  /* Floating glass control, positioned over the stage/video - stays a
-     fixed dark-glass style in both themes (like the caption overlay and
-     PiP controls) rather than following the site theme, so it stays
-     legible over arbitrary video content underneath it. Nền/viền dùng
-     giá trị cứng (không qua --ds-bg-* vì cố tình không theo theme) -
-     nhưng vẫn nâng sáng lên 1 bậc cho đồng bộ với phần còn lại. */
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(22, 50, 79, 0.85);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(60, 102, 147, 0.8);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
-}
-.fullscreen-corner-btn:hover {
-  background: #24406b;
-  color: #fff;
-  border-color: rgba(75, 180, 222, 0.6);
-}
-/* Hard guarantee on top of the JS isMobileDevice gate: any touch-primary
-   device (no real mouse) must never show this button, full stop. */
-@media (hover: none) and (pointer: coarse) {
-  .fullscreen-corner-btn {
-    display: none !important;
-  }
-}
-
 /* "Trang chủ" (kaiwa) trong khi vẫn gọi - góc dưới-trái, chỉ giaovien/
-   admin trên desktop (gate ở JS, xem setGoHomeCornerBtn trong
-   client.js). Cùng công thức "glass control" với .fullscreen-corner-btn
-   ở trên, chỉ khác 2 điểm: nằm bên trái (left thay right) và viền/hover
-   màu xanh lá để phân biệt rõ 2 nút khác chức năng. */
+   admin trên desktop (gate ở JS, xem setGoHomeCornerBtn trong client.js).
+   Floating glass control, positioned over the stage/video - stays a fixed
+   dark-glass style in both themes (like the caption overlay and PiP
+   controls) rather than following the site theme, so it stays legible
+   over arbitrary video content underneath it. Nền/viền dùng giá trị cứng
+   (không qua --ds-bg-* vì cố tình không theo theme) - nhưng vẫn nâng sáng
+   lên 1 bậc cho đồng bộ với phần còn lại. */
 .go-home-corner-btn {
   position: fixed;
   left: 20px;
@@ -1081,8 +1043,8 @@ video:fullscreen {
 /* Overlay hiện trang chủ kaiwa đè lên trang gọi (xem client.html) - KHÔNG
    phải điều hướng, chỉ ẩn/hiện 1 iframe, nên cuộc gọi (WebRTC/audio)
    phía dưới không hề bị gián đoạn lúc đang xem. z-index cao hơn mọi thứ
-   khác trong trang gọi, kể cả .fullscreen-corner-btn/.go-home-corner-btn
-   (z-index: 40) và các popup Swal (z-index mặc định ~1060) - đủ cao để
+   khác trong trang gọi, kể cả .go-home-corner-btn (z-index: 40) và các
+   popup Swal (z-index mặc định ~1060) - đủ cao để
    luôn nổi trên cùng khi hiện. */
 .kaiwa-overlay-frame {
   position: fixed;
@@ -1107,7 +1069,7 @@ video:fullscreen {
    desktop-only ("hidden md:flex" in client.html), but that Tailwind
    width breakpoint alone isn't reliable on mobile: many phones exceed
    the md breakpoint's width once rotated to landscape, which wrongly
-   re-shows these buttons. Same hard guarantee as .fullscreen-corner-btn
+   re-shows these buttons. Same hard guarantee as .go-home-corner-btn
    above - any touch-primary device (no real mouse) never sees them,
    landscape or not. */
 @media (hover: none) and (pointer: coarse) {

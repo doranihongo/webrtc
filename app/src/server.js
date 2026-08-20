@@ -68,6 +68,7 @@ const checkXSS = require("./xss.js");
 const ServerApi = require("./api");
 const MattermostController = require("./mattermost");
 const Recording = require("./recording");
+const ShadowingYoutube = require("./shadowingYoutube");
 const Validate = require("./validate");
 const HtmlInjector = require("./htmlInjector");
 const Host = require("./host");
@@ -98,6 +99,15 @@ const loginLimiter = rateLimit({
     message: `Too many login attempts. Please try again after ${minBlockTime} minute${minBlockTime == 1 ? "" : "s"}.`,
   },
   keyGenerator: (req) => req.body?.username || getIP(req),
+});
+
+// Shadowing YouTube (kaiwa tool) - each request shells out to yt-dlp, so
+// cap how often one IP can trigger that regardless of login state.
+const shadowingLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 15,
+  message: { ok: false, code: "rate_limited", message: "Thử lại sau ít phút." },
+  keyGenerator: (req) => getIP(req),
 });
 
 const port = config.server.port;
@@ -1064,6 +1074,34 @@ app.post("/isRoomActive", (req, res) => {
     res.status(400).json({ message: "Unauthorized" });
   }
 });
+
+// Kaiwa tool "Shadowing YouTube": given a YouTube link, return whatever
+// Japanese captions the video already has (manual first, YouTube's own
+// auto-generated captions as fallback), with per-line timestamps so the
+// client can highlight the current line in sync with video playback. Gated
+// by the same OIDCAuth as the rest of kaiwa - not a public endpoint.
+app.post(
+  "/kaiwa/shadowing/transcript",
+  OIDCAuth,
+  shadowingLimiter,
+  async (req, res) => {
+    const { url } = checkXSS(req.body || {});
+    const result = await ShadowingYoutube.getTranscript(url);
+    if (result.ok) {
+      res.status(200).json(result);
+    } else {
+      const status =
+        result.code === "invalid_url"
+          ? 400
+          : result.code === "no_captions" || result.code === "empty_captions"
+            ? 404
+            : result.code === "ytdlp_missing"
+              ? 503
+              : 502;
+      res.status(status).json(result);
+    }
+  },
+);
 
 // Receive a ~30s recording chunk from the presenter's browser and append it
 // (in order) to that session's temp file on disk. Auth is via the opaque

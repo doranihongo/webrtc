@@ -110,6 +110,74 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb { background-color: var(--color-zinc-200); border-radius: 10px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: var(--color-zinc-400); }
 
+/* Thanh tua/âm lượng tự code cho tool Shadowing YouTube (khung nhúng bị
+   khoá, thay UI gốc của YouTube - xem YoutubeShadowingModal.tsx). Nằm đè
+   trên video nên cố tình dùng tông "kính tối" cố định (trắng/indigo trên
+   nền đen mờ), không theo theme sáng của app, để luôn đọc được trên mọi
+   nội dung video bên dưới.
+   Phần "đã tua qua" tô màu bằng biến --fill (0%-100%, tính trong JS theo
+   currentTime/duration hoặc volume) - Chrome/Safari (WebKit) tô trực tiếp
+   qua background của chính input (track mặc định trong suốt nên lộ ra
+   đúng màu này); Firefox có pseudo-element ::-moz-range-progress riêng
+   để tô phần đã qua nên không cần biến --fill ở nhánh đó. */
+.player-range {
+  --fill: 0%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, #818cf8 var(--fill), rgba(255, 255, 255, 0.35) var(--fill));
+  outline: none;
+  cursor: pointer;
+}
+.player-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.player-range::-webkit-slider-thumb:hover,
+.player-range:active::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
+.player-range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.player-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: #818cf8;
+}
+.player-range::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+/* Thẻ "câu đang phát" dưới video trong tool Shadowing YouTube - chỉ dành
+   cho máy tính. Ẩn theo THIẾT BỊ CẢM ỨNG THẬT (không có chuột) chứ không
+   theo độ rộng cửa sổ (breakpoint sm:/md:) - 1 cửa sổ desktop dù chưa
+   maximize/kéo hẹp cỡ nào vẫn còn chuột thật (hover: hover, pointer: fine)
+   nên vẫn hiện; chỉ điện thoại/tablet cảm ứng thật (hover: none, pointer:
+   coarse) mới ẩn. Cùng công thức đã dùng cho .fullscreen-corner-btn bên
+   trang gọi điện (public/css/videoGrid.css). */
+@media (hover: none) and (pointer: coarse) {
+  .current-sentence-card {
+    display: none !important;
+  }
+}
+
 @keyframes drawStroke {
   0% { stroke-dashoffset: 500; opacity: 0; }
   10% { opacity: 1; }
