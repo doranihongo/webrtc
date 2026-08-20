@@ -19,8 +19,32 @@ const kaiwaDir = path.join(__dirname, "..", "kaiwa");
 const kaiwaDist = path.join(kaiwaDir, "dist");
 const target = path.join(__dirname, "..", "public", "kaiwa");
 
-if (!fs.existsSync(path.join(kaiwaDir, "node_modules"))) {
-  console.log("[build:kaiwa] kaiwa/node_modules missing, running npm install first...");
+// Re-install whenever node_modules is missing OR stale relative to
+// package-lock.json - the latter catches a `git pull` that brought in a
+// new/updated dependency (e.g. a fresh entry in kaiwa/package.json) into an
+// already-existing node_modules from a previous deploy, which used to
+// silently skip npm install here and fail later at Vite's import-resolution
+// step instead. Compared against node_modules/.package-lock.json (which npm
+// itself rewrites at the end of every successful install to mirror exactly
+// what got installed) rather than the node_modules directory's own mtime -
+// more reliable, since plain directory mtime doesn't always bump when only
+// nested sub-packages change.
+const nodeModulesDir = path.join(kaiwaDir, "node_modules");
+const installedLockMarker = path.join(nodeModulesDir, ".package-lock.json");
+const lockfilePath = path.join(kaiwaDir, "package-lock.json");
+const nodeModulesMissing = !fs.existsSync(nodeModulesDir);
+const installIsStale =
+  !nodeModulesMissing &&
+  fs.existsSync(lockfilePath) &&
+  (!fs.existsSync(installedLockMarker) ||
+    fs.statSync(lockfilePath).mtimeMs > fs.statSync(installedLockMarker).mtimeMs);
+
+if (nodeModulesMissing || installIsStale) {
+  console.log(
+    nodeModulesMissing
+      ? "[build:kaiwa] kaiwa/node_modules missing, running npm install first..."
+      : "[build:kaiwa] kaiwa/package-lock.json changed since the last install, running npm install first...",
+  );
   execSync("npm install", { cwd: kaiwaDir, stdio: "inherit" });
 }
 
