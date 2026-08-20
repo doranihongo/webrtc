@@ -1,0 +1,18 @@
+# Đánh dấu rõ file nhị phân - core.autocrlf=true (phổ biến trên máy Windows)
+# nếu không có file này sẽ tự đoán text/binary theo heuristic riêng, và có
+# thể áp nhầm LF->CRLF lên file nhị phân, làm hỏng nội dung không phục hồi
+# được. Khai rõ ở đây để chắc chắn không đụng vào các file này.
+*.pdf -text
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.ico -text
+*.webp -text
+*.mp3 -text
+*.mp4 -text
+*.webm -text
+*.woff -text
+*.woff2 -text
+*.ttf -text
+*.zip -text

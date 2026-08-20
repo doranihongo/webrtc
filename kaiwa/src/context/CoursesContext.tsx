@@ -39,7 +39,10 @@ const STATIC_LESSONS: Record<string, any[]> = {
     {
       id: 'lesson-s2',
       title: 'Bài 2: Mua sắm & Hỏi giá tiền ( me đi shopping )',
-      description: 'Hội thoại khi đi siêu thị, cửa hàng tiện lợi, hỏi giá và thanh toán.'
+      description: 'Hội thoại khi đi siêu thị, cửa hàng tiện lợi, hỏi giá và thanh toán.',
+      // Đặt file test vào public/kaiwa-files/ để server phục vụ tại
+      // /kaiwa-files/lesson-2.pdf - test nút mở tài liệu.
+      lessonFileUrl: '/kaiwa-files/lesson-2.pdf'
     },
     {
       id: 'lesson-s3',
@@ -56,7 +59,10 @@ const STATIC_LESSONS: Record<string, any[]> = {
     {
       id: 'lesson-t1',
       title: 'Bài 1: Thảo luận công việc & Báo cáo với cấp trên (報連相)',
-      description: 'Quy tắc Báo cáo - Liên lạc - Thảo luận (Hourenso) chuẩn văn hóa công sở Nhật.'
+      description: 'Quy tắc Báo cáo - Liên lạc - Thảo luận (Hourenso) chuẩn văn hóa công sở Nhật.',
+      // Ví dụ URL - thay bằng link thật của bạn (file phải truy cập được
+      // từ trình duyệt người xem, không bị chặn đăng nhập).
+      lessonFileUrl: '/kaiwa-files/lesson-1.pdf'
     },
     {
       id: 'lesson-t2',

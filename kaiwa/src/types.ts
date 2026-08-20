@@ -32,6 +32,16 @@ export interface Lesson {
   kanjiList?: string;
   vocabList?: string;
   exerciseJson?: any;
+  /**
+   * File trình chiếu/bài giảng cho bài học này - PDF hoặc PPT/PPTX.
+   * Có thể là:
+   *   - URL đầy đủ (https://...): nhúng trực tiếp (cần URL truy cập được
+   *     từ trình duyệt của người xem, KHÔNG bị chặn đăng nhập).
+   *   - Đường dẫn tương đối (vd "kaiwa-files/lesson-1.pdf"): file đặt trong
+   *     public/kaiwa-files/, phục vụ từ cùng nguồn với web.
+   * Trống = bài chưa có tài liệu, giao diện sẽ hiện trạng thái "chưa có".
+   */
+  lessonFileUrl?: string;
 }
 
 export interface Course {

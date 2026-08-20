@@ -201,6 +201,20 @@ module.exports = {
   },
 
   // ==========================================
+  // Shadowing YouTube (kaiwa tool - pulls JA captions via yt-dlp)
+  // ==========================================
+  shadowing: {
+    enabled: getEnvBoolean(process.env.SHADOWING_ENABLED, true), // ops kill-switch
+    tempDir:
+      process.env.SHADOWING_TEMP_DIR ||
+      path.join(__dirname, "../../recordings-tmp/shadowing"),
+    // Path/command for yt-dlp on this host - override if it's not on PATH
+    // (e.g. a venv install: /opt/venvs/ytdlp/bin/yt-dlp).
+    ytDlpPath: process.env.SHADOWING_YTDLP_PATH || "yt-dlp",
+    timeoutMs: parseInt(process.env.SHADOWING_TIMEOUT_MS, 10) || 25000,
+  },
+
+  // ==========================================
   // Google Drive (personal account - recording uploads)
   // ==========================================
   googleDrive: {

@@ -29,6 +29,13 @@ const supabaseClient = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
 );
+// `const` ở top-level 1 script cổ điển KHÔNG gắn vào `window` (chỉ `var`/
+// function declaration mới vậy) - các script cổ điển khác (accountPanel.js,
+// common.js...) vẫn gọi được biến `supabaseClient` trần vì chúng chia sẻ
+// chung global lexical scope, nhưng code trong bundle module (kaiwa/src -
+// React) thì không tự resolve được biến đó, phải đi qua `window`. Gán tường
+// minh ở đây để cả 2 phía dùng chung đúng 1 client.
+window.supabaseClient = supabaseClient;
 
 // ---------------------------------------------------------
 // Đồng bộ access token hiện tại ra 1 cookie riêng (KHÔNG phải cơ chế

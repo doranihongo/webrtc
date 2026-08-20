@@ -77,8 +77,19 @@ document.querySelectorAll(".account-toggle-password").forEach((btn) => {
 
 function openAccountPanel() {
   accountPanelOverlay.classList.remove("hidden");
-  // Khoá cuộn/vuốt trang nền phía sau trong lúc bảng đang mở - không
-  // thì trên mobile vẫn vuốt/cuộn được trang chủ đằng sau lớp phủ.
+  // Khoá cuộn/vuốt trang nền phía sau trong lúc bảng đang mở, trên cả
+  // điện thoại lẫn máy tính - overflow:hidden suông trên <body> không ăn
+  // chắc trên mọi trình duyệt di động (Safari iOS vẫn có thể cuộn dội qua
+  // lớp phủ), nên dùng đúng cách App.tsx (kaiwa/src/App.tsx) đã dùng cho
+  // lúc vào khóa học/buổi học: chuyển body sang position:fixed + bù lại
+  // đúng vị trí cuộn cũ (scrollY) làm top offset, phục hồi nguyên vị trí
+  // lúc đóng. .account-panel-open giữ lại cho CSS (border/touch-action ở
+  // trên) chứ bản thân class đó không còn gánh việc khoá cuộn nữa.
+  const scrollY = window.scrollY;
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${scrollY}px`;
+  document.body.style.width = "100%";
+  document.body.style.overflow = "hidden";
   document.body.classList.add("account-panel-open");
   // Luôn mở lại ở màn thông tin, không phải màn đổi mật khẩu dở dang
   showAccountInfoView();
@@ -91,7 +102,13 @@ function openAccountPanel() {
 
 function closeAccountPanel() {
   accountPanelOverlay.classList.add("hidden");
+  const scrollY = document.body.style.top;
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.width = "";
+  document.body.style.overflow = "";
   document.body.classList.remove("account-panel-open");
+  if (scrollY) window.scrollTo(0, parseInt(scrollY || "0", 10) * -1);
 }
 
 function showAccountInfoView() {

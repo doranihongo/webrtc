@@ -16,6 +16,7 @@
     "canvas-confetti": "^1.9.4",
     "howler": "^2.2.4",
     "lucide-react": "^0.546.0",
+    "pdfjs-dist": "^6.2.108",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "tailwindcss-animate": "^1.0.7",
