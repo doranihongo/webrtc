@@ -852,7 +852,14 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                                 <span className="block h-full bg-indigo-500" style={{ width: `${pct}%` }} />
                               </span>
                             </div>
-                            <span className="block mt-1.5 min-h-[2.0625rem] text-xs font-bold text-zinc-800 leading-snug line-clamp-2">{video.title}</span>
+                            {/* KHÔNG thêm class "block" vào đây: line-clamp-2 cần
+                                display:-webkit-box mới cắt được 2 dòng, mà CSS
+                                .block sinh ra sau .line-clamp-2 cùng độ ưu tiên
+                                nên ghi đè thành display:block -> tiêu đề chạy
+                                3+ dòng và lệch hàng. line-clamp-2 tự nó đã là
+                                block-level rồi. min-h chừa đúng 2 dòng (33px)
+                                để thẻ 1 dòng và 2 dòng thẳng hàng nhau. */}
+                            <span className="mt-1.5 min-h-[2.0625rem] text-xs font-bold text-zinc-800 leading-snug line-clamp-2">{video.title}</span>
                             <span className="block text-[11px] font-semibold text-zinc-400 mt-0.5 tabular-nums">Đã xem {pct}%</span>
                           </button>
                         );
