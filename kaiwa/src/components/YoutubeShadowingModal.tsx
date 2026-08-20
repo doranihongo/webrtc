@@ -852,7 +852,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                                 <span className="block h-full bg-indigo-500" style={{ width: `${pct}%` }} />
                               </span>
                             </div>
-                            <span className="block mt-1.5 text-xs font-bold text-zinc-800 leading-snug line-clamp-2">{video.title}</span>
+                            <span className="block mt-1.5 min-h-[2.0625rem] text-xs font-bold text-zinc-800 leading-snug line-clamp-2">{video.title}</span>
                             <span className="block text-[11px] font-semibold text-zinc-400 mt-0.5 tabular-nums">Đã xem {pct}%</span>
                           </button>
                         );
