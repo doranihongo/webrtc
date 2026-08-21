@@ -1178,21 +1178,21 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
 
               {/* Vùng phụ đề chạy */}
               <div className="flex-1 min-h-0 border-t md:border-t-0 md:border-l border-b border-surface-border flex flex-col">
-                <div className="px-4 sm:px-6 py-3 shrink-0 flex items-center justify-center md:justify-start gap-2 flex-wrap">
+                <div className="px-4 sm:px-6 py-3 shrink-0 flex items-center justify-center md:justify-start gap-1.5 sm:gap-2 flex-nowrap overflow-x-auto">
                   <button
                     onClick={() => setLoopLine((v) => !v)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-white/10 transition-all ${
+                    className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-full text-xs font-bold border bg-white/10 transition-all whitespace-nowrap shrink-0 ${
                       loopLine
                         ? 'border-blue-400 text-blue-300'
                         : 'border-white/10 text-[#8fb0ce] hover:border-white/20'
                     }`}
                   >
                     <Repeat1 className="w-3.5 h-3.5" />
-                    Lặp câu
+                    Lặp
                   </button>
                   <button
                     onClick={() => toggleDisplayPref('showRomaji')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-white/10 transition-all ${
+                    className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-full text-xs font-bold border bg-white/10 transition-all whitespace-nowrap shrink-0 ${
                       displayPrefs.showRomaji
                         ? 'border-blue-400 text-blue-300'
                         : 'border-white/10 text-[#8fb0ce] hover:border-white/20'
@@ -1203,7 +1203,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                   </button>
                   <button
                     onClick={() => toggleDisplayPref('showVi')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-white/10 transition-all ${
+                    className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-full text-xs font-bold border bg-white/10 transition-all whitespace-nowrap shrink-0 ${
                       displayPrefs.showVi
                         ? 'border-emerald-400 text-emerald-300'
                         : 'border-white/10 text-[#8fb0ce] hover:border-white/20'
@@ -1214,14 +1214,14 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                   </button>
                   <button
                     onClick={() => toggleDisplayPref('autoScroll')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-white/10 transition-all ${
+                    className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-full text-xs font-bold border bg-white/10 transition-all whitespace-nowrap shrink-0 ${
                       displayPrefs.autoScroll
                         ? 'border-blue-400 text-blue-300'
                         : 'border-white/10 text-[#8fb0ce] hover:border-white/20'
                     }`}
                   >
                     <Crosshair className="w-3.5 h-3.5" />
-                    Tự cuộn
+                    Cuộn
                   </button>
                 </div>
                 <div ref={subtitleListRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 sm:px-4 pb-8 flex flex-col gap-1.5">
