@@ -213,7 +213,7 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
                  <p className="text-[#8fb0ce] mt-2 font-medium">Thành thạo trong 3 tháng</p>
              </div>
 
-             <div className="grid grid-cols-1 md:grid-cols-2 w-full gap-6 md:gap-8">
+             <div className="grid grid-cols-1 sm:grid-cols-3 w-full gap-6 md:gap-8">
                {courses.map(course => {
                  const isAllowed = true;
                  return (

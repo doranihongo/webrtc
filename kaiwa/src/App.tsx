@@ -62,7 +62,7 @@ export default function App() {
       />
 
       {activeCourseId && (
-        <div key={activeCourseId} id="course-detail-container" className="fixed inset-0 z-[100] bg-[linear-gradient(315deg,#16324f_0%,#24406b_45%,#345da7_100%)] overflow-y-auto custom-scrollbar w-full h-[100dvh] flex flex-col">
+        <div key={activeCourseId} id="course-detail-container" className="fixed inset-0 z-[100] bg-[linear-gradient(315deg,#16324f_0%,#24406b_45%,#345da7_100%)] overflow-y-auto hide-scrollbar w-full h-[100dvh] flex flex-col">
           <CourseDetail 
             courseId={activeCourseId} 
             onBack={() => setActiveCourseId(null)}
@@ -73,7 +73,7 @@ export default function App() {
       )}
 
       {activeCourseId && activeLessonId && (
-        <div key={activeLessonId} id="lesson-view-container" className="fixed inset-0 z-[200] bg-[linear-gradient(315deg,#16324f_0%,#24406b_45%,#345da7_100%)] overflow-y-auto custom-scrollbar w-full h-[100dvh] flex flex-col">
+        <div key={activeLessonId} id="lesson-view-container" className="fixed inset-0 z-[200] bg-[linear-gradient(315deg,#16324f_0%,#24406b_45%,#345da7_100%)] overflow-y-auto hide-scrollbar w-full h-[100dvh] flex flex-col">
           <LessonView 
             courseId={activeCourseId} 
             lessonId={activeLessonId}

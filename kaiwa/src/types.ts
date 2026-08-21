@@ -12,6 +12,17 @@ export interface VocabWord {
   displayStt?: number;
 }
 
+/** 1 mẫu ngữ pháp trong "Danh sách ngữ pháp" của 1 buổi học (LessonView). */
+export interface GrammarPoint {
+  id: string;
+  /** Cấu trúc ngữ pháp, vd "〜てもいいです". */
+  pattern: string;
+  /** Ý nghĩa/cách dùng, vd "Xin phép làm gì đó". */
+  meaning: string;
+  exampleJapanese?: string;
+  exampleVietnamese?: string;
+}
+
 export interface KanjiWord {
   id: string;
   kanji: string;
@@ -32,6 +43,10 @@ export interface Lesson {
   kanjiList?: string;
   vocabList?: string;
   exerciseJson?: any;
+  /** Danh sách từ vựng hiển thị trong trang chi tiết buổi học (LessonView). */
+  vocabulary?: VocabWord[];
+  /** Danh sách ngữ pháp hiển thị trong trang chi tiết buổi học (LessonView). */
+  grammar?: GrammarPoint[];
   /**
    * File trình chiếu/bài giảng cho bài học này - PDF hoặc PPT/PPTX.
    * Có thể là:

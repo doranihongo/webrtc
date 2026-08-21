@@ -41,6 +41,11 @@ export default function PdfSlideShow({ url, title, onClose }: PdfSlideShowProps)
   const [containerW, setContainerW] = useState(0);
   const renderTaskRef = useRef<pdfjsLib.RenderTask | null>(null);
   const docRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
+  // .destroy() nằm trên PDFDocumentLoadingTask (trả về từ getDocument()),
+  // KHÔNG nằm trên PDFDocumentProxy (giá trị đã resolve từ .promise) - gọi
+  // nhầm trên PDFDocumentProxy trước đây bị nuốt lỗi âm thầm bởi try/catch
+  // rỗng bên dưới nên tài liệu không bao giờ thực sự được giải phóng.
+  const loadingTaskRef = useRef<pdfjsLib.PDFDocumentLoadingTask | null>(null);
   // Component còn mounted hay không - chặn setState/render sau khi đóng
   const mountedRef = useRef(true);
 
@@ -57,18 +62,20 @@ export default function PdfSlideShow({ url, title, onClose }: PdfSlideShowProps)
     setLoading(true);
     setError(null);
 
-    pdfjsLib
-      .getDocument({
-        url,
-        // File nằm sau lớp chặn auth của server (cookie sb_page_token) -
-        // bắt buộc gửi kèm credential để PDF.js tải được file như người
-        // dùng đang đăng nhập.
-        withCredentials: true,
-      })
-      .promise.then((loadedDoc) => {
+    const loadingTask = pdfjsLib.getDocument({
+      url,
+      // File nằm sau lớp chặn auth của server (cookie sb_page_token) -
+      // bắt buộc gửi kèm credential để PDF.js tải được file như người
+      // dùng đang đăng nhập.
+      withCredentials: true,
+    });
+    loadingTaskRef.current = loadingTask;
+
+    loadingTask.promise
+      .then((loadedDoc) => {
         if (cancelled || !mountedRef.current) {
           try {
-            loadedDoc.destroy();
+            loadingTask.destroy();
           } catch {
             /* bỏ qua */
           }
@@ -99,10 +106,11 @@ export default function PdfSlideShow({ url, title, onClose }: PdfSlideShowProps)
         /* bỏ qua */
       }
       try {
-        docRef.current?.destroy();
+        loadingTaskRef.current?.destroy();
       } catch {
         /* bỏ qua */
       }
+      loadingTaskRef.current = null;
       docRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -139,6 +147,7 @@ export default function PdfSlideShow({ url, title, onClose }: PdfSlideShowProps)
 
       renderTaskRef.current?.cancel();
       const task = pdfPage.render({
+        canvas,
         canvasContext: ctx,
         viewport,
         transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
