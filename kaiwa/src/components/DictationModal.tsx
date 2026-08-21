@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Howl } from 'howler';
 import confetti from 'canvas-confetti';
+import { Headphones } from 'lucide-react';
 import { convertToKana } from '../utils/helpers';
 
 const GITHUB_BASE = "https://cdn.jsdelivr.net/gh/datto02/luyenvietkanji@main";
@@ -38,6 +39,10 @@ export default function DictationModal({ isOpen, onClose }: DictationModalProps)
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const hasFinishedRef = useRef(false);
+  // Popup xác nhận trước khi đóng hẳn tool - tránh bấm nhầm dấu X mất tiến
+  // trình đang luyện. Mọi nút X đều chỉ mở popup này, nút "Đóng" trong popup
+  // mới thật sự gọi handleClose().
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   const handleClose = () => {
     onClose();
@@ -108,58 +113,58 @@ export default function DictationModal({ isOpen, onClose }: DictationModalProps)
   };
 
   const renderBooks = () => (
-    <div className="flex flex-col h-full bg-white overflow-hidden relative">
-      <div className="flex justify-between items-center px-6 py-5 border-b border-zinc-100 bg-white z-10 shadow-sm shrink-0">
-        <h2 className="text-xl font-black text-zinc-900 uppercase tracking-tight">Luyện Nghe Chính Tả</h2>
-        <button onClick={handleClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-100 text-zinc-500 hover:bg-red-50 hover:text-red-500 transition-all cursor-pointer">✕</button>
+    <div className="flex flex-col h-full bg-blue-900 overflow-hidden relative">
+      <div className="flex justify-between items-center px-6 py-5 border-b border-surface-border bg-blue-800 z-10 shadow-sm shrink-0">
+        <h2 className="text-xl font-black text-white uppercase tracking-tight">Luyện Nghe Chính Tả</h2>
+        <button onClick={() => setShowCloseConfirm(true)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-[#8fb0ce] hover:bg-red-500/20 hover:text-red-400 transition-all cursor-pointer">✕</button>
       </div>
 
       <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
         <div className="flex flex-col gap-4">
           <button 
             onClick={() => handleLoadBook('tangon5', 'Tango N5')}
-            className="w-full p-5 sm:p-6 bg-white border border-zinc-200 rounded-2xl hover:border-indigo-400 hover:shadow-md transition-all flex flex-col items-start active:scale-95 group relative overflow-hidden cursor-pointer"
+            className="w-full p-5 sm:p-6 bg-blue-700 border-2 border-transparent rounded-2xl hover:border-blue-300 hover:shadow-md transition-all flex flex-col items-start active:scale-95 group relative overflow-hidden cursor-pointer"
           >
             <div className="flex justify-between items-center w-full gap-4">
-              <span className="text-lg sm:text-xl font-black text-zinc-900 uppercase text-left leading-tight group-hover:text-indigo-600 transition-colors">
+              <span className="text-lg sm:text-xl font-black text-white uppercase text-left leading-tight transition-colors">
                 Tango N5
               </span>
             </div>
-            <span className="text-xs sm:text-sm font-bold text-zinc-500 mt-1.5 text-left">TỪ ĐƠN & VÍ DỤ</span>
+            <span className="text-xs sm:text-sm font-bold text-blue-100 mt-1.5 text-left">TỪ ĐƠN & VÍ DỤ</span>
           </button>
           <button 
             onClick={() => handleLoadBook('tangon4', 'Tango N4')}
-            className="w-full p-5 sm:p-6 bg-white border border-zinc-200 rounded-2xl hover:border-indigo-400 hover:shadow-md transition-all flex flex-col items-start active:scale-95 group relative overflow-hidden cursor-pointer"
+            className="w-full p-5 sm:p-6 bg-blue-700 border-2 border-transparent rounded-2xl hover:border-blue-300 hover:shadow-md transition-all flex flex-col items-start active:scale-95 group relative overflow-hidden cursor-pointer"
           >
             <div className="flex justify-between items-center w-full gap-4">
-              <span className="text-lg sm:text-xl font-black text-zinc-900 uppercase text-left leading-tight group-hover:text-indigo-600 transition-colors">
+              <span className="text-lg sm:text-xl font-black text-white uppercase text-left leading-tight transition-colors">
                 Tango N4
               </span>
             </div>
-            <span className="text-xs sm:text-sm font-bold text-zinc-500 mt-1.5 text-left">TỪ ĐƠN & VÍ DỤ</span>
+            <span className="text-xs sm:text-sm font-bold text-blue-100 mt-1.5 text-left">TỪ ĐƠN & VÍ DỤ</span>
           </button>
 
           <button 
             onClick={() => handleLoadBook('minna1', 'MINNA NO NIHONGO N5')}
-            className="w-full p-5 sm:p-6 bg-white border border-zinc-200 rounded-2xl hover:border-indigo-400 hover:shadow-md transition-all flex flex-col items-start active:scale-95 group relative overflow-hidden cursor-pointer"
+            className="w-full p-5 sm:p-6 bg-blue-700 border-2 border-transparent rounded-2xl hover:border-blue-300 hover:shadow-md transition-all flex flex-col items-start active:scale-95 group relative overflow-hidden cursor-pointer"
           >
             <div className="flex justify-between items-center w-full gap-4">
-              <span className="text-lg sm:text-xl font-black text-zinc-900 uppercase text-left leading-tight group-hover:text-indigo-600 transition-colors">
+              <span className="text-lg sm:text-xl font-black text-white uppercase text-left leading-tight transition-colors">
                 MINNA NO NIHONGO N5
               </span>
             </div>
-            <span className="text-xs sm:text-sm font-bold text-zinc-500 mt-1.5 text-left">TỪ ĐƠN</span>
+            <span className="text-xs sm:text-sm font-bold text-blue-100 mt-1.5 text-left">TỪ ĐƠN</span>
           </button>
           <button 
             onClick={() => handleLoadBook('minna2', 'MINNA NO NIHONGO N4')}
-            className="w-full p-5 sm:p-6 bg-white border border-zinc-200 rounded-2xl hover:border-indigo-400 hover:shadow-md transition-all flex flex-col items-start active:scale-95 group relative overflow-hidden cursor-pointer"
+            className="w-full p-5 sm:p-6 bg-blue-700 border-2 border-transparent rounded-2xl hover:border-blue-300 hover:shadow-md transition-all flex flex-col items-start active:scale-95 group relative overflow-hidden cursor-pointer"
           >
             <div className="flex justify-between items-center w-full gap-4">
-              <span className="text-lg sm:text-xl font-black text-zinc-900 uppercase text-left leading-tight group-hover:text-indigo-600 transition-colors">
+              <span className="text-lg sm:text-xl font-black text-white uppercase text-left leading-tight transition-colors">
                 MINNA NO NIHONGO N4
               </span>
             </div>
-            <span className="text-xs sm:text-sm font-bold text-zinc-500 mt-1.5 text-left">TỪ ĐƠN</span>
+            <span className="text-xs sm:text-sm font-bold text-blue-100 mt-1.5 text-left">TỪ ĐƠN</span>
           </button>
 
 
@@ -169,15 +174,15 @@ export default function DictationModal({ isOpen, onClose }: DictationModalProps)
   );
 
   const renderParts = () => (
-    <div className="flex flex-col h-full bg-zinc-50 overflow-hidden">
-      <div className="p-4 bg-white border-b border-zinc-200 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+    <div className="flex flex-col h-full bg-blue-900 overflow-hidden">
+      <div className="p-4 bg-blue-800 border-b border-surface-border flex items-center justify-between sticky top-0 z-10 shadow-sm">
         <div className="flex items-center gap-3">
-          <button onClick={() => setView('books')} className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-600 transition-colors outline-none cursor-pointer">
+          <button onClick={() => setView('books')} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/15 text-[#8fb0ce] transition-colors outline-none cursor-pointer">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </button>
-          <h2 className="text-sm font-black text-zinc-900 uppercase">{selectedBookTitle}</h2>
+          <h2 className="text-sm font-black text-white uppercase">{selectedBookTitle}</h2>
         </div>
-        <button onClick={handleClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-100 text-zinc-500 hover:bg-red-50 hover:text-red-500 transition-all outline-none cursor-pointer">✕</button>
+        <button onClick={() => setShowCloseConfirm(true)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-[#8fb0ce] hover:bg-red-500/20 hover:text-red-400 transition-all outline-none cursor-pointer">✕</button>
       </div>
 
       <div className="p-4 space-y-3 overflow-y-auto custom-scrollbar flex-1">
@@ -185,14 +190,14 @@ export default function DictationModal({ isOpen, onClose }: DictationModalProps)
           <button 
             key={idx}
             onClick={() => { setCurrentPartIndex(idx); setView('practice'); }}
-            className="w-full p-4 sm:p-5 bg-white border border-zinc-200 rounded-xl text-left md:hover:border-indigo-400 md:hover:shadow-md transition-all active:scale-[0.98] flex items-center justify-between group outline-none cursor-pointer"
+            className="w-full p-4 sm:p-5 bg-blue-700 border-2 border-transparent rounded-xl text-left md:hover:border-blue-300 md:hover:shadow-md transition-all active:scale-[0.98] flex items-center justify-between group outline-none cursor-pointer"
           >
             <div className="flex flex-col">
-              <span className="text-base sm:text-lg font-black text-zinc-800 font-sans md:group-hover:text-indigo-600 transition-colors uppercase tracking-wide">{part.title}</span>
-              <span className="text-xs font-bold text-zinc-400 mt-1">{part.vocabularies?.length || 0} từ vựng</span>
+              <span className="text-base sm:text-lg font-black text-white font-sans transition-colors uppercase tracking-wide">{part.title}</span>
+              <span className="text-xs font-bold text-blue-100 mt-1">{part.vocabularies?.length || 0} từ vựng</span>
             </div>
-            <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center md:group-hover:bg-indigo-50 transition-colors">
-              <svg className="w-4 h-4 text-zinc-400 md:group-hover:text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center md:group-hover:bg-white/25 transition-colors">
+              <svg className="w-4 h-4 text-blue-100 md:group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             </div>
           </button>
         ))}
@@ -201,16 +206,16 @@ export default function DictationModal({ isOpen, onClose }: DictationModalProps)
   );
 
   return (
-    <div className="fixed inset-0 z-[500] flex justify-center items-center bg-zinc-900/90 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
-      <div className="bg-white w-full h-full sm:h-[90vh] max-w-2xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 relative">
+    <div className="fixed inset-0 z-[500] flex justify-center items-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+      <div className="bg-blue-900 w-full h-full sm:h-[90vh] max-w-2xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 relative">
         {isLoading && (
-          <div className="absolute inset-0 z-[600] flex flex-col items-center justify-center bg-white/90 backdrop-blur-md">
+          <div className="absolute inset-0 z-[600] flex flex-col items-center justify-center bg-blue-900/90 backdrop-blur-md">
             <div className="text-center">
-              <span className="text-xs font-bold text-zinc-900 uppercase tracking-widest animate-pulse mb-4 block">
+              <span className="text-xs font-bold text-white uppercase tracking-widest animate-pulse mb-4 block">
                 Đang tải dữ liệu... {progress}%
               </span>
-              <div className="w-48 bg-zinc-200 rounded-full h-1.5 overflow-hidden mx-auto">
-                <div className="bg-zinc-900 h-full transition-all duration-300 ease-out" style={{ width: `${progress}%` }}></div>
+              <div className="w-48 bg-white/15 rounded-full h-1.5 overflow-hidden mx-auto">
+                <div className="bg-blue-600 h-full transition-all duration-300 ease-out" style={{ width: `${progress}%` }}></div>
               </div>
             </div>
           </div>
@@ -222,13 +227,40 @@ export default function DictationModal({ isOpen, onClose }: DictationModalProps)
           <DictationPracticeView 
             lessonData={partsList[currentPartIndex]} 
             onBack={() => setView('parts')}
-            onClose={handleClose}
+            onClose={() => setShowCloseConfirm(true)}
             onLessonComplete={() => {
               hasFinishedRef.current = true;
             }}
           />
         )}
       </div>
+
+      {/* Popup xác nhận đóng tool - tránh bấm nhầm dấu X mất tiến trình
+          đang luyện (xem showCloseConfirm ở trên). */}
+      {showCloseConfirm && (
+        <div className="fixed inset-0 z-[800] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowCloseConfirm(false)}>
+          <div className="bg-blue-900 border border-surface-border rounded-3xl max-w-sm w-full p-6 sm:p-8 shadow-2xl flex flex-col text-center" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xl font-bold text-white mb-8 flex items-center justify-center gap-2.5">
+              <Headphones className="w-5 h-5 text-blue-300 shrink-0" />
+              Đóng Nghe chính tả?
+            </h3>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowCloseConfirm(false)}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-[#8fb0ce] bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => { setShowCloseConfirm(false); handleClose(); }}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -286,7 +318,7 @@ function DictationPracticeView({ lessonData, onBack, onClose, onLessonComplete }
         return (
           <ruby key={index} className="leading-loose mx-0.5">
             {match[1]}
-            {isShow && <rt className="text-[11px] sm:text-xs text-indigo-500 font-bold select-none"><span className="sm:inline-block sm:-translate-y-0.5">{match[2]}</span></rt>}
+            {isShow && <rt className="text-[11px] sm:text-xs text-blue-300 font-bold select-none"><span className="sm:inline-block sm:-translate-y-0.5">{match[2]}</span></rt>}
           </ruby>
         );
       }
@@ -702,7 +734,7 @@ function DictationPracticeView({ lessonData, onBack, onClose, onLessonComplete }
 
     const fullPlainText = tokens.map(t => t.plain).join('');
     const startIndex = fullPlainText.indexOf(wordToMask);
-    if (startIndex === -1) return <span className="font-sans leading-loose text-zinc-900">{renderFurigana(rawSentence, true)}</span>;
+    if (startIndex === -1) return <span className="font-sans leading-loose text-white">{renderFurigana(rawSentence, true)}</span>;
     const endIndex = startIndex + wordToMask.length;
 
     let beforeRaw = "";
@@ -728,15 +760,15 @@ function DictationPracticeView({ lessonData, onBack, onClose, onLessonComplete }
     const isRevealed = showHint || status === 'retyping' || (status === 'correct' && isAutoReview);
 
     return (
-      <span className="font-sans leading-loose text-zinc-900">
+      <span className="font-sans leading-loose text-white">
         {renderFurigana(beforeRaw, true)}
-        <span className={`px-1.5 mx-1 rounded-md transition-all duration-300 inline-block align-baseline min-w-[50px] leading-none pt-1 pb-0.5 ${isRevealed ? 'bg-green-100 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'text-transparent bg-zinc-200'}`}>
+        <span className={`px-1.5 mx-1 rounded-md transition-all duration-300 inline-block align-baseline min-w-[50px] leading-none pt-1 pb-0.5 ${isRevealed ? 'bg-green-100 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'text-transparent bg-white/20'}`}>
           {isRevealed ? (
             <span className="font-bold animate-in fade-in duration-300 whitespace-nowrap inline-block leading-none">
               <ruby>
-                <span className="text-zinc-900">{wordToMask}</span>
+                <span className="text-green-900">{wordToMask}</span>
                 {wordToMask !== readingText && (
-                  <rt className="text-[11px] sm:text-xs text-indigo-600 font-bold select-none"><span className="sm:inline-block sm:-translate-y-0.5">{readingText}</span></rt>
+                  <rt className="text-[11px] sm:text-xs text-blue-700 font-bold select-none"><span className="sm:inline-block sm:-translate-y-0.5">{readingText}</span></rt>
                 )}
               </ruby>
             </span>
@@ -788,48 +820,48 @@ function DictationPracticeView({ lessonData, onBack, onClose, onLessonComplete }
   }
 
   return (
-    <div className="flex flex-col h-full bg-white overflow-hidden relative">
-      <div className="px-4 py-3 border-b border-zinc-100 flex items-center justify-between z-10 shrink-0">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-900 px-2 py-1.5 rounded-lg hover:bg-zinc-100 transition-colors outline-none cursor-pointer">
+    <div className="flex flex-col h-full bg-blue-900 overflow-hidden relative">
+      <div className="px-4 py-3 border-b border-surface-border flex items-center justify-between z-10 shrink-0">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-xs font-bold text-[#8fb0ce] hover:text-white px-2 py-1.5 rounded-lg hover:bg-white/10 transition-colors outline-none cursor-pointer">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           QUAY LẠI
         </button>
-        <span className="absolute left-1/2 -translate-x-1/2 text-[10px] font-black text-zinc-800 tracking-widest bg-zinc-100 px-3 py-1.5 rounded-xl border border-zinc-200">
+        <span className="absolute left-1/2 -translate-x-1/2 text-[10px] font-black text-white/80 tracking-widest bg-white/10 px-3 py-1.5 rounded-xl border border-white/10">
           {currentIndex + 1} / {queue.length}
         </span>
-        <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-100 text-zinc-500 hover:bg-red-50 hover:text-red-500 transition-all outline-none cursor-pointer">✕</button>
+        <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-[#8fb0ce] hover:bg-red-500/20 hover:text-red-400 transition-all outline-none cursor-pointer">✕</button>
       </div>
 
       {!finished ? (
         <div className="flex-1 flex flex-col p-4 sm:p-6 w-full h-full relative pb-6 sm:pb-10">
           <div className={`transition-all duration-300 ${isInputFocused ? 'flex-1 sm:flex-none sm:hidden' : 'hidden'}`}></div>
         
-          <div className="w-full mx-auto mb-2 flex flex-col sm:flex-row gap-2 justify-center items-center bg-zinc-50 p-1.5 sm:p-2 rounded-2xl border border-zinc-100 shadow-sm shrink-0"> 
+          <div className="w-full mx-auto mb-2 flex flex-col sm:flex-row gap-2 justify-center items-center bg-white/5 p-1.5 sm:p-2 rounded-2xl border border-white/10 shadow-sm shrink-0"> 
             {supportSentence && (
-              <div className="flex w-full sm:w-auto justify-between sm:justify-center gap-1 bg-zinc-200/50 p-1 rounded-xl">
-                <button onMouseDown={(e) => e.preventDefault()} onClick={() => setMode('word')} className={`flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all outline-none cursor-pointer ${mode === 'word' ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200' : 'text-zinc-500 hover:text-zinc-800'}`}>
+              <div className="flex w-full sm:w-auto justify-between sm:justify-center gap-1 bg-white/10 p-1 rounded-xl">
+                <button onMouseDown={(e) => e.preventDefault()} onClick={() => setMode('word')} className={`flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all outline-none cursor-pointer ${mode === 'word' ? 'bg-blue-700 text-white shadow-md border border-blue-700' : 'text-[#8fb0ce] hover:text-white'}`}>
                   TỪ ĐƠN
                 </button>
-                <button onMouseDown={(e) => e.preventDefault()} onClick={() => setMode('hidden_word')} className={`flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all outline-none cursor-pointer ${mode === 'hidden_word' ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200' : 'text-zinc-500 hover:text-zinc-800'}`}>
+                <button onMouseDown={(e) => e.preventDefault()} onClick={() => setMode('hidden_word')} className={`flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all outline-none cursor-pointer ${mode === 'hidden_word' ? 'bg-blue-700 text-white shadow-md border border-blue-700' : 'text-[#8fb0ce] hover:text-white'}`}>
                   TỪ BỊ ẨN
                 </button>
-                <button onMouseDown={(e) => e.preventDefault()} onClick={() => setMode('full_sentence')} className={`flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all outline-none cursor-pointer ${mode === 'full_sentence' ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200' : 'text-zinc-500 hover:text-zinc-800'}`}>
+                <button onMouseDown={(e) => e.preventDefault()} onClick={() => setMode('full_sentence')} className={`flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all outline-none cursor-pointer ${mode === 'full_sentence' ? 'bg-blue-700 text-white shadow-md border border-blue-700' : 'text-[#8fb0ce] hover:text-white'}`}>
                   CẢ CÂU
                 </button>
               </div>
             )}
 
             <div className="flex w-full sm:w-auto justify-between sm:justify-center gap-1.5 sm:gap-2">
-              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setShowVi(!showVi)} className={`flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-xl text-[10px] font-bold border transition-all shadow-sm outline-none cursor-pointer ${showVi ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100'}`}>
+              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setShowVi(!showVi)} className={`flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-xl text-[10px] font-bold border transition-all shadow-sm outline-none cursor-pointer ${showVi ? 'bg-blue-700 text-white border-blue-700' : 'bg-white/10 text-[#8fb0ce] border-white/10 hover:bg-white/15'}`}>
                 DỊCH
               </button>
-              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setIsLooping(!isLooping)} className={`flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-xl text-[10px] font-bold border transition-all shadow-sm outline-none cursor-pointer ${isLooping ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100'}`}>
+              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setIsLooping(!isLooping)} className={`flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-xl text-[10px] font-bold border transition-all shadow-sm outline-none cursor-pointer ${isLooping ? 'bg-blue-700 text-white border-blue-700' : 'bg-white/10 text-[#8fb0ce] border-white/10 hover:bg-white/15'}`}>
                 LẶP
               </button>
-              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setIsAutoReview(!isAutoReview)} className={`flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-xl text-[10px] font-bold border transition-all shadow-sm outline-none cursor-pointer ${isAutoReview ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100'}`}>
+              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setIsAutoReview(!isAutoReview)} className={`flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-xl text-[10px] font-bold border transition-all shadow-sm outline-none cursor-pointer ${isAutoReview ? 'bg-blue-700 text-white border-blue-700' : 'bg-white/10 text-[#8fb0ce] border-white/10 hover:bg-white/15'}`}>
                 XEM LẠI
               </button>
-              <button onMouseDown={(e) => e.preventDefault()} onClick={cyclePlaybackRate} className="flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-xl text-[10px] font-bold border transition-all shadow-sm outline-none bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100 cursor-pointer">
+              <button onMouseDown={(e) => e.preventDefault()} onClick={cyclePlaybackRate} className="flex-1 flex items-center justify-center whitespace-nowrap px-1 sm:px-4 py-1.5 rounded-xl text-[10px] font-bold border transition-all shadow-sm outline-none bg-white/10 text-[#8fb0ce] border-white/10 hover:bg-white/15 cursor-pointer">
                 {playbackRate}x
               </button>
             </div>
@@ -841,7 +873,7 @@ function DictationPracticeView({ lessonData, onBack, onClose, onLessonComplete }
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={handleManualPrev}
                 disabled={currentIndex === 0}
-                className={`${sideBtnSize} rounded-full flex items-center justify-center transition-all duration-300 active:scale-90 outline-none ${currentIndex === 0 ? 'bg-zinc-50 text-zinc-300 border border-zinc-100 cursor-not-allowed' : 'bg-white border-2 border-zinc-200 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 shadow-sm cursor-pointer'}`}
+                className={`${sideBtnSize} rounded-full flex items-center justify-center transition-all duration-300 active:scale-90 outline-none ${currentIndex === 0 ? 'bg-white/5 text-white/25 border border-white/10 cursor-not-allowed' : 'bg-white/10 border-2 border-white/15 text-[#8fb0ce] hover:border-white/25 hover:bg-white/15 shadow-sm cursor-pointer'}`}
               >
                 <svg className={sideIconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
               </button>
@@ -850,13 +882,13 @@ function DictationPracticeView({ lessonData, onBack, onClose, onLessonComplete }
                 <button 
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={playCurrentAudio}
-                  className={`${playBtnSize} rounded-full flex items-center justify-center shadow-md transition-all duration-300 active:scale-90 outline-none cursor-pointer ${isAudioLoading ? 'bg-zinc-200 cursor-wait' : isPlaying ? 'bg-indigo-600 text-white' : 'bg-zinc-900 text-white hover:bg-black'}`}
+                  className={`${playBtnSize} rounded-full flex items-center justify-center shadow-md transition-all duration-300 active:scale-90 outline-none cursor-pointer ${isAudioLoading ? 'bg-white/20 cursor-wait' : isPlaying ? 'bg-blue-600 text-white' : 'bg-blue-700 text-white hover:bg-blue-600'}`}
                 >
                   {isAudioLoading ? (
                     <div className="flex space-x-1">
-                      <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce"></div>
-                      <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
-                      <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
+                      <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce"></div>
+                      <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
+                      <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
                     </div>
                   ) : isPlaying ? (
                     <svg className={playIconSize} viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"></rect><rect x="14" y="5" width="4" height="14"></rect></svg>
@@ -870,7 +902,7 @@ function DictationPracticeView({ lessonData, onBack, onClose, onLessonComplete }
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={handleManualNext}
                 disabled={currentIndex === queue.length - 1}
-                className={`${sideBtnSize} rounded-full flex items-center justify-center transition-all duration-300 active:scale-90 outline-none ${currentIndex === queue.length - 1 ? 'bg-zinc-50 text-zinc-300 border border-zinc-100 cursor-not-allowed' : 'bg-white border-2 border-zinc-200 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 shadow-sm cursor-pointer'}`}
+                className={`${sideBtnSize} rounded-full flex items-center justify-center transition-all duration-300 active:scale-90 outline-none ${currentIndex === queue.length - 1 ? 'bg-white/5 text-white/25 border border-white/10 cursor-not-allowed' : 'bg-white/10 border-2 border-white/15 text-[#8fb0ce] hover:border-white/25 hover:bg-white/15 shadow-sm cursor-pointer'}`}
               >
                 <svg className={sideIconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
               </button>
@@ -879,11 +911,11 @@ function DictationPracticeView({ lessonData, onBack, onClose, onLessonComplete }
             {isShowingText && (
               <div className="w-full flex justify-center animate-in fade-in zoom-in-95 duration-300">
                 {(effectiveMode === 'hidden_word' || effectiveMode === 'full_sentence') ? (
-                  <div className="text-lg sm:text-xl font-bold text-zinc-800 text-center w-full leading-loose px-2">
+                  <div className="text-lg sm:text-xl font-bold text-white text-center w-full leading-loose px-2">
                     {(effectiveMode === 'full_sentence' && !showHint && status !== 'retyping' && !(status === 'correct' && isAutoReview)) ? (
-                      <span className="text-zinc-300 font-sans tracking-widest">＿＿＿＿＿＿＿＿＿＿＿＿</span>
+                      <span className="text-white/30 font-sans tracking-widest">＿＿＿＿＿＿＿＿＿＿＿＿</span>
                     ) : effectiveMode === 'full_sentence' ? (
-                      <div className="font-sans leading-loose text-zinc-900 w-full pt-2 break-words">
+                      <div className="font-sans leading-loose text-white w-full pt-2 break-words">
                         {renderFurigana(currentItem.sentence, true)}
                       </div>
                     ) : (
@@ -896,12 +928,12 @@ function DictationPracticeView({ lessonData, onBack, onClose, onLessonComplete }
                     )}
                   </div>
                 ) : (
-                  <div className="text-center flex flex-col items-center justify-center bg-indigo-50 border border-indigo-100 px-4 py-1.5 rounded-lg inline-flex w-auto min-w-[80px]">
-                    <span className={`text-lg sm:text-xl font-black text-indigo-700 ${currentItem.word !== currentItem.reading ? 'mb-0.5' : ''}`}>
+                  <div className="text-center flex flex-col items-center justify-center bg-blue-50 border border-blue-100 px-4 py-1.5 rounded-lg inline-flex w-auto min-w-[80px]">
+                    <span className={`text-lg sm:text-xl font-black text-blue-700 ${currentItem.word !== currentItem.reading ? 'mb-0.5' : ''}`}>
                       {currentItem.word}
                     </span>
                     {currentItem.word !== currentItem.reading && (
-                      <span className="text-sm sm:text-base font-bold text-indigo-500 tracking-widest">
+                      <span className="text-sm sm:text-base font-bold text-blue-700 tracking-widest">
                         {currentItem.reading}
                       </span>
                     )}
@@ -911,7 +943,7 @@ function DictationPracticeView({ lessonData, onBack, onClose, onLessonComplete }
             )}
 
             {(showVi || (status === 'correct' && isAutoReview)) && (
-              <p className="text-[13px] sm:text-sm font-medium text-zinc-500 text-center px-4 w-full max-w-md animate-in fade-in slide-in-from-bottom-2"> 
+              <p className="text-[13px] sm:text-sm font-medium text-[#dceaf3] text-center px-4 w-full max-w-md animate-in fade-in slide-in-from-bottom-2">
                 {(effectiveMode === 'hidden_word' || effectiveMode === 'full_sentence') ? currentItem.sentenceVi : currentItem.meaning}
               </p>
             )}
@@ -929,15 +961,15 @@ function DictationPracticeView({ lessonData, onBack, onClose, onLessonComplete }
               onFocus={() => setIsInputFocused(true)} 
               onBlur={() => setIsInputFocused(false)}
               placeholder={status === 'retyping' ? "Nhập lại từ vựng" : "Nhập từ vựng"}
-              className={`w-full p-3.5 sm:p-4 text-center text-lg sm:text-xl font-bold border-2 rounded-2xl outline-none transition-all shadow-sm ${status === 'correct' ? 'border-green-500 bg-green-50 text-green-700 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : status === 'wrong' || status === 'retyping' ? 'border-red-500 bg-red-50 text-red-700 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-zinc-200 focus:border-indigo-500 bg-zinc-50'}`}
+              className={`w-full p-3.5 sm:p-4 text-center text-lg sm:text-xl font-bold border-2 rounded-2xl outline-none transition-all shadow-sm ${status === 'correct' ? 'border-green-500 bg-green-50 text-green-700 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : status === 'wrong' || status === 'retyping' ? 'border-red-500 bg-red-50 text-red-700 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-blue-200 focus:border-blue-600 bg-blue-50 text-blue-900'}`}
             />
             
             <div className="flex justify-between items-center px-2">
-              <button onMouseDown={(e) => e.preventDefault()} onClick={handleShowAnswer} disabled={showHint || status === 'retyping'} className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest transition-colors flex items-center gap-1.5 outline-none cursor-pointer ${showHint || status === 'retyping' ? 'text-zinc-300 cursor-not-allowed' : 'text-zinc-500 hover:text-indigo-600 active:scale-95'}`}>
+              <button onMouseDown={(e) => e.preventDefault()} onClick={handleShowAnswer} disabled={showHint || status === 'retyping'} className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest transition-colors flex items-center gap-1.5 outline-none cursor-pointer ${showHint || status === 'retyping' ? 'text-white/25 cursor-not-allowed' : 'text-[#dceaf3] hover:text-blue-300 active:scale-95'}`}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
                 ĐÁP ÁN
               </button>
-              <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 transition-all duration-300 ${status === 'correct' ? 'text-red-400/80 animate-pulse' : 'text-zinc-400'}`}>
+              <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 transition-all duration-300 ${status === 'correct' ? 'text-red-400/80 animate-pulse' : 'text-[#8fb0ce]'}`}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 10 4 15 9 20"></polyline><path d="M20 4v7a4 4 0 0 1-4 4H4"></path></svg>
                 {status === 'correct' ? (isAutoReview ? 'Bấm Enter để chuyển câu...' : 'Đang tự động chuyển...') : 'Bấm Enter để kiểm tra'}
               </span>
@@ -947,13 +979,13 @@ function DictationPracticeView({ lessonData, onBack, onClose, onLessonComplete }
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center p-6">
           <div className="text-6xl mb-6 animate-bounce cursor-pointer hover:scale-125 transition-transform" onClick={triggerConfetti}>🎉</div>
-          <h3 className="text-2xl font-black text-zinc-900 mb-2 uppercase tracking-wide">XUẤT SẮC!</h3>
-          <p className="text-zinc-500 mb-8 text-sm font-medium">Bạn đã hoàn thành phần luyện tập chép chính tả.</p>
+          <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-wide">XUẤT SẮC!</h3>
+          <p className="text-[#8fb0ce] mb-8 text-sm font-medium">Bạn đã hoàn thành phần luyện tập chép chính tả.</p>
           <div className="space-y-3 w-full max-w-xs">
-            <button onClick={() => initLesson(true)} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-[11px] tracking-widest uppercase shadow-lg shadow-indigo-200 active:scale-95 transition-all outline-none cursor-pointer">
+            <button onClick={() => initLesson(true)} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-[11px] tracking-widest uppercase shadow-lg shadow-blue-200 active:scale-95 transition-all outline-none cursor-pointer">
               HỌC LẠI TỪ ĐẦU
             </button>
-            <button onClick={onBack} className="w-full py-4 bg-white border-2 border-zinc-200 text-zinc-500 hover:text-zinc-800 hover:border-zinc-800 font-black text-[11px] uppercase tracking-widest rounded-xl transition-all active:scale-95 outline-none cursor-pointer">
+            <button onClick={onBack} className="w-full py-4 bg-white/10 border-2 border-white/15 text-[#8fb0ce] hover:text-white hover:border-white/25 font-black text-[11px] uppercase tracking-widest rounded-xl transition-all active:scale-95 outline-none cursor-pointer">
               VỀ DANH SÁCH BÀI
             </button>
           </div>

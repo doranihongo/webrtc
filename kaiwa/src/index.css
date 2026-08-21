@@ -105,10 +105,14 @@ body {
 .hide-scrollbar::-webkit-scrollbar { display: none; }
 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* Trắng mờ (không phải zinc-200 xám sáng) - mọi nơi dùng class này giờ đều
+   là nền tối (Home/LessonView/3 modal công cụ học), zinc-200 nổi bật hẳn lên
+   như 1 vệt xám sáng lạc quẻ. Trắng mờ tự "hoà" vào bất kỳ nền tối nào bên
+   dưới, đúng yêu cầu "ẩn đi hoặc cho giống màu nền". */
 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-radius: 10px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background-color: var(--color-zinc-200); border-radius: 10px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: var(--color-zinc-400); }
+.custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.15); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.3); }
 
 /* Thanh tua/âm lượng tự code cho tool Shadowing YouTube (khung nhúng bị
    khoá, thay UI gốc của YouTube - xem YoutubeShadowingModal.tsx). Nằm đè

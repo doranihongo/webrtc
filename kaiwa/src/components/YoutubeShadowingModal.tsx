@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
-  Youtube, X, Loader2, AlertTriangle, Repeat1, Gauge, Link2, ArrowLeft, PlayCircle, ListVideo, Download,
+  Youtube, X, Loader2, AlertTriangle, Repeat1, Link2, ArrowLeft, PlayCircle, ListVideo, Download,
   Heart, Check, Type, Languages, Crosshair, Play, Pause, Volume2, VolumeX,
 } from 'lucide-react';
 import {
@@ -43,6 +43,10 @@ interface PresetVideo {
   id: number | string;
   title: string;
   youtube_url: string;
+  // KHÔNG nằm trong kết quả tải danh sách (useEffect tải presetVideos chỉ
+  // select cột nhẹ) - field này chỉ có giá trị khi handlePickPreset tự
+  // fetch riêng theo id lúc người dùng bấm vào 1 video, khai báo ở đây cho
+  // tiện dùng chung type Segment[] chứ object trong presetVideos luôn undefined.
   subtitle_json?: Segment[] | null;
   // Cột "duration" (text) trong kaiwa_shadowing_videos - admin điền tay dạng
   // hiển thị sẵn kiểu YouTube ("5:23", "1:02:10"...), không phải số giây.
@@ -109,6 +113,10 @@ function looksLikeYoutubeLink(value: string): boolean {
 }
 
 export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadowingModalProps) {
+  // Popup xác nhận trước khi đóng hẳn tool - tránh bấm nhầm dấu X mất tiến
+  // trình đang xem/luyện. Nút X chỉ mở popup này, nút "Đóng" trong popup
+  // mới thật sự gọi onClose().
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [stage, setStage] = useState<Stage>('list');
   const [linkValue, setLinkValue] = useState('');
   const [inlineHint, setInlineHint] = useState<string | null>(null);
@@ -231,7 +239,11 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
 
     supabase
       .from('kaiwa_shadowing_videos')
-      .select('id, title, youtube_url, subtitle_json, duration, created_at')
+      // KHÔNG select subtitle_json ở đây - transcript đầy đủ (romaji+dịch mọi
+      // câu) chỉ cần đúng 1 video lúc mở xem, tải hết cho cả danh sách vừa
+      // tốn băng thông vừa chậm màn danh sách. Cột này được fetch riêng theo
+      // từng video trong handlePickPreset khi người dùng thật sự bấm vào.
+      .select('id, title, youtube_url, duration, created_at')
       .eq('is_active', true)
       .order('sort_order', { ascending: true })
       .then(({ data, error }: { data: PresetVideo[] | null; error: any }) => {
@@ -537,14 +549,30 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
 
   // Video có sẵn đã có subtitle_json (admin làm giàu romaji/vi rồi dán lại
   // Supabase, xem handleExportJson) -> dùng thẳng, khỏi gọi lại yt-dlp.
-  // Thiếu/rỗng thì rơi về đường cũ (gọi /kaiwa/shadowing/transcript).
-  const handlePickPreset = (video: PresetVideo) => {
-    if (Array.isArray(video.subtitle_json) && video.subtitle_json.length > 0) {
+  // Thiếu/rỗng thì rơi về đường cũ (gọi /kaiwa/shadowing/transcript). Cột
+  // này KHÔNG có sẵn trong `video` truyền vào nữa (danh sách chỉ tải cột
+  // nhẹ - xem useEffect tải presetVideos ở trên), nên phải tự fetch riêng
+  // đúng 1 hàng theo id ngay lúc bấm, chỉ tốn request cho video thật sự mở.
+  const handlePickPreset = async (video: PresetVideo) => {
+    setInlineHint(null);
+    setStage('loading');
+
+    const supabase = (window as any).supabaseClient;
+    let subtitleJson: Segment[] | null | undefined;
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('kaiwa_shadowing_videos')
+        .select('subtitle_json')
+        .eq('id', video.id)
+        .single();
+      if (!error) subtitleJson = data?.subtitle_json;
+    }
+
+    if (Array.isArray(subtitleJson) && subtitleJson.length > 0) {
       const ytId = extractYoutubeId(video.youtube_url);
       if (ytId) {
-        setInlineHint(null);
         setVideoId(ytId);
-        setSegments(video.subtitle_json);
+        setSegments(subtitleJson);
         setActiveIndex(0);
         setStage('ready');
         return;
@@ -718,10 +746,10 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[500] flex justify-center items-center bg-zinc-900/90 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
-      <div className="bg-white w-full h-full sm:h-[92vh] max-w-6xl sm:rounded-3xl shadow-2xl border-b border-zinc-200 flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 relative">
+    <div className="fixed inset-0 z-[500] flex justify-center items-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+      <div className="bg-blue-900 w-full h-full sm:h-[92vh] max-w-6xl sm:rounded-3xl shadow-2xl border-b border-surface-border flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 relative">
         {/* Header */}
-        <div className="flex justify-between items-center px-6 py-5 border-b border-zinc-100 bg-white z-10 shadow-sm shrink-0">
+        <div className="flex justify-between items-center px-6 py-5 border-b border-surface-border bg-blue-800 z-10 shadow-sm shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             {/* Trở về danh sách video - thay cho nút "Đổi video" cũ, chỉ có
                 nghĩa (và chỉ hiện) lúc đang xem 1 video cụ thể. */}
@@ -729,12 +757,12 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
               <button
                 onClick={handleBackToList}
                 aria-label="Trở về danh sách video"
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-100 text-zinc-500 hover:bg-indigo-50 hover:text-indigo-600 transition-all cursor-pointer shrink-0"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-[#8fb0ce] hover:bg-blue-500/20 hover:text-blue-200 transition-all cursor-pointer shrink-0"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
             )}
-            <h2 className="text-xl font-black text-zinc-900 uppercase tracking-tight flex items-center gap-2.5 truncate">
+            <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2.5 truncate">
               <Youtube className="w-6 h-6 text-red-500 shrink-0" />
               Nghe Podcast
             </h2>
@@ -746,7 +774,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
               <button
                 onClick={handleExportJson}
                 aria-label="Xuất transcript hiện tại ra JSON"
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-100 text-zinc-500 hover:bg-indigo-50 hover:text-indigo-600 transition-all cursor-pointer"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-[#8fb0ce] hover:bg-blue-500/20 hover:text-blue-200 transition-all cursor-pointer"
               >
                 <Download className="w-4 h-4" />
               </button>
@@ -757,12 +785,12 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
               <button
                 onClick={() => { setStage('input'); setInlineHint(null); }}
                 aria-label="Dán link YouTube khác (chỉ admin)"
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-100 text-zinc-500 hover:bg-indigo-50 hover:text-indigo-600 transition-all cursor-pointer"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-[#8fb0ce] hover:bg-blue-500/20 hover:text-blue-200 transition-all cursor-pointer"
               >
                 <Link2 className="w-4 h-4" />
               </button>
             )}
-            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-100 text-zinc-500 hover:bg-red-50 hover:text-red-500 transition-all cursor-pointer">
+            <button onClick={() => setShowCloseConfirm(true)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-[#8fb0ce] hover:bg-red-500/20 hover:text-red-400 transition-all cursor-pointer">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -770,11 +798,11 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
 
         {/* STAGE: list - danh sách video có sẵn (lấy từ Supabase), màn mặc định lúc mở tool */}
         {stage === 'list' && (
-          <div className="flex-1 min-h-0 flex flex-col p-4 sm:p-6 gap-4 overflow-y-auto">
+          <div className="flex-1 min-h-0 flex flex-col p-4 sm:p-6 gap-4 overflow-y-auto hide-scrollbar">
             {presetLoading && (
               <div className="flex-1 flex flex-col items-center justify-center gap-4 py-10">
-                <Loader2 className="w-9 h-9 text-indigo-600 animate-spin" />
-                <span className="text-sm font-bold text-zinc-600">Đang tải danh sách video...</span>
+                <Loader2 className="w-9 h-9 text-blue-700 animate-spin" />
+                <span className="text-sm font-bold text-[#8fb0ce]">Đang tải danh sách video...</span>
               </div>
             )}
 
@@ -783,16 +811,16 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                 <div className="w-14 h-14 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center">
                   <AlertTriangle className="w-7 h-7" />
                 </div>
-                <p className="text-sm font-semibold text-zinc-700 max-w-sm">{presetError}</p>
+                <p className="text-sm font-semibold text-[#8fb0ce] max-w-sm">{presetError}</p>
               </div>
             )}
 
             {!presetLoading && !presetError && presetVideos.length === 0 && (
               <div className="flex-1 flex flex-col items-center justify-center gap-3 py-10 text-center">
-                <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                <div className="w-14 h-14 bg-blue-50 text-blue-700 rounded-2xl flex items-center justify-center">
                   <ListVideo className="w-7 h-7" />
                 </div>
-                <p className="text-sm font-semibold text-zinc-700 max-w-sm">Chưa có video nào trong danh sách có sẵn.</p>
+                <p className="text-sm font-semibold text-[#8fb0ce] max-w-sm">Chưa có video nào trong danh sách có sẵn.</p>
               </div>
             )}
 
@@ -814,12 +842,12 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                       onClick={() => setActiveFilter(f.key)}
                       className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold border transition-all ${
                         activeFilter === f.key
-                          ? 'bg-indigo-50 border-indigo-200 text-indigo-600'
-                          : 'bg-white border-zinc-200 text-zinc-500 hover:border-zinc-300'
+                          ? 'bg-blue-50 border-blue-200 text-blue-700'
+                          : 'bg-white/10 border-white/10 text-[#8fb0ce] hover:border-white/20'
                       }`}
                     >
                       {f.label}
-                      <span className={`tabular-nums ${activeFilter === f.key ? 'text-indigo-400' : 'text-zinc-400'}`}>{f.count}</span>
+                      <span className={`tabular-nums ${activeFilter === f.key ? 'text-blue-600' : 'text-[#8fb0ce]'}`}>{f.count}</span>
                     </button>
                   ))}
                 </div>
@@ -828,7 +856,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                     chỉ hiện khi có video đang xem dở. */}
                 {activeFilter === 'all' && continueWatching.length > 0 && (
                   <div className="flex flex-col gap-2 shrink-0">
-                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Tiếp tục xem</span>
+                    <span className="text-[11px] font-bold text-[#8fb0ce] uppercase tracking-wider">Tiếp tục xem</span>
                     <div className="flex gap-3 overflow-x-auto pb-1 hide-scrollbar">
                       {continueWatching.map(({ video, ytId }) => {
                         const entry = getShadowingEntry(progress, ytId || '');
@@ -841,7 +869,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                             onClick={() => handlePickPreset(video)}
                             className="shrink-0 w-36 text-left group cursor-pointer"
                           >
-                            <div className="relative w-36 h-[81px] rounded-lg overflow-hidden bg-zinc-100">
+                            <div className="relative w-36 h-[81px] rounded-lg overflow-hidden bg-white/10">
                               {ytId && (
                                 <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} alt="" className="w-full h-full object-cover" />
                               )}
@@ -849,7 +877,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                                 <PlayCircle className="w-7 h-7 text-white opacity-0 group-hover:opacity-100 drop-shadow transition-opacity" />
                               </div>
                               <span className="absolute left-0 right-0 bottom-0 h-[3px] bg-white/50">
-                                <span className="block h-full bg-indigo-500" style={{ width: `${pct}%` }} />
+                                <span className="block h-full bg-blue-500" style={{ width: `${pct}%` }} />
                               </span>
                             </div>
                             {/* KHÔNG thêm class "block" vào đây: line-clamp-2 cần
@@ -859,8 +887,8 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                                 3+ dòng và lệch hàng. line-clamp-2 tự nó đã là
                                 block-level rồi. min-h chừa đúng 2 dòng (33px)
                                 để thẻ 1 dòng và 2 dòng thẳng hàng nhau. */}
-                            <span className="mt-1.5 min-h-[2.0625rem] text-xs font-bold text-zinc-800 leading-snug line-clamp-2">{video.title}</span>
-                            <span className="block text-[11px] font-semibold text-zinc-400 mt-0.5 tabular-nums">Đã xem {pct}%</span>
+                            <span className="mt-1.5 min-h-[2.0625rem] text-xs font-bold text-white leading-snug line-clamp-2">{video.title}</span>
+                            <span className="block text-[11px] font-semibold text-[#8fb0ce] mt-0.5 tabular-nums">Đã xem {pct}%</span>
                           </button>
                         );
                       })}
@@ -877,7 +905,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                   // "Tiếp tục xem" ở trên thì không tính là rỗng thật - khỏi
                   // hiện thông báo (dải phía trên đã hiện đủ hết rồi).
                   <div className="flex-1 flex flex-col items-center justify-center gap-2 py-10 text-center">
-                    <p className="text-sm font-semibold text-zinc-500 max-w-sm">
+                    <p className="text-sm font-semibold text-[#8fb0ce] max-w-sm">
                       {activeFilter === 'saved' && 'Chưa lưu video nào - bấm biểu tượng ♡ trên video để lưu.'}
                       {activeFilter === 'watched' && 'Chưa xem video nào trong danh sách này.'}
                       {activeFilter === 'unwatched' && 'Video nào cũng đã xem hết rồi - không còn video chưa xem.'}
@@ -899,13 +927,13 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                           tabIndex={0}
                           onClick={() => handlePickPreset(video)}
                           onKeyDown={(e) => handleCardKeyDown(e, video)}
-                          className="flex items-center gap-3 md:flex-col md:items-stretch md:gap-2 text-left px-3 py-2.5 md:p-2 rounded-xl border border-zinc-100 hover:border-indigo-200 hover:bg-indigo-50/50 transition-all cursor-pointer"
+                          className="flex items-center gap-3 md:flex-col md:items-stretch md:gap-2 text-left px-3 py-2.5 md:p-2 rounded-xl border border-white/10 hover:border-blue-400 hover:bg-blue-500/10 transition-all cursor-pointer"
                         >
-                          <div className="relative w-36 h-[81px] md:w-full md:h-auto md:aspect-video shrink-0 rounded-lg overflow-hidden bg-zinc-100 flex items-center justify-center">
+                          <div className="relative w-36 h-[81px] md:w-full md:h-auto md:aspect-video shrink-0 rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
                             {ytId ? (
                               <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} alt="" className="w-full h-full object-cover" />
                             ) : (
-                              <PlayCircle className="w-6 h-6 text-zinc-400" />
+                              <PlayCircle className="w-6 h-6 text-[#8fb0ce]" />
                             )}
                             {isNewVideo(video.created_at, entry) && (
                               <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-amber-500 text-white text-[9px] font-black uppercase tracking-wide leading-none">
@@ -926,7 +954,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                               </span>
                             ) : pct > 0 ? (
                               <span className="absolute left-0 right-0 bottom-0 h-[3px] bg-white/40">
-                                <span className="block h-full bg-indigo-500" style={{ width: `${pct}%` }} />
+                                <span className="block h-full bg-blue-500" style={{ width: `${pct}%` }} />
                               </span>
                             ) : null}
                             {video.duration && (
@@ -935,7 +963,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                               </span>
                             )}
                           </div>
-                          <span className="text-sm font-bold text-zinc-800 leading-snug md:line-clamp-2">{video.title}</span>
+                          <span className="text-sm font-bold text-white leading-snug md:line-clamp-2">{video.title}</span>
                         </div>
                       );
                     })}
@@ -948,13 +976,13 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
 
         {/* STAGE: input */}
         {stage === 'input' && (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 gap-5 overflow-y-auto">
-            <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+          <div className="flex-1 flex flex-col items-center justify-center p-8 gap-5 overflow-y-auto hide-scrollbar">
+            <div className="w-16 h-16 bg-blue-50 text-blue-700 rounded-2xl flex items-center justify-center">
               <Link2 className="w-8 h-8" />
             </div>
             <div className="text-center max-w-md">
-              <h3 className="text-lg font-black text-zinc-900 mb-1.5">Dán link YouTube để luyện Shadowing</h3>
-              <p className="text-sm text-zinc-500 font-medium leading-relaxed">
+              <h3 className="text-lg font-black text-white mb-1.5">Dán link YouTube để luyện Shadowing</h3>
+              <p className="text-sm text-[#8fb0ce] font-medium leading-relaxed">
                 Video sẽ được nhúng lại và phụ đề tiếng Nhật có sẵn trên YouTube (do người tạo thêm hoặc tự động) sẽ chạy đồng bộ theo lời nói.
               </p>
             </div>
@@ -966,11 +994,11 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                   onChange={(e) => { setLinkValue(e.target.value); setInlineHint(null); }}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleLoad(); }}
                   placeholder="https://www.youtube.com/watch?v=..."
-                  className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                  className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-white/15 text-sm font-medium text-white placeholder:text-white/40 bg-white/5 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                 />
                 <button
                   onClick={handleLoad}
-                  className="shrink-0 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-md transition-all active:scale-95"
+                  className="shrink-0 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-md transition-all active:scale-95"
                 >
                   Bắt đầu
                 </button>
@@ -979,7 +1007,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
               {presetVideos.length > 0 && (
                 <button
                   onClick={() => setStage('list')}
-                  className="self-center mt-1 flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700"
+                  className="self-center mt-1 flex items-center gap-1.5 text-xs font-bold text-blue-300 hover:text-blue-200"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   Quay về danh sách có sẵn
@@ -992,8 +1020,8 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
         {/* STAGE: loading */}
         {stage === 'loading' && (
           <div className="flex-1 flex flex-col items-center justify-center gap-4">
-            <Loader2 className="w-9 h-9 text-indigo-600 animate-spin" />
-            <span className="text-sm font-bold text-zinc-600">Đang lấy phụ đề tiếng Nhật từ video...</span>
+            <Loader2 className="w-9 h-9 text-blue-700 animate-spin" />
+            <span className="text-sm font-bold text-[#8fb0ce]">Đang lấy phụ đề tiếng Nhật từ video...</span>
           </div>
         )}
 
@@ -1003,10 +1031,10 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
             <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center">
               <AlertTriangle className="w-8 h-8" />
             </div>
-            <p className="text-sm font-semibold text-zinc-700 max-w-sm">{errorMessage}</p>
+            <p className="text-sm font-semibold text-[#8fb0ce] max-w-sm">{errorMessage}</p>
             <button
               onClick={handleBackToList}
-              className="flex items-center gap-2 px-5 py-2.5 bg-zinc-900 hover:bg-zinc-700 text-white text-sm font-bold rounded-xl shadow-md transition-all active:scale-95"
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-700 hover:bg-blue-600 text-white text-sm font-bold rounded-xl shadow-md transition-all active:scale-95"
             >
               <ArrowLeft className="w-4 h-4" />
               Thử link khác
@@ -1019,7 +1047,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
           <div className="flex-1 min-h-0 flex flex-col">
             <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
               {/* Vùng phát video */}
-              <div className="md:w-[58%] shrink-0 flex flex-col p-4 sm:p-6 gap-4 overflow-y-auto">
+              <div className="md:w-[58%] shrink-0 flex flex-col p-4 sm:p-6 gap-4 overflow-y-auto hide-scrollbar">
                 <div
                   className="relative w-full aspect-video rounded-2xl overflow-hidden bg-black shadow-lg group"
                   onMouseMove={showControlsTemporarily}
@@ -1088,6 +1116,20 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                       <span className="text-[11px] font-bold text-white/80 tabular-nums shrink-0">
                         {formatTime(scrubDraft ?? currentTime)} / {formatTime(duration)}
                       </span>
+                      <div className="flex items-center gap-0.5 bg-white/10 rounded-lg p-0.5 shrink-0">
+                        {SPEEDS.map((rate) => (
+                          <button
+                            key={rate}
+                            type="button"
+                            onClick={() => { handleSpeedChange(rate); showControlsTemporarily(); }}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                              playbackRate === rate ? 'bg-white text-blue-700' : 'text-white/70 hover:text-white'
+                            }`}
+                          >
+                            {rate}x
+                          </button>
+                        ))}
+                      </div>
                       <span className="flex-1" />
                       <button
                         type="button"
@@ -1112,35 +1154,6 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
-                  <div className="flex items-center gap-1.5 bg-zinc-100 rounded-xl p-1">
-                    <Gauge className="w-4 h-4 text-zinc-400 ml-1.5" />
-                    {SPEEDS.map((rate) => (
-                      <button
-                        key={rate}
-                        onClick={() => handleSpeedChange(rate)}
-                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          playbackRate === rate ? 'bg-white text-indigo-600 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
-                        }`}
-                      >
-                        {rate}x
-                      </button>
-                    ))}
-                  </div>
-
-                  <button
-                    onClick={() => setLoopLine((v) => !v)}
-                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
-                      loopLine
-                        ? 'bg-indigo-50 border-indigo-200 text-indigo-600'
-                        : 'bg-zinc-100 border-transparent text-zinc-500 hover:text-zinc-700'
-                    }`}
-                  >
-                    <Repeat1 className="w-4 h-4" />
-                    Lặp câu này
-                  </button>
-                </div>
-
                 {/* Câu đang phát - chỉ máy tính. Ẩn theo THIẾT BỊ CẢM ỨNG THẬT
                     (class .current-sentence-card, xem CSS trong index.css -
                     @media (hover: none) and (pointer: coarse), cùng cách đã
@@ -1151,10 +1164,10 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                     active trong khung phụ đề bên cạnh cho dễ liên tưởng là
                     cùng 1 câu. */}
                 {segments[activeIndex] && (
-                  <div className="current-sentence-card bg-indigo-50 rounded-xl px-4 py-4 shrink-0 text-center">
-                    <p className="text-lg font-semibold text-indigo-900 leading-relaxed">{segments[activeIndex].text}</p>
+                  <div className="current-sentence-card bg-blue-50 rounded-xl px-4 py-4 shrink-0 text-center">
+                    <p className="text-lg font-semibold text-blue-900 leading-relaxed">{segments[activeIndex].text}</p>
                     {displayPrefs.showRomaji && segments[activeIndex].romaji && (
-                      <p className="text-sm italic text-indigo-500 mt-1">{segments[activeIndex].romaji}</p>
+                      <p className="text-sm italic text-blue-700 mt-1">{segments[activeIndex].romaji}</p>
                     )}
                     {displayPrefs.showVi && segments[activeIndex].vi && (
                       <p className="text-sm text-emerald-700 mt-1">{segments[activeIndex].vi}</p>
@@ -1164,14 +1177,25 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
               </div>
 
               {/* Vùng phụ đề chạy */}
-              <div className="flex-1 min-h-0 border-t md:border-t-0 md:border-l border-b border-zinc-200 flex flex-col">
+              <div className="flex-1 min-h-0 border-t md:border-t-0 md:border-l border-b border-surface-border flex flex-col">
                 <div className="px-4 sm:px-6 py-3 shrink-0 flex items-center justify-center md:justify-start gap-2 flex-wrap">
                   <button
+                    onClick={() => setLoopLine((v) => !v)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-white/10 transition-all ${
+                      loopLine
+                        ? 'border-blue-400 text-blue-300'
+                        : 'border-white/10 text-[#8fb0ce] hover:border-white/20'
+                    }`}
+                  >
+                    <Repeat1 className="w-3.5 h-3.5" />
+                    Lặp câu
+                  </button>
+                  <button
                     onClick={() => toggleDisplayPref('showRomaji')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-white transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-white/10 transition-all ${
                       displayPrefs.showRomaji
-                        ? 'border-indigo-200 text-indigo-600'
-                        : 'border-zinc-200 text-zinc-500 hover:border-zinc-300'
+                        ? 'border-blue-400 text-blue-300'
+                        : 'border-white/10 text-[#8fb0ce] hover:border-white/20'
                     }`}
                   >
                     <Type className="w-3.5 h-3.5" />
@@ -1179,10 +1203,10 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                   </button>
                   <button
                     onClick={() => toggleDisplayPref('showVi')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-white transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-white/10 transition-all ${
                       displayPrefs.showVi
-                        ? 'border-emerald-200 text-emerald-600'
-                        : 'border-zinc-200 text-zinc-500 hover:border-zinc-300'
+                        ? 'border-emerald-400 text-emerald-300'
+                        : 'border-white/10 text-[#8fb0ce] hover:border-white/20'
                     }`}
                   >
                     <Languages className="w-3.5 h-3.5" />
@@ -1190,10 +1214,10 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                   </button>
                   <button
                     onClick={() => toggleDisplayPref('autoScroll')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-white transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-white/10 transition-all ${
                       displayPrefs.autoScroll
-                        ? 'border-indigo-200 text-indigo-600'
-                        : 'border-zinc-200 text-zinc-500 hover:border-zinc-300'
+                        ? 'border-blue-400 text-blue-300'
+                        : 'border-white/10 text-[#8fb0ce] hover:border-white/20'
                     }`}
                   >
                     <Crosshair className="w-3.5 h-3.5" />
@@ -1209,23 +1233,23 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                         ref={(el) => { lineRefs.current[idx] = el; }}
                         onClick={() => handleLineClick(idx)}
                         className={`text-left px-4 py-3 rounded-xl border-l-4 transition-all flex items-start gap-3 ${
-                          active ? 'bg-indigo-50 border-indigo-500 shadow-sm' : 'border-transparent hover:bg-zinc-50'
+                          active ? 'bg-blue-50 md:bg-blue-100 border-blue-600 shadow-sm' : 'border-transparent hover:bg-white/5'
                         }`}
                       >
-                        <span className={`text-[10px] font-bold mt-1 shrink-0 tabular-nums ${active ? 'text-indigo-500' : 'text-zinc-400'}`}>
+                        <span className={`text-[10px] font-bold mt-1 shrink-0 tabular-nums ${active ? 'text-blue-700' : 'text-[#8fb0ce]'}`}>
                           {formatTime(seg.start)}
                         </span>
                         <div className="flex flex-col gap-0.5 min-w-0">
-                          <span className={`text-[15px] sm:text-base leading-relaxed font-semibold ${active ? 'text-indigo-900' : 'text-zinc-700'}`}>
+                          <span className={`text-[15px] sm:text-base leading-relaxed font-semibold ${active ? 'text-blue-900' : 'text-white/80'}`}>
                             {seg.text}
                           </span>
                           {displayPrefs.showRomaji && seg.romaji && (
-                            <span className={`text-xs sm:text-[13px] italic leading-snug ${active ? 'text-indigo-500' : 'text-zinc-400'}`}>
+                            <span className={`text-xs sm:text-[13px] italic leading-snug ${active ? 'text-blue-700' : 'text-[#8fb0ce]'}`}>
                               {seg.romaji}
                             </span>
                           )}
                           {displayPrefs.showVi && seg.vi && (
-                            <span className={`text-xs sm:text-[13px] leading-snug ${active ? 'text-emerald-700' : 'text-emerald-600'}`}>
+                            <span className={`text-xs sm:text-[13px] leading-snug ${active ? 'text-emerald-700' : 'text-emerald-400'}`}>
                               {seg.vi}
                             </span>
                           )}
@@ -1239,6 +1263,33 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
           </div>
         )}
       </div>
+
+      {/* Popup xác nhận đóng tool - tránh bấm nhầm dấu X mất tiến trình
+          đang xem/luyện (xem showCloseConfirm ở trên). */}
+      {showCloseConfirm && (
+        <div className="fixed inset-0 z-[800] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowCloseConfirm(false)}>
+          <div className="bg-blue-900 border border-surface-border rounded-3xl max-w-sm w-full p-6 sm:p-8 shadow-2xl flex flex-col text-center" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xl font-bold text-white mb-8 flex items-center justify-center gap-2.5">
+              <Youtube className="w-5 h-5 text-red-500 shrink-0" />
+              Đóng Nghe Podcast?
+            </h3>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowCloseConfirm(false)}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-[#8fb0ce] bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => { setShowCloseConfirm(false); onClose(); }}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
