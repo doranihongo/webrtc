@@ -132,6 +132,11 @@ class RNNoiseProcessor {
     this.destinationNode = null;
     this.isProcessing = false;
     this.noiseSuppressionEnabled = false;
+    // Set by the caller (client.js) right after construction - fired once
+    // if the worklet's real-time self-test finds this device's CPU can't
+    // keep RNNoise running within its audio budget (see
+    // noiseSuppressionProcessor.js's PERF_* constants).
+    this.onPerformanceSlow = null;
 
     this.initializeUI();
     this.initializeDependencies();
@@ -250,8 +255,15 @@ class RNNoiseProcessor {
         },
       );
 
-      this.workletNode.port.onmessage = (event) =>
+      this.workletNode.port.onmessage = (event) => {
         this.messageHandler.handleMessage(event);
+        if (
+          event.data.type === "performance-slow" &&
+          typeof this.onPerformanceSlow === "function"
+        ) {
+          this.onPerformanceSlow(event.data);
+        }
+      };
 
       this.sourceNode = this.audioContext.createMediaStreamSource(
         this.mediaStream,

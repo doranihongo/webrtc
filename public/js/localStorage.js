@@ -24,6 +24,13 @@ class LocalStorage {
       speech_in_msg: false,
       pin_chat_by_default: false,
       mic_noise_suppression: true, // Noise suppression using RNNoise
+      // Set once we've measured that this device's CPU can't keep RNNoise
+      // running in real time (see enableNoiseSuppression/handleRNNoiseTooSlow
+      // in client.js) - "Khử tiếng ồn" stays ON from the user's point of
+      // view, it's just backed by the browser's built-in noise suppression
+      // instead of the heavier WASM one from then on, so we don't re-run
+      // the (audible) real-time self-test every single join.
+      rnnoise_native_fallback: false,
       video_fps: 1, // default 30fps
       screen_fps: 1, // default 30fps
       pitch_bar: true,

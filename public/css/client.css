@@ -19,10 +19,6 @@
   --caption-height: 680px;
   --caption-width: 420px;
 
-  /* video iframe */
-  --iframe-width: 640px;
-  --iframe-height: 480px;
-
   --wb-width: 1920px;
   --wb-height: 1080px;
 
@@ -1743,29 +1739,14 @@ textarea,
   position: relative;
   background: transparent;
   max-width: 100%;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.4) rgba(0, 0, 0, 0.1);
+  /* Vẫn cuộn được bình thường (overflow-y ở chỗ khác), chỉ ẩn thanh
+     trượt cho gọn - Firefox */
+  scrollbar-width: none;
 }
 
+/* Ẩn thanh trượt - Chrome/Safari/Edge */
 .msger-chat::-webkit-scrollbar {
-  width: 8px;
-}
-
-.msger-chat::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
-}
-
-.msger-chat::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: 10px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-.msger-chat::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.6);
-  background-clip: padding-box;
+  display: none;
 }
 
 .msg {
@@ -4606,64 +4587,6 @@ input:checked + .slider:before {
 }
 
 /*--------------------------------------------------------------
-# Video Audio IFrame
---------------------------------------------------------------*/
-
-#videoAudioUrlCont,
-#videoUrlCont {
-  z-index: 15;
-  display: none;
-  width: var(--iframe-width);
-  height: var(--iframe-height);
-  border: var(--border);
-  box-shadow: var(--box-shadow);
-  border-radius: 12px;
-}
-
-#videoAudioUrlHeader,
-#videoUrlHeader {
-  z-index: 15;
-  position: absolute;
-  display: flex;
-  left: 0px;
-  top: 0px;
-  width: 100%;
-  cursor: move;
-  border-radius: 12px;
-}
-
-#videoAudioUrlHeader button,
-#videoUrlHeader button {
-  height: 30px;
-  width: 30px;
-  font-size: 1.2rem;
-  margin-top: 10px;
-  margin-left: 10px;
-  border: none;
-  color: var(--ds-text-primary);
-  background: black;
-}
-
-#videoAudioUrlHeader button:hover,
-#videoUrlHeader button:hover {
-  color: var(--hover-color);
-  transform: var(--btns-hover-scale);
-  transition: all 0.3s ease-in-out;
-}
-
-#videoUrlIframe {
-  width: var(--iframe-width);
-  height: var(--iframe-height);
-  border-radius: 12px;
-}
-
-#videoAudioUrlElement {
-  width: var(--iframe-width);
-  height: var(--iframe-height) - 20px;
-  border-radius: 12px;
-}
-
-/*--------------------------------------------------------------
 # About
 --------------------------------------------------------------*/
 
@@ -4776,12 +4699,6 @@ input:checked + .slider:before {
 #webRTCSeo {
   /* just for SEO */
   display: none;
-}
-
-#videoAudioCloseBtn,
-#videoUrlCloseBtn {
-  border: none;
-  border-radius: 10px;
 }
 
 /*--------------------------------------------------------------

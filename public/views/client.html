@@ -829,7 +829,6 @@ micro để sử dụng ứng dụng này.
             tip(newFs, "Toàn màn hình");
             tip(newSettings, "Cài đặt");
             tip(newLeave, "Rời cuộc gọi");
-            tip(document.getElementById("msgerVideoUrlBtn"), "Chia sẻ video/audio");
           }
 
           const updateUI = () => {
@@ -1096,14 +1095,6 @@ micro để sử dụng ứng dụng này.
         <div
           class="msger-composer p-3 bg-slate-900 border-t border-slate-800 flex items-center gap-2 shrink-0"
         >
-          <button
-            id="msgerVideoUrlBtn"
-            class="cursor-pointer p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl transition-all"
-            style="display: none"
-          >
-            <i class="fab fa-youtube" style="font-size: 16px"></i>
-          </button>
-
           <textarea
             id="msgerInput"
             rows="1"
@@ -1470,13 +1461,6 @@ micro để sử dụng ứng dụng này.
             <div class="clw" id="lastRecordingInfo"></div>
           </div>
 
-          <div id="tabMedia" class="tabcontent">
-            <button id="shareMediaAudioVideoBtn" class="buttons">
-              <i class="fa-solid fa-circle-play"></i>
-              <p>Chia sẻ Video hoặc Audio</p>
-            </button>
-          </div>
-
           <div id="tabParticipants" class="tabcontent">
             <div class="title">
               <i class="fa-solid fa-users"></i>
@@ -1532,49 +1516,6 @@ micro để sử dụng ứng dụng này.
     </div>
 
     <!-- End my settings -->
-
-    <!-- Start video URL iframe -->
-
-    <div id="videoUrlCont" class="center fadein">
-      <div id="videoUrlHeader">
-        <button id="videoUrlCloseBtn" class="fas fa-times"></button>
-      </div>
-      <br />
-      <iframe
-        id="videoUrlIframe"
-        src=""
-        frameborder="0"
-        allow="
-          accelerometer;
-          autoplay;
-          clipboard-write;
-          encrypted-media;
-          gyroscope;
-          picture-in-picture;
-        "
-        allowfullscreen
-      ></iframe>
-    </div>
-
-    <!-- End Youtube Iframe -->
-
-    <!-- Start Video - Audio player -->
-
-    <div id="videoAudioUrlCont" class="center fadein">
-      <div id="videoAudioUrlHeader">
-        <button id="videoAudioCloseBtn" class="fas fa-times"></button>
-      </div>
-      <br />
-      <video
-        id="videoAudioUrlElement"
-        src=""
-        autoplay
-        playsinline
-        controls
-      ></video>
-    </div>
-
-    <!-- End Video - Audio player -->
 
     <!-- Start Video container -->
 

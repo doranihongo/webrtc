@@ -501,7 +501,6 @@ module.exports = {
     },
     chat: {
       showMaxBtn: true,
-      showShareVideoAudioBtn: true,
       showParticipantsBtn: true,
     },
     caption: {
@@ -526,7 +525,6 @@ module.exports = {
       videoBtnClickAllowed: true,
       showVideoPipBtn: true,
       showKickOutBtn: true,
-      showShareVideoAudioBtn: true,
     },
     local: {
       showVideoPipBtn: true,

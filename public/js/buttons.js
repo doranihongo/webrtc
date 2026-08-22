@@ -25,7 +25,6 @@ let buttons = {
   },
   chat: {
     showMaxBtn: true,
-    showShareVideoAudioBtn: true,
     showParticipantsBtn: true,
   },
   caption: {
@@ -47,7 +46,6 @@ let buttons = {
     videoBtnClickAllowed: true,
     showVideoPipBtn: true,
     showKickOutBtn: true,
-    showShareVideoAudioBtn: true,
   },
   local: {
     showVideoPipBtn: true,

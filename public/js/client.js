@@ -136,7 +136,6 @@ const images = {
   delete: "../images/delete.png",
   message: "../images/message.png",
   leave: "../images/leave-room.png",
-  vaShare: "../images/va-share.png",
   about: "../images/dora-logo.png",
   feedback: "../images/feedback.png",
   forbidden: "../images/forbidden.png",
@@ -162,7 +161,6 @@ const className = {
   fullScreen: "fas fa-expand",
   fsOn: "fas fa-compress-alt",
   fsOff: "fas fa-expand-alt",
-  shareVideoAudio: "fab fa-youtube",
   kickOut: "fas fa-sign-out-alt",
   chatOn: "fas fa-comment",
   chatOff: "fas fa-comment",
@@ -346,7 +344,6 @@ const msgerSidebarDropDownContent =
 const msgerChat = getId("msgerChat");
 const msgerEmptyParticipantsNotice = getId("msgerEmptyParticipantsNotice");
 const msgerMain = document.querySelector(".msger-main");
-const msgerVideoUrlBtn = getId("msgerVideoUrlBtn");
 
 const msgerScrollBottomBtn = getId("msgerScrollBottomBtn");
 let isAutoScrollingMsger = false;
@@ -480,9 +477,6 @@ const micOptionsDiv = getId("micOptionsDiv");
 const switchNoiseSuppression = getId("switchNoiseSuppression");
 const labelNoiseSuppression = getId("labelNoiseSuppression");
 
-// Tab Media
-const shareMediaAudioVideoBtn = getId("shareMediaAudioVideoBtn");
-
 const wbDrawingColorEl = getId("wbDrawingColorEl");
 const wbBackgroundColorEl = getId("wbBackgroundColorEl");
 
@@ -491,16 +485,6 @@ const wbBackgroundColorEl = getId("wbBackgroundColorEl");
 const lockRoomBtn = getId("lockRoomBtn");
 const unlockRoomBtn = getId("unlockRoomBtn");
 const roomLockStatusIcon = getId("roomLockStatusIcon");
-
-// Video/audio url player
-const videoUrlCont = getId("videoUrlCont");
-const videoAudioUrlCont = getId("videoAudioUrlCont");
-const videoUrlHeader = getId("videoUrlHeader");
-const videoAudioUrlHeader = getId("videoAudioUrlHeader");
-const videoUrlCloseBtn = getId("videoUrlCloseBtn");
-const videoAudioCloseBtn = getId("videoAudioCloseBtn");
-const videoUrlIframe = getId("videoUrlIframe");
-const videoAudioUrlElement = getId("videoAudioUrlElement");
 
 // Media
 const sinkId = "sinkId" in HTMLMediaElement.prototype;
@@ -585,8 +569,6 @@ let knownAudioInputIds = null;
 let knownAudioOutputIds = null;
 let autoSwitchedHeadset = null; // { micId, speakerId, baselineMicId, baselineSpeakerId }
 
-// video/audio player
-let isVideoUrlPlayerOpen = false;
 let pinnedVideoPlayerId = null;
 
 // connection
@@ -617,6 +599,10 @@ let remoteAudioBoostContext; // shared AudioContext used to boost remote peers' 
 const REMOTE_AUDIO_GAIN = 1.7; // gain applied to remote peer audio; <audio>.volume caps at 1.0 (100%), this goes louder
 let localAudioMediaStream; // my microphone
 let noiseProcessor = null; // RNNoise audio processing
+// Guards against handleRNNoiseTooSlow() firing more than once per active
+// RNNoise pipeline (the worklet's own self-test only ever posts its
+// "performance-slow" message once, but this stays cheap insurance).
+let rnnoiseFallbackInProgress = false;
 let peerScreenMediaElements = {}; // keep track of our peer <video> tags, indexed by peer_id_screen
 let peerVideoMediaElements = {}; // keep track of our peer <video> tags, indexed by peer_id_video
 let peerAudioMediaElements = {}; // keep track of our peer <audio> tags, indexed by peer_id_audio
@@ -855,13 +841,6 @@ function setButtonsToolTip() {
   );
   setTippy(recImage, "Bật tắt ghi hình", "right");
   setTippy(networkIP, "Địa chỉ IP liên kết với ICE candidate", "right");
-  setTippy(videoUrlCloseBtn, "Đóng trình phát video", "bottom");
-  setTippy(videoAudioCloseBtn, "Đóng trình phát video", "bottom");
-  setTippy(
-    msgerVideoUrlBtn,
-    "Chia sẻ video hoặc audio tới tất cả người tham gia",
-    "top",
-  );
 }
 
 /**
@@ -1503,7 +1482,6 @@ async function initClientPeer() {
   signalingSocket.on("peerAction", handlePeerAction);
   signalingSocket.on("cmd", handleCmd);
   signalingSocket.on("message", handleMessage);
-  signalingSocket.on("videoPlayer", handleVideoPlayer);
   signalingSocket.on("kickOut", handleKickedOut);
   signalingSocket.on("duplicateSession", handleDuplicateSession);
   signalingSocket.on("roomWaitingForTeacher", handleRoomWaitingForTeacher);
@@ -1590,7 +1568,6 @@ async function handleConnect() {
     handleButtonsRule();
     setupMySettings();
     loadSettingsFromLocalStorage();
-    setupVideoUrlPlayer();
     handleDropdownHover();
     setupQuickDeviceSwitchDropdowns();
     startSessionTime();
@@ -1820,9 +1797,7 @@ function handleButtonsRule() {
   ]);
 
   // Chat buttons
-  displayElements([
-    { element: msgerVideoUrlBtn, display: buttons.chat.showShareVideoAudioBtn },
-  ]);
+  displayElements([]);
 
   // Caption buttons
   displayElements([]);
@@ -2686,6 +2661,96 @@ function handleRNNoiseNotSupported() {
 }
 
 /**
+ * Rough, instant pre-filter for "this CPU probably can't run the RNNoise
+ * WASM pipeline in real time" - checked BEFORE ever downloading/starting
+ * it, so a clearly low-end device skips straight to the browser's built-in
+ * noise suppression (saves the ~MB WASM download too, not just the CPU).
+ * Deliberately conservative (easy to trip) since a false positive here just
+ * means using the built-in noise suppression instead of RNNoise - not a
+ * broken call - whereas the real-time self-test in enableNoiseSuppression /
+ * handleRNNoiseTooSlow still catches whatever this heuristic misses.
+ * @returns {boolean}
+ */
+function isLikelyWeakDevice() {
+  const cores = navigator.hardwareConcurrency;
+  if (typeof cores === "number" && cores > 0 && cores <= 4) return true;
+  // deviceMemory (GB, Chrome/Edge only) is rounded/approximate by spec.
+  const mem = navigator.deviceMemory;
+  if (typeof mem === "number" && mem > 0 && mem <= 2) return true;
+  return false;
+}
+
+/**
+ * Switch to the browser's own built-in noise suppression instead of the
+ * custom RNNoise WASM pipeline - used both as the instant path for devices
+ * isLikelyWeakDevice() flags up front, and as the mid-call fallback from
+ * handleRNNoiseTooSlow() once the real-time self-test catches a device that
+ * heuristic missed. Applies the constraint on the live mic track in place
+ * (no renegotiation needed) - keeps working even if this device already
+ * doesn't support the `noiseSuppression` constraint, just without any
+ * suppression at all then, same as a plain mic.
+ * "Khử tiếng ồn" stays ON from the user's point of view either way - only
+ * the implementation behind it changes.
+ * @param {boolean} persist - remember this device needs the fallback, so
+ *   future joins skip straight to it instead of re-running the (audible)
+ *   real-time self-test every time.
+ * @returns {Promise<boolean>}
+ */
+async function useNativeNoiseSuppression(persist) {
+  const track = getAudioTrack(localAudioMediaStream);
+  if (track) {
+    try {
+      await track.applyConstraints({ noiseSuppression: true });
+    } catch (err) {
+      console.warn(
+        "useNativeNoiseSuppression: applyConstraints failed, continuing without it",
+        err,
+      );
+    }
+  }
+  if (persist) {
+    lsSettings.rnnoise_native_fallback = true;
+    lS.setSettings(lsSettings);
+  }
+  // "Khử tiếng ồn" label: nodeProcessor.js's UIManager turns this lime only
+  // while the real RNNoise WASM pipeline is actively running
+  // (toggleNoiseSuppression) - match that same "not RNNoise" color here so
+  // the label still reflects which implementation is actually behind the
+  // switch, even though the switch itself stays ON either way.
+  if (labelNoiseSuppression) labelNoiseSuppression.style.color = "white";
+  await refreshMyStreamToPeers(localAudioMediaStream, true);
+  return true;
+}
+
+/**
+ * Called once from the AudioWorklet's real-time self-test (relayed via
+ * nodeProcessor.js's onPerformanceSlow) when this device's CPU can't keep
+ * RNNoise processing within its 10ms-per-frame budget - exactly what
+ * produces the audible glitching/silence reported on weak phones. Tears
+ * down the WASM pipeline and switches to the browser's built-in noise
+ * suppression instead, without turning "Khử tiếng ồn" off.
+ */
+async function handleRNNoiseTooSlow() {
+  if (rnnoiseFallbackInProgress) return;
+  rnnoiseFallbackInProgress = true;
+  try {
+    console.warn(
+      "RNNoise: real-time budget exceeded on this device — falling back to built-in noise suppression.",
+    );
+    await disableNoiseSuppression(true); // tears down the pipeline, restores the raw mic track
+    await useNativeNoiseSuppression(true); // ...then switch that raw track to the built-in noise suppression, remembered for next time
+    toastMessage(
+      "info",
+      "Máy xử lý khử ồn nâng cao không kịp, đã tự chuyển sang chế độ khử ồn nhẹ hơn.",
+      "",
+      "top",
+    );
+  } finally {
+    rnnoiseFallbackInProgress = false;
+  }
+}
+
+/**
  * Enable RNNoise audio processing for noise suppression.
  * Returns true on success, false on failure.
  */
@@ -2710,6 +2775,16 @@ async function enableNoiseSuppression() {
     return false;
   }
 
+  // Already known (this session or a previous one) or heuristically likely
+  // to be too weak for the WASM pipeline - skip straight to the browser's
+  // built-in noise suppression instead of trying RNNoise first.
+  if (lsSettings.rnnoise_native_fallback || isLikelyWeakDevice()) {
+    console.log(
+      "RNNoise: skipping WASM pipeline (weak device heuristic/previous fallback), using built-in noise suppression.",
+    );
+    return await useNativeNoiseSuppression(false);
+  }
+
   // Reset any existing pipeline to avoid keeping stale/ended streams.
   stopNoiseSuppressionPipeline();
 
@@ -2717,6 +2792,7 @@ async function enableNoiseSuppression() {
     noiseProcessor = new RNNoiseProcessor();
     // Keep a reference to the raw microphone stream for safe restore.
     noiseProcessor.originalStream = localAudioMediaStream;
+    noiseProcessor.onPerformanceSlow = () => handleRNNoiseTooSlow();
 
     const processedStream = await noiseProcessor.startProcessing(
       localAudioMediaStream,
@@ -4950,7 +5026,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       const remoteHandStatusIcon = document.createElement("button");
       const remoteVideoStatusIcon = document.createElement("button");
       const remoteAudioStatusIcon = document.createElement("button");
-      const remoteVideoAudioUrlBtn = document.createElement("button");
 
       const remotePeerKickOut = document.createElement("button");
       const remoteVideoFullScreenBtn = document.createElement("button");
@@ -4985,10 +5060,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       remoteAudioStatusIcon.style.cursor = "default";
 
       // remote share file
-
-      // remote peer YouTube video
-      remoteVideoAudioUrlBtn.setAttribute("id", peer_id + "_videoAudioUrl");
-      remoteVideoAudioUrlBtn.className = className.shareVideoAudio;
 
       // my video to image
 
@@ -5048,14 +5119,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
           createDropdownItem(
             remoteVideoFullScreenBtn,
             "Toàn màn hình",
-            remoteDropdownContent,
-          ),
-        );
-      buttons.remote.showShareVideoAudioBtn &&
-        remoteDropdownContent.appendChild(
-          createDropdownItem(
-            remoteVideoAudioUrlBtn,
-            "Gửi Video/Audio",
             remoteDropdownContent,
           ),
         );
@@ -5181,9 +5244,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       handlePeerVideoBtn(peer_id);
 
       // handle remote send file
-      // handle remote video - audio URL
-      buttons.remote.showShareVideoAudioBtn &&
-        handlePeerVideoAudioUrl(peer_id, remoteVideoAudioUrlBtn.id);
 
       // show status menu
       toggleClassElements("statusMenu", "inline");
@@ -5237,7 +5297,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       const remoteScreenFullScreenBtn = document.createElement("button");
       const remoteScreenPinBtn = document.createElement("button");
       const remoteScreenPiPBtn = document.createElement("button");
-      const remoteScreenVideoAudioUrlBtn = document.createElement("button");
 
       const remoteScreenAvatarImage = document.createElement("img");
 
@@ -5248,12 +5307,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       // text) - matches the reference's isScreenSharing badge in the
       // name pill, and mirrors the local screen tile's own name tag.
       setPeerNameHTML(remoteScreenPeerName, peer_name, false, peer_id, true);
-
-      remoteScreenVideoAudioUrlBtn.setAttribute(
-        "id",
-        peer_id + "_screen_videoAudioUrl",
-      );
-      remoteScreenVideoAudioUrlBtn.className = className.shareVideoAudio;
 
       remoteScreenFullScreenBtn.setAttribute(
         "id",
@@ -5269,8 +5322,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
 
       if (!isMobileDevice) {
         setTippy(remoteScreenPeerName, "Màn hình người tham gia", "bottom");
-        setTippy(remoteScreenVideoAudioUrlBtn, "Gửi Video hoặc Audio", "bottom");
-
         setTippy(remoteScreenFullScreenBtn, "Chế độ toàn màn hình", "bottom");
         setTippy(remoteScreenPiPBtn, "Bật tắt hình trong hình", "bottom");
         setTippy(remoteScreenPinBtn, "Bật tắt ghim màn hình", "bottom");
@@ -5286,9 +5337,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       remoteScreenNavBar.appendChild(remoteScreenPiPBtn);
       isVideoFullScreenSupported &&
         remoteScreenNavBar.appendChild(remoteScreenFullScreenBtn);
-
-      buttons.remote.showShareVideoAudioBtn &&
-        remoteScreenNavBar.appendChild(remoteScreenVideoAudioUrlBtn);
 
       remoteScreenMedia.setAttribute("id", peer_id + "___screen");
       remoteScreenMedia.setAttribute("playsinline", true);
@@ -5329,9 +5377,6 @@ async function loadRemoteMediaStream(stream, peers, peer_id, kind) {
       updateSoloScreenTileVisibility();
 
       // handle remote send file
-      // handle remote video - audio URL
-      buttons.remote.showShareVideoAudioBtn &&
-        handlePeerVideoAudioUrl(peer_id, remoteScreenVideoAudioUrlBtn.id);
 
       // screen to image
 
@@ -6447,19 +6492,6 @@ function setChatRoomBtn() {
     showButtonsBarAndMenu();
   });
 
-  // Gửi Link Video/Audio
-  if (msgerVideoUrlBtn) {
-    msgerVideoUrlBtn.addEventListener("click", (e) => {
-      const shareTarget = getConversationShareTarget("video or audio");
-      if (!shareTarget) return;
-      sendVideoUrl(
-        shareTarget.videoPeerId,
-        shareTarget.peerName,
-        shareTarget.broadcast,
-      );
-    });
-  }
-
   // Nhấn Enter để gửi - must be keydown (not keyup): a textarea inserts
   // the newline as part of Enter's default action before keyup ever
   // fires, so preventDefault() there is too late to stop it.
@@ -7095,16 +7127,6 @@ function setupMySettings() {
     openTab(e, "tabNetwork");
   });
 
-  // tab media
-  shareMediaAudioVideoBtn.addEventListener("click", (e) => {
-    const shareTarget = getConversationShareTarget("video or audio");
-    if (!shareTarget) return;
-    sendVideoUrl(
-      shareTarget.videoPeerId,
-      shareTarget.peerName,
-      shareTarget.broadcast,
-    );
-  });
   // select audio input
   audioInputSelect.addEventListener("change", async () => {
     playSound("click");
@@ -7247,26 +7269,6 @@ function getSelectedIndexValue(elem) {
 /**
  * Make video Url player draggable
  */
-function setupVideoUrlPlayer() {
-  if (isMobileDevice) {
-    // adapt video player iframe for mobile
-    setSP("--iframe-width", "320px");
-    setSP("--iframe-height", "240px");
-  } else {
-    dragElement(videoUrlCont, videoUrlHeader);
-    dragElement(videoAudioUrlCont, videoAudioUrlHeader);
-  }
-  videoUrlCloseBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    closeVideoUrlPlayer();
-    emitVideoPlayer("close");
-  });
-  videoAudioCloseBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    closeVideoUrlPlayer();
-    emitVideoPlayer("close");
-  });
-}
 
 /**
  * Handle Camera mirror logic
@@ -10176,31 +10178,6 @@ function resolvePeerNameById(peerId = "") {
   return allPeers[peerId]?.peer_name || "";
 }
 
-function getConversationShareTarget(actionLabel = "this item") {
-  if (activeConversation.type !== "private") {
-    return {
-      broadcast: true,
-      peerId: myPeerId,
-      videoPeerId: null,
-      peerName: "",
-    };
-  }
-
-  if (!activeConversation.peerId) {
-    userLog("info", `Chuyển sang khung chat riêng để chia sẻ ${actionLabel}`);
-    return null;
-  }
-
-  return {
-    broadcast: false,
-    peerId: activeConversation.peerId,
-    videoPeerId: activeConversation.peerId,
-    peerName:
-      activeConversation.peerName ||
-      resolvePeerNameById(activeConversation.peerId),
-  };
-}
-
 /**
  * Toggle empty participants notice
  */
@@ -10424,7 +10401,6 @@ function checkMsg(txt) {
   if (isHtml(text)) return sanitizeHtml(text);
   if (isValidHttpURL(text)) {
     if (isImageURL(text)) return getImage(text);
-    //if (isVideoTypeSupported(text)) return getIframe(text);
     return getLink(text);
   }
   if (isChatPasteTxt && getLineBreaks(text) > 1) {
@@ -10582,30 +10558,6 @@ function getPre(txt) {
   pre.textContent = text;
   div.appendChild(pre);
   console.log("GetPre", div.firstChild.outerHTML);
-  return div.firstChild.outerHTML;
-}
-
-/**
- * Get IFrame from URL
- * @param {string} text
- * @returns html iframe
- */
-function getIframe(text) {
-  const url = filterXSS(text);
-  const iframe = document.createElement("iframe");
-  const div = document.createElement("div");
-  const is_youtube = getVideoType(url) == "na" ? true : false;
-  const video_audio_url = is_youtube ? getYoutubeEmbed(url) : url;
-  iframe.setAttribute("src", video_audio_url);
-  iframe.setAttribute("width", "auto");
-  iframe.setAttribute("frameborder", "0");
-  iframe.setAttribute(
-    "allow",
-    "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture",
-  );
-  iframe.setAttribute("allowfullscreen", "allowfullscreen");
-  div.appendChild(iframe);
-  console.log("GetIFrame", div.firstChild.outerHTML);
   return div.firstChild.outerHTML;
 }
 
@@ -11273,18 +11225,6 @@ function handlePeerVideoBtn(peer_id) {
     if (peerVideoBtn.className === className.videoOn && isPresenter) {
       disablePeer(peer_id, "video");
     }
-  };
-}
-
-/**
- * Send video - audio URL to specific peer
- * @param {string} peer_id socket.id
- * @param {string} peerYoutubeBtnId youtube button id
- */
-function handlePeerVideoAudioUrl(peer_id, peerYoutubeBtnId) {
-  const peerYoutubeBtn = getId(peerYoutubeBtnId);
-  peerYoutubeBtn.onclick = () => {
-    sendVideoUrl(peer_id);
   };
 }
 
@@ -12035,241 +11975,6 @@ function handleUnlockTheRoom() {
     elemDisplay(lockRoomBtn, false);
     elemDisplay(unlockRoomBtn, true);
   });
-}
-
-/**
- * Opend and send Video URL to all peers in the room
- * @param {string} peer_id socket.id
- */
-function sendVideoUrl(peer_id = null, peer_name = "", broadcast = !peer_id) {
-  playSound("newMessage");
-
-  const targetPeerName = !broadcast
-    ? filterXSS(peer_name || resolvePeerNameById(peer_id) || "Người tham gia")
-    : "";
-  const targetLabel =
-    !broadcast && targetPeerName ? ` với ${targetPeerName}` : "";
-
-  Swal.fire({
-    background: swBg,
-    position: "center",
-    imageUrl: images.vaShare,
-    title: `Chia sẻ Video hoặc Audio${targetLabel}`,
-    text: `Dán URL Video hoặc audio${targetLabel}`,
-    input: "text",
-    showCancelButton: true,
-    confirmButtonText: `Chia sẻ`,
-    showClass: { popup: "animate__animated animate__fadeInDown" },
-    hideClass: { popup: "animate__animated animate__fadeOutUp" },
-  }).then((result) => {
-    if (result.value) {
-      result.value = filterXSS(result.value);
-      if (!thereArePeerConnections()) {
-        return toastMessage("info", "Không phát hiện người tham gia nào", "", "top");
-      }
-      console.log("Video URL: " + result.value);
-      /*
-                https://www.youtube.com/watch?v=RT6_Id5-7-s
-                http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
-                https://www.learningcontainer.com/wp-content/uploads/2020/02/Kalimba.mp3
-            */
-      if (!isVideoTypeSupported(result.value)) {
-        return userLog(
-          "warning",
-          "URL không hợp lệ, vui lòng thử một URL Video hoặc audio khác",
-        );
-      }
-      const is_youtube = getVideoType(result.value) == "na" ? true : false;
-      const video_url = is_youtube
-        ? getYoutubeEmbed(result.value)
-        : result.value;
-      const config = {
-        peer_id: peer_id,
-        video_src: video_url,
-        broadcast: broadcast,
-      };
-      openVideoUrlPlayer(config);
-      emitVideoPlayer("open", config);
-      appendMessage(
-        myPeerName,
-        rightChatAvatar,
-        "right",
-        `${icons.share} Shared media: <br/><a href="${video_url}" target="_blank" rel="noopener noreferrer">${video_url}</a>`,
-        !broadcast,
-        null,
-        targetPeerName,
-      );
-    }
-  });
-
-  // Take URL from clipboard ex:
-  // https://www.youtube.com/watch?v=1ZYbU82GVz4
-  //
-  // Mobile-only skip: iOS shows its own native "Dán"/Paste permission
-  // bubble on top of the dialog the instant this Clipboard API call
-  // fires, so the dialog looks like it needs a second tap before it's
-  // actually usable. Mobile users can still paste normally (long-press)
-  // straight into the input, so just skip the auto-fill there.
-  if (!isMobileDevice) {
-    navigator.clipboard
-      .readText()
-      .then((clipboardText) => {
-        if (!clipboardText) return false;
-        const sanitizedText = filterXSS(clipboardText);
-        const inputElement = Swal.getInput();
-        if (isVideoTypeSupported(sanitizedText) && inputElement) {
-          inputElement.value = sanitizedText;
-        }
-        return false;
-      })
-      .catch(() => {
-        return false;
-      });
-  }
-}
-
-/**
- * Open video url Player
- */
-function openVideoUrlPlayer(config) {
-  console.log("Open video Player", config);
-  const videoSrc = config.video_src;
-  const videoType = getVideoType(videoSrc);
-  const videoEmbed = getYoutubeEmbed(videoSrc);
-  console.log("Video embed", videoEmbed);
-  //
-  if (!isVideoUrlPlayerOpen) {
-    if (videoEmbed) {
-      playSound("newMessage");
-      console.log("Load element type: iframe");
-      videoUrlIframe.src = videoEmbed;
-      elemDisplay(videoUrlCont, true, "flex");
-      isVideoUrlPlayerOpen = true;
-    } else {
-      playSound("newMessage");
-      console.log("Load element type: Video");
-      elemDisplay(videoAudioUrlCont, true, "flex");
-      videoAudioUrlElement.setAttribute("src", videoSrc);
-      videoAudioUrlElement.type = videoType;
-      if (videoAudioUrlElement.type == "video/mp3") {
-        videoAudioUrlElement.poster = images.audioGif;
-      }
-      isVideoUrlPlayerOpen = true;
-    }
-  } else {
-    // video player seems open
-    if (videoEmbed) {
-      videoUrlIframe.src = videoEmbed;
-    } else {
-      videoAudioUrlElement.src = videoSrc;
-    }
-  }
-}
-
-/**
- * Get video type
- * @param {string} url
- * @returns string video type
- */
-function getVideoType(url) {
-  if (url.endsWith(".mp4")) return "video/mp4";
-  if (url.endsWith(".mp3")) return "video/mp3";
-  if (url.endsWith(".webm")) return "video/webm";
-  if (url.endsWith(".ogg")) return "video/ogg";
-  return "na";
-}
-
-/**
- * Check if video URL is supported
- * @param {string} url
- * @returns boolean true/false
- */
-function isVideoTypeSupported(url) {
-  if (
-    url.endsWith(".mp4") ||
-    url.endsWith(".mp3") ||
-    url.endsWith(".webm") ||
-    url.endsWith(".ogg") ||
-    url.includes("youtube.com")
-  )
-    return true;
-  return false;
-}
-
-/**
- * Get youtube embed URL
- * @param {string} url of YouTube video
- * @returns {string} YouTube Embed URL
- */
-function getYoutubeEmbed(url) {
-  const regExp =
-    /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
-  const match = url.match(regExp);
-  return match && match[7].length == 11
-    ? "https://www.youtube.com/embed/" + match[7] + "?autoplay=1"
-    : false;
-}
-
-/**
- * Close Video Url Player
- */
-function closeVideoUrlPlayer() {
-  console.log("Close video Player", {
-    videoUrlIframe: videoUrlIframe.src,
-    videoAudioUrlElement: videoAudioUrlElement.src,
-  });
-  if (videoUrlIframe.src != "") videoUrlIframe.setAttribute("src", "");
-  if (videoAudioUrlElement.src != "")
-    videoAudioUrlElement.setAttribute("src", "");
-  elemDisplay(videoUrlCont, false);
-  elemDisplay(videoAudioUrlCont, false);
-  isVideoUrlPlayerOpen = false;
-}
-
-/**
- * Emit video palyer to peers
- * @param {string} video_action type
- * @param {object} config data
- */
-function emitVideoPlayer(video_action, config = {}) {
-  sendToServer("videoPlayer", {
-    room_id: roomId,
-    peer_name: myPeerName,
-    video_action: video_action,
-    video_src: config.video_src,
-    peer_id: config.peer_id,
-    broadcast: config.broadcast,
-  });
-}
-
-/**
- * Handle Video Player
- * @param {object} config data
- */
-function handleVideoPlayer(config) {
-  const { peer_name, video_action, video_src, broadcast } = config;
-  //
-  switch (video_action) {
-    case "open":
-      userLog("toast", `${icons.user} ${peer_name} \n đã mở trình phát video`);
-      openVideoUrlPlayer(config);
-      appendMessage(
-        peer_name,
-        leftChatAvatar,
-        "left",
-        `${icons.share} Media đã chia sẻ: <br/><a href="${video_src}" target="_blank" rel="noopener noreferrer">${video_src}</a>`,
-        !broadcast,
-        null,
-        peer_name,
-      );
-      break;
-    case "close":
-      userLog("toast", `${icons.user} ${peer_name} \n đã đóng trình phát video`);
-      closeVideoUrlPlayer();
-      break;
-    default:
-      break;
-  }
 }
 
 /**

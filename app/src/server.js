@@ -2585,56 +2585,6 @@ io.sockets.on("connect", async (socket) => {
   });
 
   /**
-   * Relay video player action
-   */
-  socket.on("videoPlayer", async (cfg) => {
-    // Prevent XSS injection
-    const config = checkXSS(cfg);
-
-    if (!Validate.isValidData(config)) return;
-
-    // log.debug('Video player', config);
-    const { room_id, peer_id, peer_name, video_action, video_src, broadcast } =
-      config;
-
-    // Check if valid video src url
-    if (video_action == "open" && !isValidHttpURL(video_src)) {
-      log.debug("[" + socket.id + "] Video src not valid", config);
-      return;
-    }
-
-    const data = {
-      peer_id: socket.id,
-      peer_name: peer_name,
-      video_action: video_action,
-      video_src: video_src,
-      broadcast: broadcast,
-    };
-
-    if (peer_id) {
-      log.debug(
-        "[" +
-          socket.id +
-          "] emit videoPlayer to [" +
-          peer_id +
-          "] from room_id [" +
-          room_id +
-          "]",
-        data,
-      );
-
-      await sendToPeer(peer_id, sockets, "videoPlayer", data);
-    } else {
-      log.debug(
-        "[" + socket.id + "] emit videoPlayer to [room_id: " + room_id + "]",
-        data,
-      );
-
-      await sendToRoom(room_id, socket.id, "videoPlayer", data);
-    }
-  });
-
-  /**
    * Add peers to channel
    * @param {string} channel room id
    */
@@ -2793,20 +2743,6 @@ io.sockets.on("connect", async (socket) => {
     }
   }
 }); // end [sockets.on-connect]
-
-/**
- * Check if valid URL
- * @param {string} str to check
- * @returns boolean true/false
- */
-function isValidHttpURL(input) {
-  try {
-    const url = new URL(input);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch (_) {
-    return false;
-  }
-}
 
 /**
  * get Peer geo Location using GeoJS
