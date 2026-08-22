@@ -306,17 +306,17 @@ export function NotePad({ isOpen, onClose, text, setText }: NotePadProps) {
             </div>
             <div className="w-px h-4 bg-zinc-300"></div>
             <div className="flex items-center bg-zinc-200/50 rounded-lg p-0.5 no-drag" onDoubleClick={(e) => e.stopPropagation()}>
-              <button onClick={() => setFontSize((f) => Math.max(MIN_FONT, f - 2))} className="w-6 h-6 flex items-center justify-center rounded hover:bg-white text-zinc-600 font-black text-xs transition-colors">
+              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setFontSize((f) => Math.max(MIN_FONT, f - 2))} className="w-6 h-6 flex items-center justify-center rounded hover:bg-white text-zinc-600 font-black text-xs transition-colors">
                 -
               </button>
               <span className="px-1 text-[10px] font-bold text-zinc-500 w-5 text-center">A</span>
-              <button onClick={() => setFontSize((f) => Math.min(MAX_FONT, f + 2))} className="w-6 h-6 flex items-center justify-center rounded hover:bg-white text-zinc-600 font-black text-xs transition-colors">
+              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setFontSize((f) => Math.min(MAX_FONT, f + 2))} className="w-6 h-6 flex items-center justify-center rounded hover:bg-white text-zinc-600 font-black text-xs transition-colors">
                 +
               </button>
             </div>
           </div>
           <div className="flex items-center gap-1.5 no-drag" onDoubleClick={(e) => e.stopPropagation()}>
-            <button onClick={toggleMaximize} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-zinc-200 text-zinc-500 transition-all active:scale-90">
+            <button onMouseDown={(e) => e.preventDefault()} onClick={toggleMaximize} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-zinc-200 text-zinc-500 transition-all active:scale-90">
               {isMaximized ? (
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
