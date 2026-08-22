@@ -8,6 +8,7 @@ import Blackboard from './Blackboard';
 import NotePad from './NotePad';
 import FlashcardModal from './FlashcardModal';
 import { getVocabAudioUrl, getPooledVocabAudio, preloadLessonVocabAudio } from '../utils/vocabAudioCache';
+import { probeSlideImages } from '../utils/probeSlideImages';
 import type { VocabWord, GrammarPoint } from '../types';
 
 /**
@@ -16,8 +17,10 @@ import type { VocabWord, GrammarPoint } from '../types';
  *     (thường là link Google Drive chia sẻ, không phải file trực tiếp nên
  *     không nhúng được trong app - Drive cần phiên đăng nhập riêng của
  *     Google, không đi kèm cookie đăng nhập của web này).
- *   - "Slide" (chỉ giáo viên/admin): `lesson.slideImages` - mảng ảnh, hiển
- *     thị bằng SlideShow.tsx (component ảnh đơn giản, không PDF.js).
+ *   - "Slide" (chỉ giáo viên/admin): `lesson.slideFolder` - 1 thư mục ảnh
+ *     đặt tên tuần tự (1.svg/2.svg/...), hệ thống tự DÒ ra danh sách rồi
+ *     hiển thị bằng SlideShow.tsx (component ảnh đơn giản, không PDF.js) -
+ *     xem effect dò slide bên dưới, utils/probeSlideImages.ts và types.ts.
  */
 export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   courseId: string,
@@ -138,7 +141,29 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   };
 
   // --- Slide trình chiếu (giáo viên/admin) ---
-  const slideImages: string[] = lesson?.slideImages ?? [];
+  // Tự DÒ qua `slideFolder` (xem utils/probeSlideImages.ts + types.ts) -
+  // không còn cách liệt kê tay từng URL nữa.
+  const [slideImages, setSlideImages] = useState<string[]>([]);
+  const [slideProbing, setSlideProbing] = useState(false);
+
+  useEffect(() => {
+    setSlideImages([]);
+    if (!lesson || !lesson.slideFolder) return;
+    let cancelled = false;
+    setSlideProbing(true);
+    probeSlideImages(lesson.slideFolder, { ext: lesson.slideExt })
+      .then((urls) => {
+        if (!cancelled) setSlideImages(urls);
+      })
+      .finally(() => {
+        if (!cancelled) setSlideProbing(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessonKey, lesson?.slideFolder, lesson?.slideExt]);
+
   const hasSlideImages = slideImages.length > 0;
 
   const toggleContentTab = (tab: 'vocab' | 'grammar') => {
@@ -334,8 +359,14 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
                 disabled={!hasSlideImages}
                 className="bg-blue-600 border border-blue-400/60 p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md shadow-blue-900/30 transition-all hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-900/40 disabled:opacity-40 disabled:pointer-events-none disabled:hover:translate-y-0"
               >
-                <MonitorPlay className="w-6 h-6 text-white" />
-                <span className="text-xs font-bold text-white uppercase tracking-wider">Slide</span>
+                {slideProbing ? (
+                  <div className="w-6 h-6 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <MonitorPlay className="w-6 h-6 text-white" />
+                )}
+                <span className="text-xs font-bold text-white uppercase tracking-wider">
+                  {slideProbing ? 'Đang tải...' : 'Slide'}
+                </span>
               </button>
             )}
 
@@ -361,7 +392,7 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
             const missing = [
               vocabulary.length === 0 && 'từ vựng để luyện tập',
               !hasLessonFile && 'tài liệu',
-              isTeacherOrAdmin && !hasSlideImages && 'slide trình chiếu',
+              isTeacherOrAdmin && !hasSlideImages && !slideProbing && 'slide trình chiếu',
             ].filter(Boolean) as string[];
             if (missing.length === 0) return null;
             return (

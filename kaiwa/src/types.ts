@@ -73,17 +73,23 @@ export interface Lesson {
    */
   lessonFileUrl?: string;
   /**
-   * Danh sách ảnh slide trình chiếu dành cho giáo viên (nút "Slide") - KHÁC
-   * với `lessonFileUrl` (tài liệu học viên tự xem, luôn mở tab mới). Mỗi
-   * phần tử là URL 1 ảnh (jpg/png), ĐÚNG THỨ TỰ trang cần chiếu. Cách tạo:
-   * xuất slide (PowerPoint/Google Slides/Keynote) ra ảnh - PowerPoint có sẵn
-   * File > Export > Change File Type > PNG (xuất mỗi trang 1 ảnh), Google
-   * Slides/Keynote thì xuất PDF rồi convert PDF -> ảnh bằng công cụ online.
-   * Đặt các ảnh vào public/kaiwa-files/ (vd thư mục riêng theo buổi học)
-   * rồi liệt kê URL tương đối theo đúng thứ tự vào mảng này.
-   * Trống/rỗng = buổi học chưa có slide, nút "Slide" sẽ bị vô hiệu hóa.
+   * Ảnh slide trình chiếu dành cho giáo viên (nút "Slide") - KHÁC với
+   * `lessonFileUrl` (tài liệu học viên tự xem, luôn mở tab mới). 1 thư mục
+   * ảnh đặt tên TUẦN TỰ liên tục "1.svg, 2.svg, 3.svg, ..." (không nhảy
+   * số) - hệ thống tự dò lần lượt (LessonView.tsx, utils/probeSlideImages.ts)
+   * bằng cách thử tải ảnh 1, 2, 3... cho tới khi gặp ảnh không tồn tại
+   * (404) thì dừng, không cần biết trước có bao nhiêu ảnh và không cần
+   * liệt kê từng URL vào Supabase. Vd đặt ảnh buổi 1 lên Cloudflare tại
+   * ".../slides/buoi-1/1.svg" .. "10.svg" thì set
+   * `slideFolder: "https://.../slides/buoi-1/"` (có hay không dấu "/" cuối
+   * đều được). Đuôi file mặc định là "svg", đổi bằng `slideExt` nếu dùng
+   * jpg/png.
+   * Trống (hoặc dò ra 0 ảnh) = buổi học chưa có slide, nút "Slide" sẽ bị
+   * vô hiệu hóa.
    */
-  slideImages?: string[];
+  slideFolder?: string;
+  /** Đuôi file ảnh khi dò qua `slideFolder`, mặc định "svg" (vd "png", "jpg"). */
+  slideExt?: string;
 }
 
 export interface Course {

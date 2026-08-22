@@ -3,7 +3,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Presentation, NotebookText, PenLi
 import CallControls from './CallControls';
 
 interface SlideShowProps {
-  /** Danh sách URL ảnh slide, đúng thứ tự trang (xem types.ts: Lesson.slideImages). */
+  /** Danh sách URL ảnh slide, đúng thứ tự trang (dò ra từ Lesson.slideFolder - xem types.ts). */
   images: string[];
   title?: string;
   onClose: () => void;
