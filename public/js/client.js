@@ -227,6 +227,10 @@ const isIPadDevice = parserResult.device.model?.toLowerCase() === "ipad";
 const isDesktopDevice = deviceType === "desktop";
 const osName = parserResult.os.name;
 const osVersion = parserResult.os.version;
+// Android spans far too wide a hardware range (cheap-to-flagship) to trust
+// a safe default the way iPhone's narrower lineup allows - see
+// mic_noise_suppression default below and getAudioConstraints().
+const isAndroidDevice = osName === "Android";
 const browserName = parserResult.browser.name;
 const browserVersion = parserResult.browser.version;
 const isFirefox = browserName.toLowerCase().includes("firefox");
@@ -251,6 +255,18 @@ if (
   lsSettings.video_obj_fit = 1; // contain
 }
 lsSettings._videoObjFitMigrated = true;
+
+// Android defaults "Khử tiếng ồn" (RNNoise) to OFF on a genuinely fresh
+// install only (localStorageSettings === null - nothing saved yet at all)
+// - never overrides a returning Android user's own choice either way.
+// getAudioConstraints() still requests the browser's own built-in noise
+// suppression regardless of this toggle on Android, so "off" here never
+// means a fully raw/unprocessed mic - only the heavier RNNoise WASM path
+// is opt-in. iOS/desktop are untouched, RNNoise stays the default there.
+if (!localStorageSettings && isAndroidDevice) {
+  lsSettings.mic_noise_suppression = false;
+}
+
 console.log("LOCAL_STORAGE_SETTINGS", lsSettings);
 
 // Check if embedded inside an iFrame
@@ -468,6 +484,7 @@ const tabRoomParticipants = getId("tabRoomParticipants");
 const tabRoomSecurity = getId("tabRoomSecurity");
 
 const noiseSuppressionBtn = getId("noiseSuppressionBtn");
+const noiseSuppressionWeakDeviceNote = getId("noiseSuppressionWeakDeviceNote");
 const isPeerPresenter = getId("isPeerPresenter");
 const peersCount = getId("peersCount");
 const screenFpsDiv = getId("screenFpsDiv");
@@ -2661,31 +2678,12 @@ function handleRNNoiseNotSupported() {
 }
 
 /**
- * Rough, instant pre-filter for "this CPU probably can't run the RNNoise
- * WASM pipeline in real time" - checked BEFORE ever downloading/starting
- * it, so a clearly low-end device skips straight to the browser's built-in
- * noise suppression (saves the ~MB WASM download too, not just the CPU).
- * Deliberately conservative (easy to trip) since a false positive here just
- * means using the built-in noise suppression instead of RNNoise - not a
- * broken call - whereas the real-time self-test in enableNoiseSuppression /
- * handleRNNoiseTooSlow still catches whatever this heuristic misses.
- * @returns {boolean}
- */
-function isLikelyWeakDevice() {
-  const cores = navigator.hardwareConcurrency;
-  if (typeof cores === "number" && cores > 0 && cores <= 4) return true;
-  // deviceMemory (GB, Chrome/Edge only) is rounded/approximate by spec.
-  const mem = navigator.deviceMemory;
-  if (typeof mem === "number" && mem > 0 && mem <= 2) return true;
-  return false;
-}
-
-/**
  * Switch to the browser's own built-in noise suppression instead of the
- * custom RNNoise WASM pipeline - used both as the instant path for devices
- * isLikelyWeakDevice() flags up front, and as the mid-call fallback from
- * handleRNNoiseTooSlow() once the real-time self-test catches a device that
- * heuristic missed. Applies the constraint on the live mic track in place
+ * custom RNNoise WASM pipeline - used both as the instant path for Android
+ * devices that haven't opted into RNNoise (see the mic_noise_suppression
+ * default and getAudioConstraints()), and as the mid-call fallback from
+ * handleRNNoiseTooSlow() once the real-time self-test catches a device
+ * struggling to keep up. Applies the constraint on the live mic track in place
  * (no renegotiation needed) - keeps working even if this device already
  * doesn't support the `noiseSuppression` constraint, just without any
  * suppression at all then, same as a plain mic.
@@ -2775,12 +2773,12 @@ async function enableNoiseSuppression() {
     return false;
   }
 
-  // Already known (this session or a previous one) or heuristically likely
-  // to be too weak for the WASM pipeline - skip straight to the browser's
-  // built-in noise suppression instead of trying RNNoise first.
-  if (lsSettings.rnnoise_native_fallback || isLikelyWeakDevice()) {
+  // Already measured (this session or a previous one) as too slow for the
+  // WASM pipeline in real time - skip straight to the browser's built-in
+  // noise suppression instead of trying RNNoise again.
+  if (lsSettings.rnnoise_native_fallback) {
     console.log(
-      "RNNoise: skipping WASM pipeline (weak device heuristic/previous fallback), using built-in noise suppression.",
+      "RNNoise: skipping WASM pipeline (previously measured too slow on this device), using built-in noise suppression.",
     );
     return await useNativeNoiseSuppression(false);
   }
@@ -7185,6 +7183,13 @@ function setupMySettings() {
     elemDisplay(videoFpsDiv, false);
   }
 
+  // Android's hardware spread is too wide to trust a safe default the way
+  // iPhone's narrower lineup allows (see the mic_noise_suppression default
+  // above) - nudge Android users who go turn it on themselves anyway.
+  if (isAndroidDevice) {
+    elemDisplay(noiseSuppressionWeakDeviceNote, true, "block");
+  }
+
   // select video fps
   videoFpsSelect.addEventListener("change", (e) => {
     videoMaxFrameRate = parseInt(videoFpsSelect.value, 10);
@@ -7414,9 +7419,17 @@ async function applyContextualCameraConstraints() {
  * @returns {object} audio constraints
  */
 function getAudioConstraints(deviceId = null) {
-  // If custom RNNoise is enabled but not supported, fall back to built-in WebRTC noise suppression
+  // Fall back to the browser's own built-in noise suppression whenever
+  // RNNoise won't actually be running: custom RNNoise disabled entirely,
+  // unsupported on this browser, OR (Android only) the user simply hasn't
+  // turned "Khử tiếng ồn" on - Android defaults that off (see lsSettings
+  // migration above) but should never mean a fully raw/unprocessed mic,
+  // only the heavier RNNoise path is opt-in there. iOS/desktop: an off
+  // toggle there does mean no suppression at all, same as before.
   const useBuiltInNoiseSuppression =
-    !buttons.settings.customNoiseSuppression || !isRNNoiseSupported;
+    !buttons.settings.customNoiseSuppression ||
+    !isRNNoiseSupported ||
+    (isAndroidDevice && !lsSettings.mic_noise_suppression);
 
   // Enhanced audio constraints for better quality and volume on all devices
   // On mobile, use { ideal: true } so getUserMedia succeeds even if the

@@ -1192,6 +1192,16 @@ micro để sử dụng ứng dụng này.
                     <i class="fas fa-ear-listen"></i>
                     <p id="labelNoiseSuppression">Khử tiếng ồn</p>
                   </div>
+                  <!-- Chỉ hiện trên Android (gắn display qua JS - xem
+                       isAndroidDevice trong client.js): máy Android quá đa
+                       dạng cấu hình để tin tưởng mặc định an toàn như
+                       iPhone, nên nhắc trước khi người dùng tự bật. -->
+                  <small
+                    id="noiseSuppressionWeakDeviceNote"
+                    class="noise-suppression-weak-device-note"
+                    style="display: none"
+                    >*Máy yếu không nên bật</small
+                  >
                 </td>
                 <td>
                   <input
