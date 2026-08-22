@@ -3,6 +3,7 @@ import { ArrowLeft, PlayCircle, ChevronRight, Check, Lock } from 'lucide-react';
 import { useCourses } from '../context/CoursesContext';
 import { useCallEmbed } from '../hooks/useCallEmbed';
 import { isCourseAllowed } from '../utils/courseAccess';
+import { waitForAuthUser } from '../utils/authState';
 import CallControls from './CallControls';
 
 
@@ -26,16 +27,13 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
   const [authUser, setAuthUser] = useState<any>(undefined);
   const [authChecked, setAuthChecked] = useState(false);
   useEffect(() => {
-    const w = window as any;
-    const apply = () => {
-      setAuthUser(w.__authUser);
+    // waitForAuthUser() tự đợi window.__authReady xuất hiện rồi mới đọc,
+    // thay vì coi ngay là "chưa đăng nhập" nếu authGuard (common.js) chưa
+    // kịp chạy tới - xem giải thích đầy đủ trong utils/authState.ts.
+    waitForAuthUser().then((authUser) => {
+      setAuthUser(authUser);
       setAuthChecked(true);
-    };
-    if (w.__authReady) {
-      w.__authReady.then(apply);
-    } else {
-      apply();
-    }
+    });
   }, []);
   const isAllowed = isCourseAllowed(authUser, courseId);
 

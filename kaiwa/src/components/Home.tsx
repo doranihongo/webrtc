@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BookOpen, ChevronRight, MessageCircle, MessagesSquare, Lock, Unlock, Library, Users, Wrench, Repeat, Headphones, Mic, X, Film, PlayCircle, Video, PictureInPicture } from 'lucide-react';
 import { useCourses } from '../context/CoursesContext';
 import { isCourseAllowed } from '../utils/courseAccess';
+import { waitForAuthUser } from '../utils/authState';
 import KaiwaModal from './KaiwaModal';
 import DictationModal from './DictationModal';
 import YoutubeShadowingModal from './YoutubeShadowingModal';
@@ -53,6 +54,15 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
   // __authReady giống hệt userRole ở trên (window.__authUser có thể chưa
   // gắn xong ở lần render đầu).
   const [allowedCourses, setAllowedCourses] = useState<string[]>([]);
+  // true khi đã đọc xong window.__authUser (dù có hay không) - trong lúc
+  // false (mới mount, đang đợi authGuard ở common.js chạy xong) KHÔNG được
+  // coi khóa học là "đang khóa": userRole/allowedCourses vẫn còn giá trị
+  // khởi tạo rỗng lúc đó, nếu tính isAllowed ngay sẽ nháy "Đang khóa" cho
+  // mọi khóa kể cả với tài khoản admin/giáo viên - dễ thấy nhất khi trang
+  // này được tải ngầm trong iframe lúc đang gọi (isEmbeddedInCall, xem
+  // useCallEmbed.ts), lúc mạng/CPU đang bận rộn cho WebRTC nên authGuard
+  // có thể chậm hơn bình thường.
+  const [authChecked, setAuthChecked] = useState(false);
   // Trạng thái PiP thật bên trang gọi (client.js) - chỉ có ý nghĩa khi
   // isEmbeddedInCall, đồng bộ qua postMessage "dora:pipState" (xem
   // useEffect bên dưới + sendPipStateToKaiwa trong public/js/client.js).
@@ -72,20 +82,16 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
       if (widget) widget.style.display = 'none';
     }
 
-    const w = window as any;
-    const applyRole = () => {
-      setUserRole(w.__authUser?.role);
+    // waitForAuthUser() tự đợi window.__authReady xuất hiện rồi mới đọc,
+    // thay vì coi ngay là "chưa đăng nhập" nếu authGuard (common.js) chưa
+    // kịp chạy tới - xem giải thích đầy đủ trong utils/authState.ts.
+    waitForAuthUser().then((authUser) => {
+      setUserRole(authUser?.role);
       setAllowedCourses(
-        Array.isArray(w.__authUser?.allowedCourses)
-          ? w.__authUser.allowedCourses
-          : [],
+        Array.isArray(authUser?.allowedCourses) ? authUser.allowedCourses : [],
       );
-    };
-    if (w.__authReady) {
-      w.__authReady.then(applyRole);
-    } else {
-      applyRole();
-    }
+      setAuthChecked(true);
+    });
   }, []);
 
   const showReturnToCall =
@@ -228,7 +234,14 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
 
              <div className="grid grid-cols-1 sm:grid-cols-3 w-full gap-6 md:gap-8">
                {courses.map(course => {
-                 const isAllowed = isCourseAllowed(
+                 // Chưa đọc xong window.__authUser (authChecked=false) -
+                 // coi tạm là "được phép" để KHÔNG nháy nhãn "Đang khóa"
+                 // sai cho tài khoản admin/giáo viên trong lúc chờ (xem
+                 // giải thích ở khai báo state authChecked phía trên).
+                 // Nếu lỡ bấm vào trong lúc này mà hóa ra không được phép,
+                 // CourseDetail.tsx tự có lớp kiểm tra lại thật sự trước
+                 // khi hiện nội dung.
+                 const isAllowed = !authChecked || isCourseAllowed(
                    { role: userRole, allowedCourses },
                    course.id,
                  );

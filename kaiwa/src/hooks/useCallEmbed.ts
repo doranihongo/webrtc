@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { waitForAuthUser } from '../utils/authState';
 
 /**
  * Phát hiện trang hiện tại đang được nhúng (iframe) trong 1 cuộc gọi đang
@@ -22,13 +23,10 @@ export function useCallEmbed() {
     const params = new URLSearchParams(window.location.search);
     setIsEmbeddedInCall(params.get('embed') === 'call');
 
-    const w = window as any;
-    const applyRole = () => setUserRole(w.__authUser?.role);
-    if (w.__authReady) {
-      w.__authReady.then(applyRole);
-    } else {
-      applyRole();
-    }
+    // waitForAuthUser() tự đợi window.__authReady xuất hiện rồi mới đọc,
+    // thay vì coi ngay là "chưa đăng nhập" nếu authGuard (common.js) chưa
+    // kịp chạy tới - xem giải thích đầy đủ trong utils/authState.ts.
+    waitForAuthUser().then((authUser) => setUserRole(authUser?.role));
   }, []);
 
   // Chỉ giaovien/admin mới thấy cụm nút PiP/quay-lại-phòng-học - khớp với

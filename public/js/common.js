@@ -86,6 +86,43 @@ setTimeout(revealPage, 6000);
 // decodeJwtIssuedAtMs() dùng ở đây được định nghĩa chung trong
 // supabaseClient.js (load trước common.js ở cả landing.html/client.html).
 
+// Trang này còn được tải trong 1 iframe ẨN, nạp NGẦM ngay lúc vào phòng
+// gọi (kaiwaOverlayIframe, xem setGoHomeCornerBtn trong
+// public/js/client.js) - cạnh tranh CPU/băng thông trực tiếp với WebRTC
+// đang khởi động, và (khác landing/client.html) sẽ KHÔNG BAO GIỜ được tải
+// lại lần nào khác trong suốt cuộc gọi. Nếu truy vấn "profiles" bị lỗi
+// mạng/timeout thoáng qua đúng lúc đó, nhánh xử lý lỗi bên dưới vốn chủ ý
+// "để lần tải trang sau tự thử lại" (không đăng xuất) sẽ không còn cơ hội
+// thử lại nào nữa với trang này - window.__authUser bị bỏ trống vĩnh viễn,
+// khiến kaiwa hiện toàn bộ khóa học là "đang khóa" dù tài khoản có quyền.
+// Tự thử lại vài lần ở đây trước khi coi là lỗi mạng thật sự.
+const PROFILE_FETCH_RETRIES = 3;
+const PROFILE_FETCH_RETRY_DELAY_MS = 1200;
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchProfileWithRetry(userId) {
+  let result = { data: null, error: null };
+  for (let attempt = 1; attempt <= PROFILE_FETCH_RETRIES; attempt++) {
+    result = await supabaseClient
+      .from("profiles")
+      .select(
+        "role, display_name, is_first_login, password_changed_at, max_devices, expires_at, allowed_courses",
+      )
+      .eq("id", userId)
+      .single();
+
+    const { data: profile, error } = result;
+    // Có profile hợp lệ, hoặc lỗi chắc chắn không phải do mạng (vd token
+    // đã chết) - dừng ngay, không cần thử lại.
+    if (profile || (error && isAuthInvalidError(error))) break;
+    if (attempt < PROFILE_FETCH_RETRIES) await delay(PROFILE_FETCH_RETRY_DELAY_MS);
+  }
+  return result;
+}
+
 window.__authReady = (async function authGuard() {
   try {
     const {
@@ -97,13 +134,7 @@ window.__authReady = (async function authGuard() {
       return;
     }
 
-    const { data: profile, error } = await supabaseClient
-      .from("profiles")
-      .select(
-        "role, display_name, is_first_login, password_changed_at, max_devices, expires_at, allowed_courses",
-      )
-      .eq("id", session.user.id)
-      .single();
+    const { data: profile, error } = await fetchProfileWithRetry(session.user.id);
 
     if (error || !profile || !ALLOWED_ROLES.includes(profile.role)) {
       // Không lấy được profile (error, chưa chắc role sai) - phân biệt
