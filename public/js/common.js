@@ -100,7 +100,7 @@ window.__authReady = (async function authGuard() {
     const { data: profile, error } = await supabaseClient
       .from("profiles")
       .select(
-        "role, display_name, is_first_login, password_changed_at, max_devices, expires_at",
+        "role, display_name, is_first_login, password_changed_at, max_devices, expires_at, allowed_courses",
       )
       .eq("id", session.user.id)
       .single();
@@ -178,6 +178,16 @@ window.__authReady = (async function authGuard() {
       displayName: profile.display_name || session.user.email,
       maxDevices: profile.max_devices,
       expiresAt: profile.expires_at,
+      // Danh sách id khóa học (kaiwa-socap, kaiwa-trungcap...) tài khoản
+      // này được cấp quyền - cột `allowed_courses` (mảng) trong `profiles`,
+      // hiện đang được thêm/sửa TAY qua Supabase Table Editor (chưa có
+      // trang quản trị riêng). Dùng ở Home.tsx/CourseDetail.tsx (kaiwa/src)
+      // để khóa/mở từng khóa học - KHÔNG áp dụng cho admin/giaovien (staff
+      // xem/dạy được mọi khóa, xem isCourseAllowed trong
+      // kaiwa/src/utils/courseAccess.ts).
+      allowedCourses: Array.isArray(profile.allowed_courses)
+        ? profile.allowed_courses
+        : [],
     };
     revealPage();
   } catch (err) {

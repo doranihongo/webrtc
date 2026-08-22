@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, PlayCircle, ChevronRight, Check, Lock } from 'lucide-react';
 import { useCourses } from '../context/CoursesContext';
 import { useCallEmbed } from '../hooks/useCallEmbed';
+import { isCourseAllowed } from '../utils/courseAccess';
 import CallControls from './CallControls';
 
 
@@ -16,7 +17,27 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const { showCallControls, isPipActive } = useCallEmbed();
 
-  const isAllowed = true;
+  // Lớp phòng thủ thứ 2 - Home.tsx đã chặn không cho bấm vào khóa chưa
+  // được cấp quyền rồi (onSelectCourse chỉ gọi khi isAllowed), nhưng vẫn
+  // tự kiểm tra lại ở đây cho chắc (không tin tưởng hoàn toàn component
+  // cha). undefined lúc mới mount (đợi __authReady) -> coi như CHƯA xác
+  // định, không phải "bị khóa" - tránh nháy nhầm màn khóa trước khi kịp
+  // đọc xong window.__authUser.
+  const [authUser, setAuthUser] = useState<any>(undefined);
+  const [authChecked, setAuthChecked] = useState(false);
+  useEffect(() => {
+    const w = window as any;
+    const apply = () => {
+      setAuthUser(w.__authUser);
+      setAuthChecked(true);
+    };
+    if (w.__authReady) {
+      w.__authReady.then(apply);
+    } else {
+      apply();
+    }
+  }, []);
+  const isAllowed = isCourseAllowed(authUser, courseId);
 
   useEffect(() => {
     const container = document.getElementById('course-detail-container');
@@ -47,6 +68,14 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
   } catch {}
 
   if (!course) return <div className="p-8 text-center text-white min-h-screen">Không tìm thấy khóa học</div>;
+
+  if (!authChecked) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   if (!isAllowed) {
     return (
@@ -120,7 +149,7 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
                     onClick={() => onSelectLesson(lesson.id)}
                     className="w-full bg-surface-border-strong p-4 md:p-6 rounded-2xl border border-white/10 shadow-sm hover:shadow-md hover:border-blue-400 transition-all flex items-center gap-4 md:gap-6 group text-left cursor-pointer"
                   >
-                    <div className={`w-14 h-14 md:w-16 md:h-16 flex-shrink-0 ${learnedLessons[`${courseId}_${lesson.id}`] ? 'bg-green-500/10 text-green-400 border-green-400/30' : 'bg-surface text-[#8fb0ce] border-white/10'} border rounded-2xl flex items-center justify-center text-lg md:text-xl font-semibold group-hover:bg-blue-500/10 group-hover:text-blue-300 group-hover:border-blue-400/30 transition-colors shadow-sm`}>
+                    <div className={`w-14 h-14 md:w-16 md:h-16 flex-shrink-0 ${learnedLessons[`${courseId}_${lesson.id}`] ? 'bg-green-500/10 text-green-400 border-green-400/30' : 'bg-surface text-[#8fb0ce] border-white/10'} border rounded-2xl flex items-center justify-center text-lg md:text-xl font-semibold group-hover:bg-white/10 group-hover:text-white group-hover:border-white/20 transition-colors shadow-sm`}>
                       {learnedLessons[`${courseId}_${lesson.id}`] ? <Check className="w-8 h-8 md:w-8 md:h-8 stroke-[3]" /> : String(index + 1).padStart(2, '0')}
                     </div>
                     <div className="flex-1">

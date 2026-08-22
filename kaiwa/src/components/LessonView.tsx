@@ -1,62 +1,23 @@
-import { Component, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, BookOpen, FileText, Presentation, Expand, ExternalLink, AlertTriangle, Languages, ListChecks, ChevronDown, MonitorPlay, Sparkles, Layers, Volume2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, BookOpen, ExternalLink, Languages, ListChecks, ChevronDown, MonitorPlay, Layers, Volume2 } from 'lucide-react';
 import { useCourses } from '../context/CoursesContext';
 import { useCallEmbed } from '../hooks/useCallEmbed';
 import CallControls from './CallControls';
-import PdfSlideShow from './PdfSlideShow';
+import SlideShow from './SlideShow';
+import Blackboard from './Blackboard';
+import NotePad from './NotePad';
 import FlashcardModal from './FlashcardModal';
 import { getVocabAudioUrl, getPooledVocabAudio, preloadLessonVocabAudio } from '../utils/vocabAudioCache';
 import type { VocabWord, GrammarPoint } from '../types';
 
 /**
- * Error boundary quanh trình chiếu PDF: nếu PDF.js/component gặp lỗi khi
- * render hoặc khi đóng (unmount), thay vì React sập cả cây -> màn hình
- * trống trơn, hiện màn hình lỗi gọn với nút đóng để quay lại bài học.
- */
-class PdfSlideShowErrorBoundary extends Component<
-  { onClose: () => void; children: ReactNode },
-  { hasError: boolean }
-> {
-  state = { hasError: false };
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(err: unknown) {
-    console.error('[PdfSlideShow] Lỗi khi hiển thị tài liệu:', err);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="fixed inset-0 z-[300] bg-black flex flex-col items-center justify-center gap-4 text-center px-6">
-          <div className="w-14 h-14 bg-white/10 text-amber-300 rounded-2xl flex items-center justify-center">
-            <AlertTriangle className="w-7 h-7" />
-          </div>
-          <p className="text-white text-sm font-medium">Có lỗi khi hiển thị tài liệu bài học.</p>
-          <button
-            onClick={this.props.onClose}
-            className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors"
-          >
-            Đóng
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-/**
- * Trang chi tiết 1 bài học. Khối "Tài liệu bài học":
- *   - File .pdf  -> bấm "Trình chiếu toàn màn hình" mở PdfSlideShow (PDF.js
- *     render từng trang, bấm Next/Prev để lật trang).
- *   - File .ppt/.pptx -> trình duyệt không render natively; dùng Google
- *     Docs Viewer (https://docs.google.com/viewer?embedded=true&url=...)
- *     trong khung toàn màn hình. Lưu ý viewer chỉ hoạt động với URL truy
- *     cập CÔNG KHAI từ trình duyệt người xem - nếu file bắt buộc đăng nhập
- *     (vd Cloudflare) thì dùng nút "Mở tab mới" để tự đăng nhập xem.
+ * Trang chi tiết 1 bài học.
+ *   - "Tài liệu" (học viên): `lesson.lessonFileUrl` - luôn mở ra TAB MỚI
+ *     (thường là link Google Drive chia sẻ, không phải file trực tiếp nên
+ *     không nhúng được trong app - Drive cần phiên đăng nhập riêng của
+ *     Google, không đi kèm cookie đăng nhập của web này).
+ *   - "Slide" (chỉ giáo viên/admin): `lesson.slideImages` - mảng ảnh, hiển
+ *     thị bằng SlideShow.tsx (component ảnh đơn giản, không PDF.js).
  */
 export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   courseId: string,
@@ -67,8 +28,6 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
 }) {
   const { courses, loadedCourseDetails, detailsLoading } = useCourses();
   const [showExitConfirm, setShowExitConfirm] = useState(false);
-  // true = đang mở trình chiếu toàn màn hình (tài liệu bài học)
-  const [fullscreen, setFullscreen] = useState(false);
   // "NỘI DUNG BUỔI HỌC": Từ vựng/Ngữ pháp thu gọn mặc định, bấm tiêu đề mới
   // trượt ra danh sách - chỉ 1 mục mở tại 1 thời điểm (bố cục/hành vi giống
   // hệt khối "NỘI DUNG BUỔI HỌC" Kanji/Từ vựng của dự án "Xóa mù Kanji").
@@ -78,6 +37,16 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   const [isFlashcardOpen, setIsFlashcardOpen] = useState(false);
   // true = đang mở khu vực slide trình chiếu cho giáo viên
   const [teacherSlideOpen, setTeacherSlideOpen] = useState(false);
+  // Bảng đen/Ghi chú (chỉ dùng trong lúc trình chiếu Slide, xem SlideShow.tsx)
+  // - state giữ Ở ĐÂY (không giữ trong SlideShow) để nội dung KHÔNG mất khi
+  // đóng/mở lại Slide (SlideShow unmount/remount mỗi lần bật/tắt, còn
+  // LessonView thì không - vẫn 1 instance suốt buổi học, xem lessonKey bên
+  // dưới). Chỉ mất khi thực sự sang buổi học khác (lessonKey đổi, xem
+  // effect reset bên dưới) - đúng yêu cầu, tránh nội dung buổi này lẫn
+  // sang buổi khác.
+  const [isBoardOpen, setIsBoardOpen] = useState(false);
+  const [isNoteOpen, setIsNoteOpen] = useState(false);
+  const [noteText, setNoteText] = useState('');
   const { showCallControls, isPipActive, userRole } = useCallEmbed();
   // Chỉ giaovien/admin mới thấy nút "Slide" - học viên không có.
   const isTeacherOrAdmin = userRole === 'giaovien' || userRole === 'admin';
@@ -87,11 +56,23 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   // buổi (xem utils/vocabAudioCache.ts) - vào lại đúng buổi này thì dùng
   // ngay cache cũ, sang buổi khác mới tải lại + xoá cache buổi trước.
   const lessonKey = `${courseId}_${lessonId}`;
+
+  // Sang buổi học khác (lessonKey đổi) -> xoá nội dung Bảng đen/Ghi chú của
+  // buổi cũ (đóng luôn nếu đang mở) - key={lessonKey} truyền cho
+  // Blackboard/NotePad bên dưới lo phần remount (xoá canvas/nội dung thật
+  // sự), effect này chỉ lo phần state/hiển thị ở LessonView.
+  useEffect(() => {
+    setIsBoardOpen(false);
+    setIsNoteOpen(false);
+    setNoteText('');
+  }, [lessonKey]);
+
   // id của từ đang phát (để hiện icon loa nhấp nháy đúng thẻ), null = không phát.
   const [playingVocabId, setPlayingVocabId] = useState<string | null>(null);
   const vocabAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const playVocabAudio = (v: VocabWord) => {
+    if (v.noAudio) return; // từ không có audio, xem types.ts
     // Bấm lại đúng thẻ đang phát -> dừng luôn (toggle).
     if (playingVocabId === v.id) {
       vocabAudioRef.current?.pause();
@@ -102,7 +83,7 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
     // Dùng lại audio đã tải ngầm sẵn (phát tức thì) nếu có, không thì tạo
     // mới (vd vừa vào buổi, chưa tải ngầm xong kịp).
     const pooled = getPooledVocabAudio(lessonKey, v.id);
-    const audio = pooled || new Audio(getVocabAudioUrl(v.word, v.reading));
+    const audio = pooled || new Audio(getVocabAudioUrl(v.word, v.reading, v.targetKanji));
     if (pooled) {
       try {
         audio.currentTime = 0;
@@ -146,41 +127,19 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
     preloadLessonVocabAudio(lessonKey, vocabulary);
   }, [lessonKey, lesson, vocabulary]);
 
-  // --- Tài liệu bài học ---
+  // --- Tài liệu bài học (học viên) ---
   const lessonFileUrl: string | undefined = lesson?.lessonFileUrl?.trim();
   const hasLessonFile = !!lessonFileUrl;
 
-  /** Nhận diện loại file từ đuôi URL (không phân biệt hoa thường). */
-  function getFileKind(url: string): 'pdf' | 'ppt' | 'other' {
-    const clean = url.split('?')[0].split('#')[0].toLowerCase();
-    if (clean.endsWith('.pdf')) return 'pdf';
-    if (clean.endsWith('.ppt') || clean.endsWith('.pptx') || clean.endsWith('.pps') || clean.endsWith('.ppsx')) return 'ppt';
-    return 'other';
-  }
-
-  /** URL hiển thị trong iframe cho file PPT (Google Docs viewer). */
-  function getPptEmbedUrl(url: string): string {
-    return `https://docs.google.com/viewer?embedded=true&url=${encodeURIComponent(url)}`;
-  }
-
-  const fileKind = hasLessonFile ? getFileKind(lessonFileUrl) : 'other';
-  const pptEmbedUrl = hasLessonFile && fileKind === 'ppt' ? getPptEmbedUrl(lessonFileUrl) : '';
-
-  /**
-   * .pdf/.ppt(x) -> mở trình chiếu toàn màn hình trong app (PDF.js/Google
-   * Docs Viewer). Các link khác (Google Drive, Google Docs...) - viewer
-   * trong app không nhúng được (không phải link file trực tiếp, trước đây
-   * rơi vào nhánh PPT với iframe rỗng vì không nhận diện được đuôi file) -
-   * mở thẳng ra tab mới, đúng link gốc, để trình duyệt/Drive tự xử lý.
-   */
+  /** Luôn mở tab mới - xem giải thích ở comment đầu file. */
   const openLessonFile = () => {
     if (!hasLessonFile) return;
-    if (fileKind === 'other') {
-      window.open(lessonFileUrl, '_blank', 'noopener,noreferrer');
-    } else {
-      setFullscreen(true);
-    }
+    window.open(lessonFileUrl, '_blank', 'noopener,noreferrer');
   };
+
+  // --- Slide trình chiếu (giáo viên/admin) ---
+  const slideImages: string[] = lesson?.slideImages ?? [];
+  const hasSlideImages = slideImages.length > 0;
 
   const toggleContentTab = (tab: 'vocab' | 'grammar') => {
     setActiveContentTab((prev) => (prev === tab ? null : tab));
@@ -268,9 +227,12 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
                             key={v.id}
                             type="button"
                             onClick={() => playVocabAudio(v)}
-                            title="Bấm để nghe phát âm"
+                            disabled={v.noAudio}
+                            title={v.noAudio ? undefined : 'Bấm để nghe phát âm'}
                             className={`relative p-3 pt-6 rounded-xl text-left w-full border shadow-sm transition-colors ${
-                              isPlaying
+                              v.noAudio
+                                ? 'bg-blue-50 cursor-default'
+                                : isPlaying
                                 ? 'bg-white border-blue-400 ring-2 ring-blue-400/50'
                                 : 'bg-blue-50 hover:bg-white border-blue-100/70'
                             }`}
@@ -278,11 +240,13 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
                             <span className="absolute top-2 left-2.5 text-[11px] font-bold text-blue-700/70">
                               {String(i + 1).padStart(2, '0')}
                             </span>
-                            <Volume2
-                              className={`absolute top-2 right-2.5 w-3.5 h-3.5 ${
-                                isPlaying ? 'text-blue-600 animate-pulse' : 'text-blue-700/40'
-                              }`}
-                            />
+                            {!v.noAudio && (
+                              <Volume2
+                                className={`absolute top-2 right-2.5 w-3.5 h-3.5 ${
+                                  isPlaying ? 'text-blue-600 animate-pulse' : 'text-blue-700/40'
+                                }`}
+                              />
+                            )}
                             {/* flex-wrap + break-words: từ dài tự động đẩy cách đọc
                                 xuống dòng riêng thay vì đè/tràn ra ngoài thẻ - từ
                                 ngắn thì 2 phần vẫn nằm chung 1 hàng như cũ. */}
@@ -363,11 +327,12 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
             Kanji" (xem FlashcardModal.tsx), chỉ đổi nguồn dữ liệu sang
             VocabWord của kaiwa. */}
         <div className="bg-surface-border-strong rounded-3xl p-5 md:p-6 border border-white/10 shadow-sm shrink-0">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className={`grid gap-3 ${isTeacherOrAdmin ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
             {isTeacherOrAdmin && (
               <button
                 onClick={() => setTeacherSlideOpen(true)}
-                className="bg-blue-600 border border-blue-400/60 p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md shadow-blue-900/30 transition-all hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-900/40"
+                disabled={!hasSlideImages}
+                className="bg-blue-600 border border-blue-400/60 p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md shadow-blue-900/30 transition-all hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-900/40 disabled:opacity-40 disabled:pointer-events-none disabled:hover:translate-y-0"
               >
                 <MonitorPlay className="w-6 h-6 text-white" />
                 <span className="text-xs font-bold text-white uppercase tracking-wider">Slide</span>
@@ -388,103 +353,57 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
               disabled={!hasLessonFile}
               className="bg-blue-600 border border-blue-400/60 p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md shadow-blue-900/30 transition-all hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-900/40 disabled:opacity-40 disabled:pointer-events-none disabled:hover:translate-y-0"
             >
-              {fileKind === 'ppt' ? (
-                <Presentation className="w-6 h-6 text-white" />
-              ) : fileKind === 'pdf' ? (
-                <FileText className="w-6 h-6 text-white" />
-              ) : (
-                <ExternalLink className="w-6 h-6 text-white" />
-              )}
+              <ExternalLink className="w-6 h-6 text-white" />
               <span className="text-xs font-bold text-white uppercase tracking-wider">Tài liệu</span>
             </button>
           </div>
-          {(vocabulary.length === 0 || !hasLessonFile) && (
-            <p className="text-xs text-[#8fb0ce] mt-3">
-              {vocabulary.length === 0 && !hasLessonFile
-                ? 'Buổi học này chưa có từ vựng và chưa có tài liệu.'
-                : vocabulary.length === 0
-                  ? 'Buổi học này chưa có từ vựng để luyện tập.'
-                  : 'Buổi học này chưa có tài liệu.'}
-            </p>
-          )}
+          {(() => {
+            const missing = [
+              vocabulary.length === 0 && 'từ vựng để luyện tập',
+              !hasLessonFile && 'tài liệu',
+              isTeacherOrAdmin && !hasSlideImages && 'slide trình chiếu',
+            ].filter(Boolean) as string[];
+            if (missing.length === 0) return null;
+            return (
+              <p className="text-xs text-[#8fb0ce] mt-3">
+                Buổi học này chưa có {missing.join(', ')}.
+              </p>
+            );
+          })()}
         </div>
       </main>
 
-      {/* Trình chiếu toàn màn hình */}
-      {fullscreen && hasLessonFile && (
-        fileKind === 'pdf' ? (
-          <PdfSlideShowErrorBoundary onClose={() => setFullscreen(false)}>
-            <PdfSlideShow
-              url={lessonFileUrl}
-              title={lesson?.title}
-              onClose={() => setFullscreen(false)}
-            />
-          </PdfSlideShowErrorBoundary>
-        ) : (
-          <div className="fixed inset-0 z-[300] bg-black flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 bg-slate-900/95 border-b border-white/10 shrink-0 gap-3">
-              <div className="flex items-center gap-2 text-white text-sm font-semibold min-w-0">
-                <Presentation className="w-5 h-5 text-blue-300 shrink-0" />
-                <span className="truncate uppercase tracking-wide">{lesson?.title || 'Tài liệu bài học'}</span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <a
-                  href={lessonFileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 text-white/80 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
-                  aria-label="Mở ở tab mới"
-                >
-                  <ExternalLink className="w-5 h-5" />
-                </a>
-                <button
-                  onClick={() => setFullscreen(false)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-colors"
-                >
-                  <Expand className="w-4 h-4 rotate-45" />
-                  Thu nhỏ
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 relative">
-              <iframe
-                key={lessonFileUrl}
-                src={pptEmbedUrl}
-                title="Tài liệu bài học"
-                className="w-full h-full border-0"
-                allowFullScreen
-              />
-            </div>
-          </div>
-        )
+      {/* Slide trình chiếu cho giáo viên - ảnh, không hiệu ứng, chỉ trước/sau */}
+      {teacherSlideOpen && hasSlideImages && (
+        <SlideShow
+          images={slideImages}
+          title={lesson?.title}
+          onClose={() => {
+            setTeacherSlideOpen(false);
+            // Đóng Slide thì ẩn luôn Bảng/Ghi chú (nếu đang mở) - nội dung
+            // (canvas/text) vẫn giữ nguyên vì Blackboard/NotePad không bị
+            // unmount ở đây, chỉ ẩn qua isOpen.
+            setIsBoardOpen(false);
+            setIsNoteOpen(false);
+          }}
+          isBoardOpen={isBoardOpen}
+          onToggleBoard={() => setIsBoardOpen((v) => !v)}
+          isNoteOpen={isNoteOpen}
+          onToggleNote={() => setIsNoteOpen((v) => !v)}
+          showCallControls={showCallControls}
+          isPipActive={isPipActive}
+        />
       )}
 
-      {/* Slide trình chiếu cho giáo viên - placeholder, chi tiết bổ sung sau */}
-      {teacherSlideOpen && (
-        <div className="fixed inset-0 z-[300] bg-black flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 bg-slate-900/95 border-b border-white/10 shrink-0 gap-3">
-            <div className="flex items-center gap-2 text-white text-sm font-semibold min-w-0">
-              <MonitorPlay className="w-5 h-5 text-blue-300 shrink-0" />
-              <span className="truncate uppercase tracking-wide">Slide trình chiếu — {lesson?.title || 'Buổi học'}</span>
-            </div>
-            <button
-              onClick={() => setTeacherSlideOpen(false)}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-colors shrink-0"
-            >
-              <Expand className="w-4 h-4 rotate-45" />
-              Đóng
-            </button>
-          </div>
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-6">
-            <div className="w-16 h-16 bg-white/10 text-blue-200 rounded-2xl flex items-center justify-center">
-              <Sparkles className="w-8 h-8 opacity-70" />
-            </div>
-            <p className="text-white font-semibold text-lg">Tính năng đang được phát triển</p>
-            <p className="text-[#8fb0ce] text-sm max-w-sm">
-              Khu vực trình chiếu slide dành cho giáo viên sẽ sớm ra mắt trong bản cập nhật tiếp theo.
-            </p>
-          </div>
-        </div>
+      {/* Bảng đen/Ghi chú - render Ở ĐÂY (không phải trong SlideShow) để
+          canvas/nội dung không mất khi đóng/mở lại Slide - xem comment ở
+          chỗ khai báo state isBoardOpen/isNoteOpen phía trên. key={lessonKey}
+          bắt buộc remount (xoá sạch canvas/nội dung) khi sang buổi học khác. */}
+      {isTeacherOrAdmin && (
+        <>
+          <Blackboard key={`board-${lessonKey}`} isOpen={isBoardOpen} onClose={() => setIsBoardOpen(false)} />
+          <NotePad key={`note-${lessonKey}`} isOpen={isNoteOpen} onClose={() => setIsNoteOpen(false)} text={noteText} setText={setNoteText} />
+        </>
       )}
 
       {/* Flashcard ôn từ vựng */}

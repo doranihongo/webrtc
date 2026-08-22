@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BookOpen, ChevronRight, MessageCircle, MessagesSquare, Lock, Unlock, Library, Users, Wrench, Repeat, Headphones, Mic, X, Film, PlayCircle, Video, PictureInPicture } from 'lucide-react';
 import { useCourses } from '../context/CoursesContext';
+import { isCourseAllowed } from '../utils/courseAccess';
 import KaiwaModal from './KaiwaModal';
 import DictationModal from './DictationModal';
 import YoutubeShadowingModal from './YoutubeShadowingModal';
@@ -47,6 +48,11 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
   // link này (nếu có) vẫn thấy nút "Phòng học" bình thường.
   const [isEmbeddedInCall, setIsEmbeddedInCall] = useState(false);
   const [userRole, setUserRole] = useState<string | undefined>(undefined);
+  // window.__authUser.allowedCourses (cột `allowed_courses` trong
+  // `profiles`) - xem kaiwa/src/utils/courseAccess.ts. Đợi qua
+  // __authReady giống hệt userRole ở trên (window.__authUser có thể chưa
+  // gắn xong ở lần render đầu).
+  const [allowedCourses, setAllowedCourses] = useState<string[]>([]);
   // Trạng thái PiP thật bên trang gọi (client.js) - chỉ có ý nghĩa khi
   // isEmbeddedInCall, đồng bộ qua postMessage "dora:pipState" (xem
   // useEffect bên dưới + sendPipStateToKaiwa trong public/js/client.js).
@@ -67,7 +73,14 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
     }
 
     const w = window as any;
-    const applyRole = () => setUserRole(w.__authUser?.role);
+    const applyRole = () => {
+      setUserRole(w.__authUser?.role);
+      setAllowedCourses(
+        Array.isArray(w.__authUser?.allowedCourses)
+          ? w.__authUser.allowedCourses
+          : [],
+      );
+    };
     if (w.__authReady) {
       w.__authReady.then(applyRole);
     } else {
@@ -215,7 +228,10 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
 
              <div className="grid grid-cols-1 sm:grid-cols-3 w-full gap-6 md:gap-8">
                {courses.map(course => {
-                 const isAllowed = true;
+                 const isAllowed = isCourseAllowed(
+                   { role: userRole, allowedCourses },
+                   course.id,
+                 );
                  return (
                    <div 
                      role="button"
@@ -241,8 +257,16 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
                        )}
                        {!isAllowed && (
                          <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-md flex items-center gap-1.5 z-10">
-                           <Lock className="w-3.5 h-3.5 text-red-400" />
-                           Chưa mở khóa
+                           {/* Icon lồng trong 1 khung cố định kích thước, đổi
+                               qua opacity (không dùng hidden/display:none) -
+                               2 icon luôn nằm sẵn trong khung, tránh mất icon
+                               do tranh chấp độ ưu tiên CSS giữa "hidden" và
+                               "group-hover:block" (cùng chỉ định display). */}
+                           <span className="relative w-3.5 h-3.5 shrink-0">
+                             <Lock className="w-3.5 h-3.5 text-red-400 absolute inset-0 transition-opacity duration-150 group-hover:opacity-0" />
+                             <Unlock className="w-3.5 h-3.5 text-red-400 absolute inset-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+                           </span>
+                           Đang khóa
                          </div>
                        )}
                        <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2 items-end pointer-events-none">
@@ -269,8 +293,12 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
                        ) : (
                          <div className="w-full bg-surface-panel text-[#8fb0ce] font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all border border-surface-border shadow-sm group-hover:bg-red-500/10 group-hover:text-red-400 group-hover:border-red-400/30">
                            MỞ KHÓA
-                           <Lock className="w-5 h-5 text-[#8fb0ce] group-hover:hidden" />
-                           <Unlock className="w-5 h-5 text-red-400 hidden group-hover:block" />
+                           {/* Đổi qua opacity (không dùng hidden/display:none) -
+                               xem giải thích ở nhãn "Đang khóa" phía trên. */}
+                           <span className="relative w-5 h-5 shrink-0">
+                             <Lock className="w-5 h-5 text-[#8fb0ce] absolute inset-0 transition-opacity duration-150 group-hover:opacity-0" />
+                             <Unlock className="w-5 h-5 text-red-400 absolute inset-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+                           </span>
                          </div>
                        )}
                      </div>

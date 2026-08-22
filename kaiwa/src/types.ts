@@ -7,7 +7,22 @@ export interface VocabWord {
   exampleJapanese?: string;
   exampleVietnamese?: string;
   customCells?: string[];
+  /**
+   * Ghi trong JSON khi muốn tra âm thanh phát âm bằng 1 cách viết kanji
+   * KHÁC với `word` hiển thị trên web (vd `word` là dạng rút gọn/viết tắt
+   * không tra được đúng audio, nhưng đổi `word` thì lại sai hiển thị) -
+   * `word`/`reading` hiển thị trên thẻ từ vựng vẫn giữ NGUYÊN, chỉ URL âm
+   * thanh (xem utils/vocabAudioCache.ts) đổi sang tra bằng `targetKanji`
+   * (+ vẫn dùng `reading` hiện có để ghép cách đọc, trừ khi cũng muốn đổi
+   * luôn cách đọc dùng để tra thì set thêm cả `reading` cho khớp).
+   */
   targetKanji?: string;
+  /**
+   * true = từ này KHÔNG có audio phát âm (server audio bên thứ 3 không có
+   * hoặc phát âm sai/không mong muốn) - thẻ từ vựng vẫn hiển thị bình
+   * thường nhưng ẩn icon loa, bấm vào không làm gì (xem LessonView.tsx).
+   */
+  noAudio?: boolean;
   isSeparator?: boolean;
   displayStt?: number;
 }
@@ -57,6 +72,18 @@ export interface Lesson {
    * Trống = bài chưa có tài liệu, giao diện sẽ hiện trạng thái "chưa có".
    */
   lessonFileUrl?: string;
+  /**
+   * Danh sách ảnh slide trình chiếu dành cho giáo viên (nút "Slide") - KHÁC
+   * với `lessonFileUrl` (tài liệu học viên tự xem, luôn mở tab mới). Mỗi
+   * phần tử là URL 1 ảnh (jpg/png), ĐÚNG THỨ TỰ trang cần chiếu. Cách tạo:
+   * xuất slide (PowerPoint/Google Slides/Keynote) ra ảnh - PowerPoint có sẵn
+   * File > Export > Change File Type > PNG (xuất mỗi trang 1 ảnh), Google
+   * Slides/Keynote thì xuất PDF rồi convert PDF -> ảnh bằng công cụ online.
+   * Đặt các ảnh vào public/kaiwa-files/ (vd thư mục riêng theo buổi học)
+   * rồi liệt kê URL tương đối theo đúng thứ tự vào mảng này.
+   * Trống/rỗng = buổi học chưa có slide, nút "Slide" sẽ bị vô hiệu hóa.
+   */
+  slideImages?: string[];
 }
 
 export interface Course {

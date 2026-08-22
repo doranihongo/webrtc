@@ -26,10 +26,15 @@ import type { VocabWord } from '../types';
 let currentLessonKey: string | null = null;
 const audioPool = new Map<string, HTMLAudioElement>();
 
-/** URL phát âm từ vựng - https://assets.languagepod101.com/... */
-export function getVocabAudioUrl(word: string, reading?: string): string {
-  const kanji = encodeURIComponent(word);
-  const kana = encodeURIComponent(reading || word);
+/**
+ * URL phát âm từ vựng - https://assets.languagepod101.com/...
+ * @param targetKanji nếu có (xem VocabWord.targetKanji trong types.ts) -
+ *   dùng cách viết này để TRA âm thanh thay cho `word`, không đụng tới
+ *   `word` hiển thị trên web.
+ */
+export function getVocabAudioUrl(word: string, reading?: string, targetKanji?: string): string {
+  const kanji = encodeURIComponent(targetKanji || word);
+  const kana = encodeURIComponent(reading || targetKanji || word);
   return `https://assets.languagepod101.com/dictionary/japanese/audiomp3.php?kanji=${kanji}&kana=${kana}`;
 }
 
@@ -57,10 +62,10 @@ export function preloadLessonVocabAudio(lessonKey: string, vocabulary: VocabWord
   currentLessonKey = lessonKey;
 
   vocabulary.forEach((v) => {
-    if (!v.word) return;
+    if (!v.word || v.noAudio) return; // noAudio - từ không có audio, xem types.ts
     const audio = new Audio();
     audio.preload = 'auto';
-    audio.src = getVocabAudioUrl(v.word, v.reading);
+    audio.src = getVocabAudioUrl(v.word, v.reading, v.targetKanji);
     audio.load();
     audioPool.set(v.id, audio);
   });

@@ -29,6 +29,7 @@ export interface DbLesson {
   vocabulary: VocabWord[];
   grammar: GrammarPoint[];
   lessonFileUrl?: string;
+  slideImages?: string[];
 }
 
 /**
@@ -67,7 +68,7 @@ export async function fetchCourseLessons(courseId: string): Promise<DbLesson[] |
 
   const { data, error } = await client
     .from('kaiwa_lessons')
-    .select('id, title, vocabulary, grammar, lesson_file_url, sort_order')
+    .select('id, title, vocabulary, grammar, lesson_file_url, slide_images, sort_order')
     .eq('course_id', courseId)
     .order('sort_order', { ascending: true });
 
@@ -82,6 +83,7 @@ export async function fetchCourseLessons(courseId: string): Promise<DbLesson[] |
     vocabulary: row.vocabulary || [],
     grammar: row.grammar || [],
     lessonFileUrl: row.lesson_file_url || undefined,
+    slideImages: row.slide_images || [],
   }));
 }
 

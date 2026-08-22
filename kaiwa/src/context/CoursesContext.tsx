@@ -66,6 +66,9 @@ const FALLBACK_LESSONS: Record<string, any[]> = {
       // Đặt file test vào public/kaiwa-files/ để server phục vụ tại
       // /kaiwa-files/lesson-2.pdf - test nút mở tài liệu.
       lessonFileUrl: '/kaiwa-files/lesson-2.pdf',
+      // Ảnh test cho nút "Slide" (giáo viên) - đặt file test vào
+      // public/kaiwa-files/ để server phục vụ.
+      slideImages: ['/kaiwa-files/slide-1.svg', '/kaiwa-files/slide-2.svg'],
       vocabulary: [
         { id: 'v1', word: '値段', sinoVietnamese: 'trị đoạn', reading: 'ねだん', meaning: 'giá cả', exampleJapanese: 'この 値段 は 高い です。', exampleVietnamese: 'Giá này đắt đấy.' },
         { id: 'v2', word: '安い', sinoVietnamese: 'an', reading: 'やすい', meaning: 'rẻ', exampleJapanese: 'このお店は安いです。', exampleVietnamese: 'Cửa hàng này rẻ.' },

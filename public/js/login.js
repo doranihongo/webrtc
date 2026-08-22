@@ -233,7 +233,31 @@ async function init() {
     } = await supabaseClient.auth.getSession();
 
     if (session?.user) {
-      await handleSignedIn(session.user, session.access_token);
+      // getSession() chỉ đọc lại từ localStorage, KHÔNG xác minh với
+      // server - session có thể đã bị Supabase thu hồi phía server (vd:
+      // bị revoke thủ công, đăng nhập lại ở nơi khác làm rotate refresh
+      // token...) trong khi access token cục bộ vẫn còn hạn (chưa hết
+      // exp), khiến getSession() vẫn trả về "đã đăng nhập". Nếu vào
+      // thẳng handleSignedIn() với session kiểu đó: bước tra `profiles`
+      // vẫn PASS (PostgREST chỉ xác minh JWT còn hạn, không biết session
+      // đã bị thu hồi) -> tưởng hợp lệ -> điều hướng về "/", nhưng
+      // middleware chặn tải trang phía server (server.js) xác minh
+      // NGHIÊM NGẶT hơn qua GoTrue (session_not_found) -> đá ngược lại
+      // /login -> localStorage vẫn giữ session hỏng đó -> LẶP VÔ HẠN.
+      // Gọi getUser() ở đây để xác minh THẬT với server TRƯỚC (giống hệt
+      // cách authGuard trong common.js đã làm), phát hiện sớm và dọn
+      // sạch thay vì để người dùng kẹt ở màn "Đang kiểm tra phiên đăng
+      // nhập..." mãi.
+      const { data: userData, error: userErr } =
+        await supabaseClient.auth.getUser();
+      if (userErr || !userData?.user) {
+        if (isAuthInvalidError(userErr)) {
+          hardResetSupabaseSession();
+        }
+        showView("login");
+        return;
+      }
+      await handleSignedIn(userData.user, session.access_token);
     } else {
       showView("login");
     }
