@@ -8363,14 +8363,40 @@ function getScreenShareConstraints() {
   // of the source display's real resolution (sending higher than what
   // viewers can render is pure bandwidth waste), while still honouring a
   // *lower* fps chosen by the user in Settings.
+  //
+  // audio: false on purpose - NOT requesting tab/screen audio capture here
+  // at all. Capturing "the whole tab" (or worse, the whole screen) would
+  // inevitably also pick up this very call's own incoming audio playing
+  // out of the sharer's speakers, looping the other peer's voice straight
+  // back to them - the browser has no way to exclude just that one source
+  // from a tab/screen capture. Any audio worth sharing (kaiwa lesson
+  // content) instead comes from getShareableAudioTrackFromKaiwa() below,
+  // which only ever contains audio explicitly registered into kaiwa's own
+  // shareableAudioBus - never this call's audio. See startScreenSharing().
   return {
-    audio: true,
+    audio: false,
     video: {
       frameRate: Math.min(screenMaxFrameRate || 30, SCREEN_SHARE_MAX_FPS),
       width: { max: SCREEN_SHARE_MAX_WIDTH },
       height: { max: SCREEN_SHARE_MAX_HEIGHT },
     },
   };
+}
+
+/**
+ * Audio track from kaiwa's shareableAudioBus (only ever contains audio a
+ * kaiwa feature explicitly registered as shareable - see
+ * kaiwa/src/utils/shareableAudioBus.ts) - null if the kaiwa overlay isn't
+ * currently loaded, or nothing is registered yet.
+ * @returns {MediaStreamTrack|null}
+ */
+function getShareableAudioTrackFromKaiwa() {
+  try {
+    return kaiwaOverlayIframe?.contentWindow?.__getShareableAudioTrack?.() || null;
+  } catch (err) {
+    console.warn("getShareableAudioTrackFromKaiwa: failed to reach kaiwa overlay", err);
+    return null;
+  }
 }
 
 /**
@@ -8393,7 +8419,7 @@ async function startScreenSharing(constraints, init) {
   try {
     screenVideoTrack.contentHint = "detail";
   } catch (_) {}
-  const screenAudioTrack = getAudioTrack(displayStream);
+  const screenAudioTrack = getShareableAudioTrackFromKaiwa();
   const micAudioTrack =
     myAudioStatus && hasAudioTrack(localAudioMediaStream)
       ? getAudioTrack(localAudioMediaStream)
