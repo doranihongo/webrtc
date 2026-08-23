@@ -612,6 +612,19 @@ let localVideoMediaStream; // my webcam
 let localScreenMediaStream; // my screen share
 let localScreenDisplayStream; // raw getDisplayMedia stream (may include audio)
 let screenShareAudioContext; // AudioContext used to mix screen audio + microphone
+
+// Shared screen-capture handle used by BOTH "Chia sẻ màn hình" and "Quay
+// video màn hình". getDisplayMedia() always shows the browser's native
+// screen/window/tab picker on every single call - by design, no site can
+// "pre-grant" it like mic/cam, so there is no way to avoid the picker on
+// the very first use. What we CAN avoid is asking a SECOND time when both
+// features are used in the same call: whichever one asks first keeps its
+// raw capture alive here, and the other reuses that exact same track (no
+// second prompt) instead of calling getDisplayMedia() again. Released once
+// neither feature needs it anymore - see acquireSharedScreenCapture()/
+// releaseSharedScreenCapture() below.
+let sharedScreenCaptureStream = null;
+const sharedScreenCaptureConsumers = new Map(); // "share"|"record" -> { constraints, init }
 let remoteAudioBoostContext; // shared AudioContext used to boost remote peers' audio playback volume
 const REMOTE_AUDIO_GAIN = 1.7; // gain applied to remote peer audio; <audio>.volume caps at 1.0 (100%), this goes louder
 let localAudioMediaStream; // my microphone
@@ -8413,20 +8426,147 @@ function getShareableAudioTrackFromKaiwa() {
 }
 
 /**
+ * Get (or start) the shared screen capture for one consumer ("share" or
+ * "record"). If another consumer already has a live capture going, this
+ * reuses that exact track - no getDisplayMedia() call, so no permission
+ * prompt. Only the very first consumer (across both features, for this
+ * call) actually triggers the browser's native picker.
+ * @param {"share"|"record"} consumerName
+ * @param {object} constraints - this consumer's own MediaStreamConstraints
+ * @param {boolean} [init] - only meaningful for "share" (see startScreenSharing)
+ * @returns {Promise<MediaStream>} the shared raw display stream
+ */
+async function acquireSharedScreenCapture(consumerName, constraints, init = false) {
+  const liveTrack = sharedScreenCaptureStream?.getVideoTracks()[0];
+  if (liveTrack && liveTrack.readyState === "live") {
+    sharedScreenCaptureConsumers.set(consumerName, { constraints, init });
+    await reconcileSharedScreenCaptureConstraints();
+    return sharedScreenCaptureStream;
+  }
+
+  // Nothing to reuse (first request this call, or a previous capture
+  // already ended) - this is the call that shows the native picker.
+  const stream = await navigator.mediaDevices.getDisplayMedia({
+    ...constraints,
+    // Chrome/Edge only, silently ignored elsewhere - just biases the
+    // picker's default selection to "This Tab" (bấm vào là mặc định share
+    // tab hiện tại; người dùng vẫn đổi được sang cửa sổ/tab khác/toàn màn
+    // hình nếu muốn).
+    preferCurrentTab: true,
+  });
+  sharedScreenCaptureStream = stream;
+  sharedScreenCaptureConsumers.clear();
+  sharedScreenCaptureConsumers.set(consumerName, { constraints, init });
+
+  const videoTrack = getVideoTrack(stream);
+  if (videoTrack) {
+    videoTrack.onended = () => {
+      // User stopped it from the browser's own native "Stop sharing"
+      // control (outside our UI entirely) - tear down whichever of our
+      // features were still riding on this capture.
+      const consumers = new Map(sharedScreenCaptureConsumers);
+      sharedScreenCaptureStream = null;
+      sharedScreenCaptureConsumers.clear();
+      const shareEntry = consumers.get("share");
+      if (shareEntry && isScreenStreaming) toggleScreenSharing(shareEntry.init);
+      if (consumers.has("record") && isStreamRecording) {
+        stopStreamRecording();
+        showPPLoading(
+          "Đang tải video lên máy chủ...",
+          "Sắp xong rồi, vài giây nữa thôi...",
+        );
+        recStopLoadingShownAt = performance.now();
+      }
+    };
+  }
+  return stream;
+}
+
+/**
+ * Release one consumer's hold on the shared screen capture. Only actually
+ * stops the underlying track once NEITHER feature needs it anymore -
+ * otherwise just drops the capture back down to whatever the remaining
+ * consumer asked for.
+ * @param {"share"|"record"} consumerName
+ */
+async function releaseSharedScreenCapture(consumerName) {
+  sharedScreenCaptureConsumers.delete(consumerName);
+  if (sharedScreenCaptureConsumers.size === 0) {
+    if (sharedScreenCaptureStream) {
+      sharedScreenCaptureStream.getTracks().forEach((t) => t.stop());
+    }
+    sharedScreenCaptureStream = null;
+    return;
+  }
+  await reconcileSharedScreenCaptureConstraints();
+}
+
+/**
+ * Re-apply constraints on the live shared track so it satisfies every
+ * feature currently using it (tightest width/height/frameRate among all
+ * active consumers wins). applyConstraints() adjusts an already-granted
+ * capture in place - it does NOT re-prompt the user.
+ */
+async function reconcileSharedScreenCaptureConstraints() {
+  const videoTrack = sharedScreenCaptureStream?.getVideoTracks()[0];
+  if (!videoTrack || sharedScreenCaptureConsumers.size === 0) return;
+  const extractMax = (entry) => {
+    if (entry == null) return undefined;
+    if (typeof entry === "number") return entry;
+    return entry.max ?? entry.ideal ?? entry.exact;
+  };
+  let width, height, frameRate;
+  for (const { constraints } of sharedScreenCaptureConsumers.values()) {
+    const v = constraints?.video || {};
+    width = Math.min(width ?? Infinity, extractMax(v.width) ?? Infinity);
+    height = Math.min(height ?? Infinity, extractMax(v.height) ?? Infinity);
+    frameRate = Math.min(
+      frameRate ?? Infinity,
+      extractMax(v.frameRate) ?? Infinity,
+    );
+  }
+  const next = {};
+  if (Number.isFinite(width)) next.width = { max: width };
+  if (Number.isFinite(height)) next.height = { max: height };
+  if (Number.isFinite(frameRate)) next.frameRate = { max: frameRate };
+  if (Object.keys(next).length === 0) return;
+  try {
+    await videoTrack.applyConstraints(next);
+  } catch (err) {
+    console.warn(
+      "[ScreenCapture] applyConstraints failed, keeping current capture settings",
+      err,
+    );
+  }
+}
+
+/**
  * Start screen sharing with given constraints
  * @param {object} constraints - MediaStreamConstraints for screen sharing
  * @param {boolean} init - Indicates if it's the initial screen share
  */
 async function startScreenSharing(constraints, init) {
-  const displayStream =
-    await navigator.mediaDevices.getDisplayMedia(constraints);
+  const displayStream = await acquireSharedScreenCapture(
+    "share",
+    constraints,
+    init,
+  );
   if (!displayStream) return;
   localScreenDisplayStream = displayStream;
-  const screenVideoTrack = getVideoTrack(displayStream);
-  if (!screenVideoTrack) {
+  const sourceVideoTrack = getVideoTrack(displayStream);
+  if (!sourceVideoTrack) {
     console.error("[ScreenShare] No video track in display stream");
     return;
   }
+  // Clone before handing the video track to WebRTC (and to the init
+  // preview below) - "Quay video màn hình" can be riding on this exact
+  // same shared capture at the same time (see acquireSharedScreenCapture).
+  // stopScreenSharing() below stops OUR copy when the user turns sharing
+  // off; that must never end record's copy too. Only
+  // releaseSharedScreenCapture() is allowed to stop the real source track,
+  // once neither feature needs it anymore - a stopped clone doesn't
+  // propagate back to the source (only source->clone does).
+  const screenVideoTrack = sourceVideoTrack.clone();
   // Tell the encoder this is detail-heavy content (slides/text) - prioritize
   // sharpness over motion smoothness.
   try {
@@ -8479,25 +8619,23 @@ async function startScreenSharing(constraints, init) {
       togglePagePip("open");
     }
   }
-  screenVideoTrack.onended = () => {
-    if (isScreenStreaming) toggleScreenSharing(init);
-  };
+  // Native "Stop sharing" is handled centrally now - see
+  // acquireSharedScreenCapture()'s onended, which knows about every
+  // feature currently riding on this capture, not just this one.
   if (init) {
     if (initStream) await stopTracks(initStream);
-    initStream = displayStream;
-    const initVideoTrack = getVideoTrack(initStream);
-    if (initVideoTrack) {
-      const newInitStream = new MediaStream([initVideoTrack]);
-      elemDisplay(initVideo, true, "block");
-      initVideo.classList.toggle("mirror");
-      initVideo.srcObject = newInitStream;
-      const initVideoLoader = getId("initVideoLoader");
-      if (initVideoLoader) initVideoLoader.style.display = "none";
-      disable(initVideoSelect, true);
-      disable(initVideoBtn, true);
-    } else {
-      elemDisplay(initVideo, false);
-    }
+    // Same reasoning as screenVideoTrack above - the init preview stops
+    // its own copy independently (stopScreenSharing's `if (init)` branch),
+    // so it needs its own clone too, never the shared source track itself.
+    const initVideoTrack = sourceVideoTrack.clone();
+    initStream = new MediaStream([initVideoTrack]);
+    elemDisplay(initVideo, true, "block");
+    initVideo.classList.toggle("mirror");
+    initVideo.srcObject = initStream;
+    const initVideoLoader = getId("initVideoLoader");
+    if (initVideoLoader) initVideoLoader.style.display = "none";
+    disable(initVideoSelect, true);
+    disable(initVideoBtn, true);
     initVideoContainerShow();
   }
 }
@@ -8528,7 +8666,7 @@ async function stopScreenSharing(init) {
     localScreenMediaStream.getTracks().forEach((t) => t.stop());
   }
   if (localScreenDisplayStream) {
-    localScreenDisplayStream.getTracks().forEach((t) => t.stop());
+    await releaseSharedScreenCapture("share");
   }
   localScreenDisplayStream = null;
   if (screenShareAudioContext) {
@@ -9290,7 +9428,7 @@ function startMobileRecording(options, audioMixerTracks) {
  * @param {MediaRecorderOptions} options - MediaRecorder options.
  * @param {array} audioMixerTracks - Array of audio tracks from the audio mixer.
  */
-function startDesktopRecording(options, audioMixerTracks) {
+async function startDesktopRecording(options, audioMixerTracks) {
   // Get the desired frame rate for screen recording
   // screenMaxFrameRate = parseInt(screenFpsSelect.value, 10);
 
@@ -9298,7 +9436,11 @@ function startDesktopRecording(options, audioMixerTracks) {
   // captured resolution actually matches the ~1Mbps encode bitrate below -
   // without this, getDisplayMedia captures the screen's real resolution
   // (often 1080p+), which looks "sharp" from pixel density alone but is
-  // under-compressed for that bitrate (blur/blocking on any motion).
+  // under-compressed for that bitrate (blur/blocking on any motion). If
+  // "Chia sẻ màn hình" is already active and this reuses its capture (see
+  // acquireSharedScreenCapture), reconcileSharedScreenCaptureConstraints()
+  // pulls the live resolution/fps down to this cap too - so the recording
+  // never records at a heavier resolution than it's actually budgeted for.
   const constraints = {
     video: {
       frameRate: { ideal: 25, max: 30 }, // ~25fps target for recording
@@ -9307,85 +9449,84 @@ function startDesktopRecording(options, audioMixerTracks) {
     },
   };
 
-  // Request access to screen capture using the specified constraints
-  navigator.mediaDevices
-    .getDisplayMedia(constraints)
-    .then((screenStream) => {
-      // Get video tracks from the screen capture stream
-      const screenTracks = screenStream.getVideoTracks();
-      console.log("Screen video tracks --->", screenTracks);
+  try {
+    // Reuses the screen-share capture if one is already live (no second
+    // permission prompt) - otherwise this is what shows the native picker.
+    const screenStream = await acquireSharedScreenCapture("record", constraints);
 
-      // The audio mixer track is separate (Web Audio, not screen capture)
-      // and stays live even after this video track ends, so the combined
-      // stream never goes fully inactive on its own - MediaRecorder would
-      // otherwise just keep "recording" silently (frozen/black video)
-      // forever after the user clicks the browser/OS's native "Stop
-      // sharing" control. Treat that the same as the app's own "DỪNG GHI":
-      // stop for real and show the same upload-in-progress popup.
-      screenTracks.forEach((track) => {
-        track.onended = () => {
-          if (!isStreamRecording) return; // already stopped through the app's own flow
-          stopStreamRecording();
-          showPPLoading(
-        "Đang tải video lên máy chủ...",
-        "Sắp xong rồi, vài giây nữa thôi...",
-      );
-          recStopLoadingShownAt = performance.now();
-        };
-      });
+    // Get video tracks from the screen capture stream
+    const screenTracks = screenStream.getVideoTracks();
+    console.log("Screen video tracks --->", screenTracks);
 
-      // Create an array to combine screen tracks and audio mixer tracks
-      const combinedTracks = [];
+    // Native "Stop sharing" (or the screen-share side releasing its own
+    // hold on it) is handled centrally now - see
+    // acquireSharedScreenCapture()'s onended, which knows about every
+    // feature currently riding on this capture, not just this one.
 
-      // Add screen video tracks to combinedTracks if available
-      if (Array.isArray(screenTracks)) {
-        combinedTracks.push(...screenTracks);
-      }
+    // Create an array to combine screen tracks and audio mixer tracks
+    const combinedTracks = [];
 
-      // Add audio mixer tracks to combinedTracks if available
-      if (useAudio && Array.isArray(audioMixerTracks)) {
-        combinedTracks.push(...audioMixerTracks);
-      }
+    // Add screen video tracks to combinedTracks if available
+    if (Array.isArray(screenTracks)) {
+      combinedTracks.push(...screenTracks);
+    }
 
-      // Create a new MediaStream using the combinedTracks
-      recScreenStream = new MediaStream(combinedTracks);
-      console.log(
-        "New Screen/Window Media Stream tracks  --->",
-        recScreenStream.getTracks(),
-      );
+    // Add audio mixer tracks to combinedTracks if available
+    if (useAudio && Array.isArray(audioMixerTracks)) {
+      combinedTracks.push(...audioMixerTracks);
+    }
 
-      // Create a MediaRecorder instance with the combined stream and specified options
-      mediaRecorder = new MediaRecorder(recScreenStream, options);
-      console.log(
-        "Created MediaRecorder",
-        mediaRecorder,
-        "with options",
-        options,
-      );
+    // Create a new MediaStream using the combinedTracks
+    recScreenStream = new MediaStream(combinedTracks);
+    console.log(
+      "New Screen/Window Media Stream tracks  --->",
+      recScreenStream.getTracks(),
+    );
 
-      // Set a flag to indicate that screen recording is active
-      isRecScreenStream = true;
+    // Create a MediaRecorder instance with the combined stream and specified options
+    mediaRecorder = new MediaRecorder(recScreenStream, options);
+    console.log(
+      "Created MediaRecorder",
+      mediaRecorder,
+      "with options",
+      options,
+    );
 
-      // Call a function to handle the MediaRecorder
-      handleMediaRecorder(mediaRecorder);
-    })
-    .catch((err) => {
-      // Handle any errors that occur during screen recording setup
-      handleRecordingError(
-        "Unable to record the screen + audio: " + err,
-        false,
-      );
-    });
+    // Set a flag to indicate that screen recording is active
+    isRecScreenStream = true;
+
+    // Call a function to handle the MediaRecorder
+    handleMediaRecorder(mediaRecorder);
+  } catch (err) {
+    // Handle any errors that occur during screen recording setup
+    handleRecordingError(
+      "Unable to record the screen + audio: " + err,
+      false,
+    );
+  }
 }
 
 /**
  * Get a MediaStream containing audio tracks from audio elements on the page.
+ *
+ * Skips a remote peer's raw <audio> element whenever it has an active
+ * boosted duplicate (see attachBoostedAudioStream(), which marks it via
+ * `_boostedAudioElement`) - that raw element is muted/volume 0 and only
+ * kept around so Chrome keeps decoding the track; the actual audible
+ * signal is the separate boosted <audio> element, which this same sweep
+ * also picks up on its own. Without this skip, both ended up here and got
+ * summed together in the recording, doubling that peer's voice.
+ *
+ * NOT filtering by `.muted` in general - the local mic preview element
+ * (#myAudio) is also always muted (to avoid hearing your own echo) but is
+ * the ONLY source of your own voice for the recording, so it must stay.
  * @returns {MediaStream} A MediaStream containing audio tracks.
  */
 function getAudioStreamFromAudioElements() {
   const audioElements = getSlALL("audio");
   const audioStream = new MediaStream();
   audioElements.forEach((audio) => {
+    if (audio._boostedAudioElement) return;
     if (audio.srcObject) {
       const audioTrack = getAudioTrack(audio.srcObject);
       if (audioTrack) {
@@ -9692,9 +9833,7 @@ async function handleMediaRecorderStop(event) {
   isStreamRecording = false;
   setPeerNameHTML(myVideoPeerName, myPeerName, true);
   if (isRecScreenStream) {
-    recScreenStream.getTracks().forEach((track) => {
-      if (track.kind === "video") track.stop();
-    });
+    await releaseSharedScreenCapture("record");
     isRecScreenStream = false;
   }
 
