@@ -13,10 +13,16 @@ export type CourseAccessUser = {
   allowedCourses?: string[];
 };
 
-// Vai trò nhân sự - luôn xem/dạy được MỌI khóa, không bị giới hạn theo
-// allowed_courses như học viên (khớp quy ước isTeacherOrAdmin đã dùng ở
-// LessonView.tsx/useCallEmbed.ts: chỉ 'giaovien'/'admin' là nhân sự).
-const STAFF_ROLES = new Set(["admin", "giaovien"]);
+// CHỈ 'admin' luôn xem/dạy được MỌI khóa, không bị giới hạn theo
+// allowed_courses - 'giaovien' KHÔNG còn đặc quyền này nữa (đổi 2026-08-23,
+// đi kèm cơ chế ký URL slide - server.js có bản mirror y hệt Set này,
+// KAIWA_SLIDE_STAFF_ROLES, sửa 1 bên nhớ sửa bên kia): 1 giáo viên chỉ dạy
+// lớp N5 thì cũng chỉ nên xem được đúng khóa N5 trong allowed_courses của
+// họ, không tự động thấy được N4/N3... Lưu ý isTeacherOrAdmin
+// (LessonView.tsx) là 1 khái niệm KHÁC - chỉ quyết định có thấy các CÔNG CỤ
+// của giáo viên (Slide, ghi hình...) hay không, không liên quan gì đến việc
+// được xem KHÓA HỌC nào.
+const STAFF_ROLES = new Set(["admin"]);
 
 /**
  * @param authUser window.__authUser (undefined nếu authGuard chưa chạy

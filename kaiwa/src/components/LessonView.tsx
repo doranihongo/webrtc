@@ -8,8 +8,27 @@ import Blackboard from './Blackboard';
 import NotePad from './NotePad';
 import FlashcardModal from './FlashcardModal';
 import { getVocabAudioUrl, getPooledVocabAudio, preloadLessonVocabAudio } from '../utils/vocabAudioCache';
-import { probeSlideImages } from '../utils/probeSlideImages';
+import { buildRawSlideUrls } from '../utils/buildRawSlideUrls';
+import { signSlideUrls, SignSlideUrlsError } from '../utils/signSlideUrls';
+import { readCachedSignedSlides, writeCachedSignedSlides } from '../utils/signedSlideUrlCache';
+import { activateSlideBlobCache, getCachedSlideBlob, loadSlideBlob } from '../utils/slideBlobCache';
 import type { VocabWord, GrammarPoint } from '../types';
+
+/**
+ * Khoá dùng cho `slideBlobUrlsRef` (LessonView) - lấy PATHNAME của URL đã
+ * ký (bỏ qua query string `exp`/`sig`), để 1 ảnh vẫn nhận diện được đúng
+ * Blob đã tải trước đó dù URL vừa được ký LẠI (làm mới token nền, đổi
+ * exp/sig nhưng ảnh thật không đổi) - không phải tải+decode lại từ đầu chỉ
+ * vì token mới. Parse lỗi (URL không hợp lệ, hiếm) thì dùng nguyên chuỗi
+ * URL làm khoá, vẫn đúng chỉ là mất phần tối ưu "sống sót qua làm mới".
+ */
+function getSlidePathKey(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
 
 /**
  * Trang chi tiết 1 bài học.
@@ -17,10 +36,13 @@ import type { VocabWord, GrammarPoint } from '../types';
  *     (thường là link Google Drive chia sẻ, không phải file trực tiếp nên
  *     không nhúng được trong app - Drive cần phiên đăng nhập riêng của
  *     Google, không đi kèm cookie đăng nhập của web này).
- *   - "Slide" (chỉ giáo viên/admin): `lesson.slideFolder` - 1 thư mục ảnh
- *     đặt tên tuần tự (1.svg/2.svg/...), hệ thống tự DÒ ra danh sách rồi
- *     hiển thị bằng SlideShow.tsx (component ảnh đơn giản, không PDF.js) -
- *     xem effect dò slide bên dưới, utils/probeSlideImages.ts và types.ts.
+ *   - "Slide" (chỉ giáo viên/admin, và chỉ khóa nằm trong allowed_courses
+ *     của họ - xem utils/courseAccess.ts): `lesson.slideFolder` - 1 thư mục
+ *     ảnh đặt tên tuần tự (1.svg/2.svg/...), sinh URL qua
+ *     utils/buildRawSlideUrls.ts rồi PHẢI ký qua server (HMAC + hạn dùng,
+ *     utils/signSlideUrls.ts - domain ảnh đứng sau 1 Cloudflare Worker chỉ
+ *     phục vụ URL có chữ ký hợp lệ) trước khi hiển thị bằng SlideShow.tsx -
+ *     xem effect ký+làm mới slide bên dưới.
  */
 export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   courseId: string,
@@ -141,42 +163,106 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   };
 
   // --- Slide trình chiếu (giáo viên/admin) ---
-  // Ưu tiên `slideCount` (gõ tay trong Supabase, xem types.ts) - biết sẵn
-  // số trang thì sinh thẳng mảng URL, KHÔNG cần dò gì cả, nút "Slide" bật
-  // ngay tức thì. Chỉ rơi về dò qua `slideFolder` (probeSlideImages.ts,
-  // thử tải 1.svg/2.svg/... tới khi 404 thì dừng - chậm, từng khiến nút
-  // "Slide" kẹt ở "Đang tải..." rất lâu với buổi học nhiều trang) khi
-  // buổi học đó chưa kịp điền `slideCount`.
+  // buildRawSlideUrls.ts sinh URL CHƯA KÝ (ưu tiên `slideCount` - biết sẵn
+  // số trang thì sinh thẳng mảng URL, KHÔNG cần dò; rơi về probeSlideImages
+  // khi buổi học chưa điền `slideCount` - xem file đó để biết chi tiết).
+  // signSlideUrls.ts sau đó ký (server kiểm tra role + allowed_courses của
+  // ĐÚNG khóa buổi học này trước khi ký, xem app/src/server.js) - domain ảnh
+  // đứng sau 1 Cloudflare Worker chỉ phục vụ URL có chữ ký hợp lệ, hạn dùng
+  // (mặc định 2 tiếng, SLIDE_URL_SIGNING_TTL_SECONDS) nên cần tự làm mới
+  // NGẦM trước khi hết hạn (scheduleRefresh bên dưới) - không ai phải F5.
   const [slideImages, setSlideImages] = useState<string[]>([]);
   const [slideProbing, setSlideProbing] = useState(false);
+  const [slideSignError, setSlideSignError] = useState<string | null>(null);
+  const slideRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // true khi lần cập nhật slideImages KẾ TIẾP là do làm mới token NGẦM
+  // (không phải lần tải đầu buổi học) - effect preload bên dưới đọc cờ này
+  // để không reset preloadedCount/hiện lại "Slide... x%" chỉ vì token được
+  // âm thầm ký lại, ảnh cũ vẫn đang xem bình thường không cần tải lại gì.
+  const isBackgroundSlideRefreshRef = useRef(false);
 
   useEffect(() => {
     setSlideImages([]);
-    if (!lesson || !lesson.slideFolder) return;
-
-    if (lesson.slideCount && lesson.slideCount > 0) {
-      const base = lesson.slideFolder.endsWith('/') ? lesson.slideFolder : `${lesson.slideFolder}/`;
-      const ext = lesson.slideExt || 'svg';
-      setSlideImages(
-        Array.from({ length: lesson.slideCount }, (_, i) => `${base}${i + 1}.${ext}`),
-      );
-      return;
+    setSlideSignError(null);
+    if (slideRefreshTimerRef.current) {
+      clearTimeout(slideRefreshTimerRef.current);
+      slideRefreshTimerRef.current = null;
     }
+    // Chỉ giáo viên/admin mới cần slide - tránh gọi ký URL (round-trip +
+    // luôn bị server từ chối) cho học viên, những người còn không thấy nút
+    // "Slide".
+    if (!lesson || !lesson.slideFolder || !isTeacherOrAdmin) return;
+
+    // Kích hoạt cache Blob ảnh ĐÚNG buổi học này NGAY (module-level, xem
+    // utils/slideBlobCache.ts) - làm ở đây (không phải effect preload bên
+    // dưới) để chắc chắn dọn Blob buổi cũ TRƯỚC khi bất kỳ ảnh nào của buổi
+    // mới bắt đầu tải, và để không phải thêm lessonKey vào deps effect
+    // preload (deps hiện chỉ theo slideImages, gọn hơn).
+    activateSlideBlobCache(lessonKey);
 
     let cancelled = false;
-    setSlideProbing(true);
-    probeSlideImages(lesson.slideFolder, { ext: lesson.slideExt })
-      .then((urls) => {
-        if (!cancelled) setSlideImages(urls);
-      })
-      .finally(() => {
-        if (!cancelled) setSlideProbing(false);
-      });
+
+    const scheduleRefresh = (exp: number) => {
+      const REFRESH_MARGIN_MS = 10 * 60 * 1000; // ký lại 10' trước khi hết hạn
+      const delay = Math.max(30_000, exp * 1000 - Date.now() - REFRESH_MARGIN_MS);
+      slideRefreshTimerRef.current = setTimeout(() => {
+        if (!cancelled) loadAndSign(true);
+      }, delay);
+    };
+
+    const loadAndSign = async (isBackgroundRefresh: boolean) => {
+      if (!isBackgroundRefresh) setSlideProbing(true);
+      try {
+        const rawUrls = await buildRawSlideUrls(lesson);
+        if (cancelled) return;
+        if (rawUrls.length === 0) {
+          setSlideImages([]);
+          return;
+        }
+        const { urls: signedUrls, exp } = await signSlideUrls(lessonId, rawUrls);
+        if (cancelled) return;
+        isBackgroundSlideRefreshRef.current = isBackgroundRefresh;
+        setSlideImages(signedUrls);
+        setSlideSignError(null);
+        writeCachedSignedSlides(lessonId, lesson, { exp, urls: signedUrls });
+        scheduleRefresh(exp);
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof SignSlideUrlsError ? err.message : 'Không ký được URL slide.';
+        setSlideSignError(message);
+        // Lỗi lúc làm mới NGẦM (không phải lần tải đầu) - thử lại sau 1
+        // phút thay vì bỏ cuộc hẳn (URL cũ còn hạn dùng tạm trong lúc chờ,
+        // slideImages hiện có KHÔNG bị xoá).
+        if (isBackgroundRefresh) {
+          slideRefreshTimerRef.current = setTimeout(() => {
+            if (!cancelled) loadAndSign(true);
+          }, 60_000);
+        }
+      } finally {
+        if (!cancelled && !isBackgroundRefresh) setSlideProbing(false);
+      }
+    };
+
+    // F5 lại trang (hay quay lại đúng buổi học này, kể cả sau khi đóng hẳn
+    // trình duyệt) trong lúc lần ký trước còn hạn - dùng lại NGUYÊN URL cũ,
+    // không ký lại: trình duyệt nhận ra đúng ảnh đã tải trước đó (cùng hệt
+    // URL, không đổi query string), hiện gần như tức thì thay vì phải
+    // tải+decode lại từ đầu (xem utils/signedSlideUrlCache.ts).
+    const cached = readCachedSignedSlides(lessonId, lesson);
+    if (cached) {
+      setSlideImages(cached.urls);
+      setSlideSignError(null);
+      scheduleRefresh(cached.exp);
+    } else {
+      loadAndSign(false);
+    }
+
     return () => {
       cancelled = true;
+      if (slideRefreshTimerRef.current) clearTimeout(slideRefreshTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lessonKey, lesson?.slideFolder, lesson?.slideExt, lesson?.slideCount]);
+  }, [lessonKey, lesson?.slideFolder, lesson?.slideExt, lesson?.slideCount, isTeacherOrAdmin, lessonId]);
 
   const hasSlideImages = slideImages.length > 0;
 
@@ -200,45 +286,122 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   // Slide mới bắt đầu) - chỉ là không tính vào điều kiện bật nút, cứ âm
   // thầm tải tiếp phía sau trong lúc giáo viên đã xem các trang đầu.
   //
-  // Dùng img.decode() thay vì chỉ nghe onload: onload chỉ báo đã tải xong
-  // BYTE ảnh, chưa chắc trình duyệt đã GIẢI MÃ xong thành bitmap sẵn sàng
-  // vẽ - ảnh SVG nặng (Canva xuất ra, cao/nhiều chi tiết) decode có thể mất
-  // cả giây dù đã nằm sẵn trong cache, gây khựng 1 nhịp đúng lúc <img> thật
-  // sự vẽ ra (SlideShow.tsx) dù coi như đã "tải xong". decode() đợi ĐÚNG
-  // bước đó luôn, nên preload xong là vẽ ra tức thì, không còn khựng.
-  // Fallback về onload/onerror cho trình duyệt hiếm không hỗ trợ decode().
+  // Tải THẬT nội dung ảnh bằng fetch()+Blob() (không phải chỉ new Image())
+  // rồi giữ lại làm Blob URL trong slideBlobUrlsRef - để khi SlideShow.tsx
+  // mở lên và TỰ preload lại (new Image(), xem effect riêng của nó) chỉ
+  // việc đọc thẳng Blob URL này (đã có sẵn trong bộ nhớ JS, không qua
+  // mạng) thay vì phải tải lại HTTP lần 2 y hệt (no-store ở Worker chặn
+  // trình duyệt tự dùng lại byte đã tải cho request thứ 2 - xem comment ở
+  // slideBlobUrlsRef). fetch() cần Worker bật CORS (Access-Control-Allow-
+  // Origin) mới đọc được nội dung response cross-origin - <img src> trước
+  // đây KHÔNG cần vì không đọc được nội dung, chỉ đưa cho trình duyệt tự vẽ.
+  //
+  // decode() ảnh dựng từ Blob URL trước khi coi là "xong": onload chỉ báo
+  // đã tải xong BYTE, chưa chắc đã GIẢI MÃ xong thành bitmap sẵn sàng vẽ -
+  // ảnh SVG nặng (Canva xuất ra) decode có thể mất cả giây, gây khựng 1
+  // nhịp đúng lúc SlideShow thật sự vẽ ra dù coi như đã "tải xong".
+  // decode() đợi ĐÚNG bước đó, nên preload xong là vẽ ra tức thì.
   const PRELOAD_GATE_COUNT = 5;
   const [preloadedCount, setPreloadedCount] = useState(0);
   const gateCount = Math.min(PRELOAD_GATE_COUNT, slideImages.length);
 
   useEffect(() => {
-    setPreloadedCount(0);
+    if (!isBackgroundSlideRefreshRef.current) {
+      setPreloadedCount(0);
+    }
+    // Tiêu thụ cờ ngay - lần cập nhật slideImages KẾ TIẾP (không rõ nguyên
+    // nhân) mặc định coi là tải thật, an toàn hơn (lỡ sai chỉ hiện lại
+    // spinner 1 lần oan, không phải lỗ hổng gì).
+    isBackgroundSlideRefreshRef.current = false;
     if (!isTeacherOrAdmin || slideImages.length === 0) return;
     let cancelled = false;
     const markLoaded = () => {
       if (!cancelled) setPreloadedCount((c) => c + 1);
     };
 
-    const preloadOne = (url: string, priority: 'high' | 'low') => {
-      const img = new Image();
-      (img as any).fetchPriority = priority;
-      img.src = url;
-      if (typeof img.decode === 'function') {
-        img.decode().then(markLoaded).catch(markLoaded);
-      } else {
-        img.onload = markLoaded;
-        img.onerror = markLoaded;
+    const preloadOne = async (url: string, priority: 'high' | 'low') => {
+      const pathKey = getSlidePathKey(url);
+      try {
+        // loadSlideBlob tự lo hết: dùng lại Blob đã có (vd quay lại đúng
+        // buổi học này sau khi ra Trang chủ, hoặc làm mới token nền - URL
+        // đổi exp/sig nhưng cùng pathname), HOẶC dùng chung kết quả nếu
+        // đang có 1 lượt tải khác dở dang cho ĐÚNG ảnh này (2 effect chạy
+        // gần như đồng thời cho cùng 1 lần vào buổi học - đã gặp thực tế),
+        // chỉ thật sự fetch() khi chưa ai tải - xem utils/slideBlobCache.ts.
+        const blobUrl = await loadSlideBlob(lessonKey, pathKey, async () => {
+          // cache: 'no-store' - KHÔNG bao giờ tin cache HTTP cũ của trình
+          // duyệt cho đúng URL này (dù URL đổi exp/sig mỗi lần ký lại nên
+          // hiếm khi trùng, nhưng phòng trường hợp trình duyệt từng thấy
+          // 1 bản Cache-Control cũ/khác từ trước - đã gặp thực tế lúc test:
+          // Worker từng có lúc trả Cache-Control dài hạn TRƯỚC khi đổi sang
+          // no-store, trình duyệt lỡ lưu đĩa bản đó thì fetch() sau này bị
+          // CHÍNH cache đĩa đó trả lời luôn, không ra mạng nữa - bản cache
+          // cũ thiếu header CORS (Access-Control-Allow-Origin) mới thêm sau
+          // nên fetch() bị chặn hẳn, dù server đã đúng từ lâu). Server cũng
+          // đã gửi Cache-Control: no-store nên về nguyên tắc trình duyệt
+          // không tự cache nữa - option này chỉ để chắc chắn tuyệt đối.
+          const res = await fetch(url, {
+            priority,
+            cache: 'no-store',
+          } as RequestInit & { priority?: 'high' | 'low' | 'auto' });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.blob();
+        });
+        if (typeof Image === 'function') {
+          const img = new Image();
+          img.src = blobUrl;
+          if (typeof img.decode === 'function') {
+            await img.decode().catch(() => {});
+          }
+        }
+      } catch {
+        // Lỗi mạng/CORS - bỏ qua, không giữ Blob cho pathKey này. SlideShow
+        // sẽ tự nhận URL ký gốc (slideDisplayImages rơi về url gốc khi
+        // không có Blob) và tự tải bằng <img src> như trước khi có tối ưu
+        // này - vẫn xem được, chỉ không còn hưởng lợi tránh tải 2 lần.
+      } finally {
+        markLoaded();
       }
     };
 
-    // PRELOAD_GATE_COUNT trang đầu ưu tiên "high" (đây là nhóm quyết định
-    // lúc nào nút bật) - từ đó trở đi "low" (chạy nền, không ai đang chờ).
-    slideImages.forEach((url, i) => preloadOne(url, i < PRELOAD_GATE_COUNT ? 'high' : 'low'));
+    // Giới hạn số ảnh tải+decode CÙNG LÚC (worker pool, không bắn hết N ảnh
+    // 1 lượt như trước) - đã gặp thực tế: 18 ảnh PNG nặng (3-6MB/ảnh) cùng
+    // fetch()+blob()+decode() đồng thời (không streaming nhẹ nhàng như
+    // <img src> nữa, mà phải đệm NGUYÊN blob vào bộ nhớ rồi giải mã) làm
+    // "đơ" hẳn tab (renderer không phản hồi nhiều giây) trên máy yếu/nhiều
+    // slide. PRELOAD_CONCURRENCY nhỏ vẫn đủ nhanh (ảnh ưu tiên "high" luôn
+    // được xếp trước trong hàng đợi nên vẫn về sớm) mà không dồn tải cùng lúc.
+    const PRELOAD_CONCURRENCY = 3;
+    const queue = slideImages.map((url, i) => ({
+      url,
+      priority: i < PRELOAD_GATE_COUNT ? ('high' as const) : ('low' as const),
+    }));
+    let nextIndex = 0;
+    const runWorker = async () => {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= queue.length) return;
+        await preloadOne(queue[i].url, queue[i].priority);
+      }
+    };
+    const workerCount = Math.min(PRELOAD_CONCURRENCY, queue.length);
+    for (let w = 0; w < workerCount; w++) runWorker();
 
     return () => {
       cancelled = true;
     };
-  }, [isTeacherOrAdmin, slideImages]);
+  }, [isTeacherOrAdmin, slideImages, lessonKey]);
+
+  // Danh sách URL thật sự đưa cho SlideShow hiển thị: dùng Blob URL đã tải
+  // sẵn (tức thì, không qua mạng) nếu có, rơi về URL ký gốc cho ảnh nào
+  // chưa preload xong kịp (vd trang cuối buổi học nhiều slide) hoặc preload
+  // lỗi - SlideShow tự tải nốt bằng <img src> bình thường trong trường hợp
+  // đó. Tính lại mỗi lần render (đọc Map module-level, không tốn gì) - tự
+  // động đổi dần từ URL gốc sang Blob URL khi từng ảnh preload xong
+  // (preloadedCount tăng kéo theo re-render, xem markLoaded ở trên).
+  const slideDisplayImages = slideImages.map(
+    (url) => getCachedSlideBlob(lessonKey, getSlidePathKey(url)) || url,
+  );
 
   // Đủ PRELOAD_GATE_COUNT trang đầu là bật nút - KHÔNG đợi hết toàn bộ
   // buổi học (xem effect preload phía trên).
@@ -475,11 +638,16 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
               <span className="text-xs font-bold text-white uppercase tracking-wider">Tài liệu</span>
             </button>
           </div>
+          {isTeacherOrAdmin && slideSignError && (
+            <p className="text-xs text-red-400 mt-3">
+              Không tải được slide: {slideSignError}
+            </p>
+          )}
           {(() => {
             const missing = [
               vocabulary.length === 0 && 'từ vựng để luyện tập',
               !hasLessonFile && 'tài liệu',
-              isTeacherOrAdmin && !hasSlideImages && !slideProbing && 'slide trình chiếu',
+              isTeacherOrAdmin && !hasSlideImages && !slideProbing && !slideSignError && 'slide trình chiếu',
             ].filter(Boolean) as string[];
             if (missing.length === 0) return null;
             return (
@@ -494,7 +662,7 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
       {/* Slide trình chiếu cho giáo viên - ảnh, không hiệu ứng, chỉ trước/sau */}
       {teacherSlideOpen && hasSlideImages && (
         <SlideShow
-          images={slideImages}
+          images={slideDisplayImages}
           title={lesson?.title}
           onClose={() => {
             setTeacherSlideOpen(false);

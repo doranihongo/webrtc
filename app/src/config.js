@@ -225,6 +225,17 @@ module.exports = {
   },
 
   // ==========================================
+  // Kaiwa slide URL signing (HMAC) - verified by a Cloudflare Worker in
+  // front of the dedicated slide-image bucket/domain (not part of this
+  // repo). Secret here MUST exactly match the Worker's SLIDE_SIGNING_SECRET
+  // binding, or every signed link will fail verification.
+  // ==========================================
+  kaiwaSlideSigning: {
+    secret: process.env.SLIDE_URL_SIGNING_SECRET || null, // null = signing disabled, route refuses to hand out URLs
+    ttlSeconds: parseInt(process.env.SLIDE_URL_SIGNING_TTL_SECONDS, 10) || 2 * 60 * 60, // 2h
+  },
+
+  // ==========================================
   // Survey
   // ==========================================
   survey: {

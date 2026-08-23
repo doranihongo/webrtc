@@ -464,6 +464,9 @@ const sentryEnabled = config.sentry.enabled;
 const sentryDSN = config.sentry.dsn;
 const sentryTracesSampleRate = config.sentry.tracesSampleRate;
 
+// Kaiwa slide URL signing (HMAC) - Node built-in, no extra dependency.
+const crypto = require("crypto");
+
 // Slack API
 const CryptoJS = require("crypto-js");
 const qS = require("qs");
@@ -1102,6 +1105,183 @@ app.post(
     }
   },
 );
+
+/**
+ * Kaiwa slide URL signing - see kaiwa/src/utils/signSlideUrls.ts (client) and
+ * the Cloudflare Worker in front of the dedicated slide bucket/domain (not
+ * part of this repo) which verifies the exp/sig this route produces before
+ * ever serving a file. Auth here is intentionally SEPARATE from the socket.io
+ * profiles lookup above (io.use(), ~line 202) and from pageAuthCache
+ * (isPageAuthTokenValid, ~line 776) - neither of those select allowed_courses,
+ * and this is a POST route (not covered by the GET/HEAD-only page-auth-guard
+ * middleware either), so it needs its own token -> role/allowed_courses check.
+ */
+const kaiwaSlideAuthCache = new Map(); // token -> { ok, role, allowedCourses, validUntil }
+const KAIWA_SLIDE_AUTH_CACHE_TTL_MS = 60 * 1000;
+
+async function getKaiwaSlideAuthUser(token) {
+  const now = Date.now();
+  const cached = kaiwaSlideAuthCache.get(token);
+  if (cached && cached.validUntil > now) return cached.ok ? cached : null;
+
+  let result = { ok: false, validUntil: now + KAIWA_SLIDE_AUTH_CACHE_TTL_MS };
+  try {
+    const { data: user } = await axios.get(`${supabaseCfg.url}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${token}`, apikey: supabaseCfg.anonKey },
+      timeout: 5000,
+    });
+    if (user?.id) {
+      const { data: profiles } = await axios.get(
+        `${supabaseCfg.url}/rest/v1/profiles`,
+        {
+          params: { id: `eq.${user.id}`, select: "role,allowed_courses" },
+          headers: { Authorization: `Bearer ${token}`, apikey: supabaseCfg.anonKey },
+          timeout: 5000,
+        },
+      );
+      const role = profiles?.[0]?.role;
+      if (role) {
+        result = {
+          ok: true,
+          role,
+          allowedCourses: Array.isArray(profiles?.[0]?.allowed_courses)
+            ? profiles[0].allowed_courses
+            : [],
+          validUntil: now + KAIWA_SLIDE_AUTH_CACHE_TTL_MS,
+        };
+      }
+    }
+  } catch (err) {
+    result = { ok: false, validUntil: now + KAIWA_SLIDE_AUTH_CACHE_TTL_MS };
+  }
+
+  if (kaiwaSlideAuthCache.size > 500) {
+    for (const [key, val] of kaiwaSlideAuthCache) {
+      if (val.validUntil <= now) kaiwaSlideAuthCache.delete(key);
+    }
+  }
+  kaiwaSlideAuthCache.set(token, result);
+  return result.ok ? result : null;
+}
+
+// Mirror of STAFF_ROLES in kaiwa/src/utils/courseAccess.ts - keep in sync.
+// Only 'admin' bypasses allowed_courses; 'giaovien' is scoped just like
+// học viên (đổi 2026-08-23, đi kèm cơ chế ký URL slide - trước đó giaovien
+// từng được xem hết mọi khóa).
+const KAIWA_SLIDE_STAFF_ROLES = new Set(["admin"]);
+function isKaiwaSlideCourseAllowed(authUser, courseId) {
+  if (!authUser) return false;
+  if (KAIWA_SLIDE_STAFF_ROLES.has(authUser.role)) return true;
+  return (
+    Array.isArray(authUser.allowedCourses) &&
+    authUser.allowedCourses.includes(courseId)
+  );
+}
+
+async function getKaiwaLessonForSigning(token, lessonId) {
+  try {
+    const { data } = await axios.get(`${supabaseCfg.url}/rest/v1/kaiwa_lessons`, {
+      params: { id: `eq.${lessonId}`, select: "course_id,slide_folder" },
+      headers: { Authorization: `Bearer ${token}`, apikey: supabaseCfg.anonKey },
+      timeout: 5000,
+    });
+    return data?.[0] || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function signKaiwaSlideUrl(rawUrl, expEpochSeconds, secret) {
+  const parsed = new URL(rawUrl);
+  const stringToSign = `${parsed.pathname}:${expEpochSeconds}`;
+  const sig = crypto.createHmac("sha256", secret).update(stringToSign).digest("hex");
+  parsed.searchParams.set("exp", String(expEpochSeconds));
+  parsed.searchParams.set("sig", sig);
+  return parsed.toString();
+}
+
+app.post("/kaiwa/sign-slide-urls", async (req, res) => {
+  const slideSigningCfg = config.kaiwaSlideSigning;
+  if (!slideSigningCfg.secret) {
+    log.error(
+      "[Kaiwa] SLIDE_URL_SIGNING_SECRET chưa được cấu hình - từ chối ký URL slide (không bao giờ trả URL chưa ký).",
+    );
+    return res.status(500).json({ error: "signing_not_configured" });
+  }
+
+  const token = getCookieValue(req, "sb_page_token");
+  if (!token) return res.status(401).json({ error: "unauthorized" });
+
+  const authUser = await getKaiwaSlideAuthUser(token);
+  if (!authUser) return res.status(401).json({ error: "unauthorized" });
+
+  const { lessonId, urls } = checkXSS(req.body || {});
+  if (!lessonId || typeof lessonId !== "string") {
+    return res
+      .status(400)
+      .json({ error: "invalid_request", message: "Thiếu lessonId." });
+  }
+  if (!Array.isArray(urls) || urls.length === 0 || urls.some((u) => typeof u !== "string")) {
+    return res
+      .status(400)
+      .json({ error: "invalid_request", message: "urls phải là mảng chuỗi không rỗng." });
+  }
+  if (urls.length > 200) {
+    return res
+      .status(400)
+      .json({ error: "invalid_request", message: "Quá nhiều URL trong 1 lần ký." });
+  }
+
+  const lesson = await getKaiwaLessonForSigning(token, lessonId);
+  if (!lesson || !lesson.slide_folder) {
+    return res.status(404).json({ error: "lesson_not_found" });
+  }
+
+  if (!isKaiwaSlideCourseAllowed(authUser, lesson.course_id)) {
+    return res.status(403).json({ error: "forbidden" });
+  }
+
+  const base = lesson.slide_folder.endsWith("/")
+    ? lesson.slide_folder
+    : `${lesson.slide_folder}/`;
+  let parsedBase;
+  try {
+    parsedBase = new URL(base);
+  } catch (err) {
+    log.error("[Kaiwa] slide_folder không phải URL hợp lệ", {
+      lessonId,
+      slideFolder: lesson.slide_folder,
+    });
+    return res.status(500).json({ error: "invalid_slide_folder" });
+  }
+
+  for (const u of urls) {
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(u);
+    } catch (err) {
+      return res
+        .status(400)
+        .json({ error: "invalid_url", message: `URL không hợp lệ: ${u}` });
+    }
+    // Chặn dùng 1 lessonId hợp lệ để ký URL của thư mục KHÁC (buổi học/khóa
+    // khác) - mỗi URL gửi lên PHẢI nằm trong đúng slide_folder của lessonId
+    // đã xin quyền ở trên.
+    if (
+      parsedUrl.origin !== parsedBase.origin ||
+      !parsedUrl.pathname.startsWith(parsedBase.pathname)
+    ) {
+      return res
+        .status(400)
+        .json({ error: "url_outside_lesson", message: `URL không thuộc buổi học: ${u}` });
+    }
+  }
+
+  const exp = Math.floor(Date.now() / 1000) + slideSigningCfg.ttlSeconds;
+  const signedUrls = urls.map((u) => signKaiwaSlideUrl(u, exp, slideSigningCfg.secret));
+
+  return res.status(200).json({ exp, urls: signedUrls });
+});
 
 // Receive a ~30s recording chunk from the presenter's browser and append it
 // (in order) to that session's temp file on disk. Auth is via the opaque
