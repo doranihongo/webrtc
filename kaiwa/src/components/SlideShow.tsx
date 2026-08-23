@@ -46,9 +46,12 @@ const GLOW_CURSOR = (() => {
 
 /**
  * Trình chiếu slide dạng ẢNH cho giáo viên (không phải PDF): mỗi trang là
- * 1 ảnh, bấm Next/Prev (hoặc phím mũi tên) để chuyển - đổi `src` trực tiếp,
- * KHÔNG hiệu ứng fade/transition, giống tinh thần PdfSlideShow.tsx nhưng
- * đơn giản hơn nhiều (không PDF.js/canvas) vì nguồn đã là ảnh sẵn.
+ * 1 ảnh, bấm Next/Prev (hoặc phím mũi tên) để chuyển - crossfade ngắn
+ * (FADE_MS) giữa các trang, giống tinh thần PdfSlideShow.tsx nhưng đơn giản
+ * hơn nhiều (không PDF.js/canvas) vì nguồn đã là ảnh sẵn. Riêng trang 1 lúc
+ * VỪA MỞ Slide có thêm hiệu ứng "hiện rõ dần" dài hơn (ENTER_FADE_MS, xem
+ * cụm state entered/useEnterDuration bên dưới) - chỉ 1 lần lúc mở, không
+ * lặp lại khi next/prev.
  *
  * Bút vẽ đè lên slide: canvas trong suốt phủ TOÀN KHUNG hiển thị (cả vùng
  * đệm quanh ảnh nếu ảnh không lấp hết khung, không riêng gì phần ảnh) - vẽ
@@ -141,6 +144,46 @@ export default function SlideShow({ images, title, onClose, isBoardOpen, onToggl
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (settleTimeoutRef.current) clearTimeout(settleTimeoutRef.current);
+    };
+  }, []);
+
+  // --- Hiệu ứng "hiện rõ dần" CHỈ cho trang 1 lúc vừa mở Slide (không áp
+  // dụng cho crossfade next/prev bình thường, xem FADE_MS ở trên) - mở lâu
+  // hơn (ENTER_FADE_MS) để cảm nhận rõ "mờ -> rõ" thay vì thoáng qua như
+  // crossfade 150ms giữa các trang. `entered` bắt đầu false (ảnh slot A vẽ
+  // opacity 0 ngay từ lần render đầu tiên) rồi bật true sau đúng 2 khung
+  // hình (double rAF - đợi trình duyệt "chốt" sơn opacity 0 đó trước, y hệt
+  // kỹ thuật crossfade ở goTo() phía trên) để CSS transition thật sự chạy
+  // thay vì nhảy thẳng lên 1 (set true ngay cùng lần render đầu sẽ không có
+  // frame nào ở opacity 0 để transition xuất phát từ đó).
+  const ENTER_FADE_MS = 600;
+  const [entered, setEntered] = useState(false);
+  // Tách riêng khỏi `entered` - PHẢI giữ nguyên ENTER_FADE_MS suốt lúc
+  // transition-opacity đang thật sự chạy (600ms), không đổi CÙNG LÚC với
+  // `entered` lật true: nếu transitionDuration đổi giá trị NGAY tại đúng
+  // khung hình opacity đổi 0->1, trình duyệt lấy transition-duration MỚI
+  // (150ms) cho transition đó thay vì 600ms - hiệu ứng sẽ vụt qua rất nhanh
+  // thay vì mờ->rõ chậm rãi như ý muốn. Tắt về false (chuyển hẳn sang dùng
+  // FADE_MS 150ms cho các crossfade next/prev sau đó) SAU KHI transition
+  // 600ms đã chạy xong hẳn.
+  const [useEnterDuration, setUseEnterDuration] = useState(true);
+  const enterRafRef = useRef<number | null>(null);
+  const enterDoneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    enterRafRef.current = requestAnimationFrame(() => {
+      enterRafRef.current = requestAnimationFrame(() => {
+        setEntered(true);
+        enterRafRef.current = null;
+        enterDoneTimeoutRef.current = setTimeout(() => {
+          setUseEnterDuration(false);
+          enterDoneTimeoutRef.current = null;
+        }, ENTER_FADE_MS);
+      });
+    });
+    return () => {
+      if (enterRafRef.current) cancelAnimationFrame(enterRafRef.current);
+      if (enterDoneTimeoutRef.current) clearTimeout(enterDoneTimeoutRef.current);
     };
   }, []);
 
@@ -628,8 +671,8 @@ export default function SlideShow({ images, title, onClose, isBoardOpen, onToggl
             <img
               src={images[slotAIndex]}
               alt={`Slide ${slotAIndex + 1}/${total}`}
-              className={`col-start-1 row-start-1 max-w-full max-h-full object-contain rounded-2xl shadow-2xl transition-opacity ease-in-out ${activeSlot === 'A' ? 'opacity-100' : 'opacity-0'}`}
-              style={{ transitionDuration: `${FADE_MS}ms` }}
+              className={`col-start-1 row-start-1 max-w-full max-h-full object-contain rounded-2xl shadow-2xl transition-opacity ease-in-out ${activeSlot === 'A' && entered ? 'opacity-100' : 'opacity-0'}`}
+              style={{ transitionDuration: `${useEnterDuration ? ENTER_FADE_MS : FADE_MS}ms` }}
             />
             <img
               src={images[slotBIndex]}

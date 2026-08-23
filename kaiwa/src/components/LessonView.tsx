@@ -659,7 +659,8 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
         </div>
       </main>
 
-      {/* Slide trình chiếu cho giáo viên - ảnh, không hiệu ứng, chỉ trước/sau */}
+      {/* Slide trình chiếu cho giáo viên - ảnh, crossfade khi trước/sau, trang
+          1 hiện rõ dần lúc vừa mở (xem SlideShow.tsx) */}
       {teacherSlideOpen && hasSlideImages && (
         <SlideShow
           images={slideDisplayImages}
