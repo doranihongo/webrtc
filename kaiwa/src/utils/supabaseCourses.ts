@@ -32,6 +32,8 @@ export interface DbLesson {
   /** Xem Lesson.slideFolder/slideExt (types.ts). */
   slideFolder?: string;
   slideExt?: string;
+  /** Xem Lesson.slideCount (types.ts). */
+  slideCount?: number;
 }
 
 /**
@@ -70,7 +72,7 @@ export async function fetchCourseLessons(courseId: string): Promise<DbLesson[] |
 
   const { data, error } = await client
     .from('kaiwa_lessons')
-    .select('id, title, vocabulary, grammar, lesson_file_url, slide_folder, slide_ext, sort_order')
+    .select('id, title, vocabulary, grammar, lesson_file_url, slide_folder, slide_ext, slide_count, sort_order')
     .eq('course_id', courseId)
     .order('sort_order', { ascending: true });
 
@@ -87,6 +89,7 @@ export async function fetchCourseLessons(courseId: string): Promise<DbLesson[] |
     lessonFileUrl: row.lesson_file_url || undefined,
     slideFolder: row.slide_folder || undefined,
     slideExt: row.slide_ext || undefined,
+    slideCount: row.slide_count || undefined,
   }));
 }
 

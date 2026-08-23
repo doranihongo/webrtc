@@ -141,14 +141,28 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   };
 
   // --- Slide trình chiếu (giáo viên/admin) ---
-  // Tự DÒ qua `slideFolder` (xem utils/probeSlideImages.ts + types.ts) -
-  // không còn cách liệt kê tay từng URL nữa.
+  // Ưu tiên `slideCount` (gõ tay trong Supabase, xem types.ts) - biết sẵn
+  // số trang thì sinh thẳng mảng URL, KHÔNG cần dò gì cả, nút "Slide" bật
+  // ngay tức thì. Chỉ rơi về dò qua `slideFolder` (probeSlideImages.ts,
+  // thử tải 1.svg/2.svg/... tới khi 404 thì dừng - chậm, từng khiến nút
+  // "Slide" kẹt ở "Đang tải..." rất lâu với buổi học nhiều trang) khi
+  // buổi học đó chưa kịp điền `slideCount`.
   const [slideImages, setSlideImages] = useState<string[]>([]);
   const [slideProbing, setSlideProbing] = useState(false);
 
   useEffect(() => {
     setSlideImages([]);
     if (!lesson || !lesson.slideFolder) return;
+
+    if (lesson.slideCount && lesson.slideCount > 0) {
+      const base = lesson.slideFolder.endsWith('/') ? lesson.slideFolder : `${lesson.slideFolder}/`;
+      const ext = lesson.slideExt || 'svg';
+      setSlideImages(
+        Array.from({ length: lesson.slideCount }, (_, i) => `${base}${i + 1}.${ext}`),
+      );
+      return;
+    }
+
     let cancelled = false;
     setSlideProbing(true);
     probeSlideImages(lesson.slideFolder, { ext: lesson.slideExt })
@@ -162,9 +176,78 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lessonKey, lesson?.slideFolder, lesson?.slideExt]);
+  }, [lessonKey, lesson?.slideFolder, lesson?.slideExt, lesson?.slideCount]);
 
   const hasSlideImages = slideImages.length > 0;
+
+  // Preload TRƯỚC toàn bộ ảnh slide ngay khi biết danh sách - KHÔNG đợi
+  // giáo viên bấm "Slide" mới bắt đầu tải như trước (SlideShow.tsx chỉ
+  // preload lúc mount, tức là sau khi bấm). Chạy sớm nhất có thể (ngay
+  // khi vào trang buổi học) cho ảnh có nhiều thời gian nằm sẵn trong cache
+  // HTTP của trình duyệt trước khi thực sự cần.
+  // Chỉ chạy cho giáo viên/admin (học viên không thấy nút "Slide", preload
+  // cho họ chỉ tốn băng thông vô ích).
+  // Trang 1 nạp RIÊNG/trước (fetchPriority "high") để chắc chắn có sẵn sớm
+  // nhất dù thứ tự trình duyệt xử lý các request khác thế nào; các trang
+  // còn lại nạp "low" - trình duyệt tự giới hạn ~6 kết nối song song/domain
+  // nên tự động thành từng cụm trước-sau, không cần tự chia lô thủ công.
+  //
+  // Nút "Slide" bật ngay khi PRELOAD_GATE_COUNT trang ĐẦU đã xong thật sự
+  // (xem slideGateReady/hasSlideImages ở nút bên dưới) - không đợi cả buổi
+  // học (có thể vài chục trang, rất nặng nếu là SVG Canva xuất ra) mới cho
+  // bấm vào, chỉ cần đủ để mở lên là xem mượt ngay từ trang 1. Các trang
+  // từ PRELOAD_GATE_COUNT+1 trở đi vẫn được nạp CÙNG LÚC (không đợi mở
+  // Slide mới bắt đầu) - chỉ là không tính vào điều kiện bật nút, cứ âm
+  // thầm tải tiếp phía sau trong lúc giáo viên đã xem các trang đầu.
+  //
+  // Dùng img.decode() thay vì chỉ nghe onload: onload chỉ báo đã tải xong
+  // BYTE ảnh, chưa chắc trình duyệt đã GIẢI MÃ xong thành bitmap sẵn sàng
+  // vẽ - ảnh SVG nặng (Canva xuất ra, cao/nhiều chi tiết) decode có thể mất
+  // cả giây dù đã nằm sẵn trong cache, gây khựng 1 nhịp đúng lúc <img> thật
+  // sự vẽ ra (SlideShow.tsx) dù coi như đã "tải xong". decode() đợi ĐÚNG
+  // bước đó luôn, nên preload xong là vẽ ra tức thì, không còn khựng.
+  // Fallback về onload/onerror cho trình duyệt hiếm không hỗ trợ decode().
+  const PRELOAD_GATE_COUNT = 5;
+  const [preloadedCount, setPreloadedCount] = useState(0);
+  const gateCount = Math.min(PRELOAD_GATE_COUNT, slideImages.length);
+
+  useEffect(() => {
+    setPreloadedCount(0);
+    if (!isTeacherOrAdmin || slideImages.length === 0) return;
+    let cancelled = false;
+    const markLoaded = () => {
+      if (!cancelled) setPreloadedCount((c) => c + 1);
+    };
+
+    const preloadOne = (url: string, priority: 'high' | 'low') => {
+      const img = new Image();
+      (img as any).fetchPriority = priority;
+      img.src = url;
+      if (typeof img.decode === 'function') {
+        img.decode().then(markLoaded).catch(markLoaded);
+      } else {
+        img.onload = markLoaded;
+        img.onerror = markLoaded;
+      }
+    };
+
+    // PRELOAD_GATE_COUNT trang đầu ưu tiên "high" (đây là nhóm quyết định
+    // lúc nào nút bật) - từ đó trở đi "low" (chạy nền, không ai đang chờ).
+    slideImages.forEach((url, i) => preloadOne(url, i < PRELOAD_GATE_COUNT ? 'high' : 'low'));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isTeacherOrAdmin, slideImages]);
+
+  // Đủ PRELOAD_GATE_COUNT trang đầu là bật nút - KHÔNG đợi hết toàn bộ
+  // buổi học (xem effect preload phía trên).
+  const slideGateReady = hasSlideImages && preloadedCount >= gateCount;
+  const slidePreloadPercent =
+    gateCount > 0 ? Math.min(100, Math.round((preloadedCount / gateCount) * 100)) : 0;
+  // "Đang tải" hiện khi đang dò slideFolder (buổi học chưa có slideCount)
+  // HOẶC đã biết danh sách nhưng nhóm trang đầu chưa tải xong.
+  const slideButtonBusy = slideProbing || (hasSlideImages && !slideGateReady);
 
   const toggleContentTab = (tab: 'vocab' | 'grammar') => {
     setActiveContentTab((prev) => (prev === tab ? null : tab));
@@ -356,16 +439,20 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
             {isTeacherOrAdmin && (
               <button
                 onClick={() => setTeacherSlideOpen(true)}
-                disabled={!hasSlideImages}
+                disabled={!hasSlideImages || !slideGateReady}
                 className="bg-blue-600 border border-blue-400/60 p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md shadow-blue-900/30 transition-all hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-900/40 disabled:opacity-40 disabled:pointer-events-none disabled:hover:translate-y-0"
               >
-                {slideProbing ? (
+                {slideButtonBusy ? (
                   <div className="w-6 h-6 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                 ) : (
                   <MonitorPlay className="w-6 h-6 text-white" />
                 )}
                 <span className="text-xs font-bold text-white uppercase tracking-wider">
-                  {slideProbing ? 'Đang tải...' : 'Slide'}
+                  {slideProbing
+                    ? 'Đang tải...'
+                    : hasSlideImages && !slideGateReady
+                      ? `Slide... ${slidePreloadPercent}%`
+                      : 'Slide'}
                 </span>
               </button>
             )}

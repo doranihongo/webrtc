@@ -76,20 +76,29 @@ export interface Lesson {
    * Ảnh slide trình chiếu dành cho giáo viên (nút "Slide") - KHÁC với
    * `lessonFileUrl` (tài liệu học viên tự xem, luôn mở tab mới). 1 thư mục
    * ảnh đặt tên TUẦN TỰ liên tục "1.svg, 2.svg, 3.svg, ..." (không nhảy
-   * số) - hệ thống tự dò lần lượt (LessonView.tsx, utils/probeSlideImages.ts)
-   * bằng cách thử tải ảnh 1, 2, 3... cho tới khi gặp ảnh không tồn tại
-   * (404) thì dừng, không cần biết trước có bao nhiêu ảnh và không cần
-   * liệt kê từng URL vào Supabase. Vd đặt ảnh buổi 1 lên Cloudflare tại
-   * ".../slides/buoi-1/1.svg" .. "10.svg" thì set
-   * `slideFolder: "https://.../slides/buoi-1/"` (có hay không dấu "/" cuối
-   * đều được). Đuôi file mặc định là "svg", đổi bằng `slideExt` nếu dùng
-   * jpg/png.
-   * Trống (hoặc dò ra 0 ảnh) = buổi học chưa có slide, nút "Slide" sẽ bị
-   * vô hiệu hóa.
+   * số). Vd đặt ảnh buổi 1 lên Cloudflare tại ".../slides/buoi-1/1.svg" ..
+   * "10.svg" thì set `slideFolder: "https://.../slides/buoi-1/"` (có hay
+   * không dấu "/" cuối đều được). Đuôi file mặc định là "svg", đổi bằng
+   * `slideExt` nếu dùng jpg/png.
+   *
+   * Số lượng ảnh lấy từ `slideCount` (gõ tay, xem field đó) nếu có - không
+   * thì mới rơi về dò lần lượt (LessonView.tsx, utils/probeSlideImages.ts,
+   * thử tải ảnh 1, 2, 3... tới khi gặp 404 thì dừng) như cách cũ, chỉ để
+   * tương thích buổi học nào chưa kịp điền `slideCount`.
+   * Trống (hoặc slideCount = 0 và dò ra 0 ảnh) = buổi học chưa có slide,
+   * nút "Slide" sẽ bị vô hiệu hóa.
    */
   slideFolder?: string;
-  /** Đuôi file ảnh khi dò qua `slideFolder`, mặc định "svg" (vd "png", "jpg"). */
+  /** Đuôi file ảnh khi dùng `slideFolder`, mặc định "svg" (vd "png", "jpg"). */
   slideExt?: string;
+  /**
+   * Số lượng ảnh trong `slideFolder`, gõ TAY vào cột `slide_count` của
+   * bảng kaiwa_lessons trên Supabase mỗi khi thêm/bớt slide - có giá trị
+   * này thì bỏ qua hẳn bước dò 404 (probeSlideImages.ts), nút "Slide" bật
+   * ngay lập tức, không còn "Đang tải...". Không điền (0/null) = tự dò như
+   * cách cũ (chậm hơn, chỉ nên dùng tạm trong lúc chưa kịp điền).
+   */
+  slideCount?: number;
 }
 
 export interface Course {
