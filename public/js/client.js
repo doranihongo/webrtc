@@ -613,6 +613,18 @@ let localScreenMediaStream; // my screen share
 let localScreenDisplayStream; // raw getDisplayMedia stream (may include audio)
 let screenShareAudioContext; // AudioContext used to mix screen audio + microphone
 
+// Kaiwa homework playback ("Bài tập về nhà" - teacher plays a student's
+// audio submission during a live call so both peers hear it). Set by the
+// "dora:homeworkAudioPlaybackChanged" message below (kaiwa owns the
+// <audio> element and its lifecycle entirely - this page only needs to
+// know "playing or not" to decide which track to push, see
+// mixKaiwaAudioBusWithMic()/refreshMyStreamToPeers() below). Deliberately a
+// SEPARATE AudioContext from screenShareAudioContext - startScreenSharing()/
+// stopScreenSharing() close that one on their own lifecycle, and sharing the
+// var would let a mid-playback screen-share toggle silently kill this graph.
+let isKaiwaHomeworkAudioPlaying = false;
+let kaiwaHomeworkAudioMixContext;
+
 // Shared screen-capture handle used by BOTH "Chia sẻ màn hình" and "Quay
 // video màn hình". getDisplayMedia() always shows the browser's native
 // screen/window/tab picker on every single call - by design, no site can
@@ -6457,6 +6469,20 @@ window.addEventListener("message", (event) => {
     if (typeof togglePagePip === "function") togglePagePip("toggle");
   } else if (event.data?.type === "dora:requestPipState") {
     sendPipStateToKaiwa();
+  } else if (event.data?.type === "dora:homeworkAudioPlaybackChanged") {
+    // Kaiwa's homework modal started/stopped playing a submission - re-push
+    // our outgoing audio track to every peer, preferring the homework bus
+    // track while it's playing (see refreshMyStreamToPeers()). Not awaited -
+    // this listener can't be async without changing its signature, and
+    // nothing here needs to block on the result.
+    isKaiwaHomeworkAudioPlaying = !!event.data.isPlaying;
+    if (!isKaiwaHomeworkAudioPlaying && kaiwaHomeworkAudioMixContext) {
+      kaiwaHomeworkAudioMixContext.close().catch(() => {});
+      kaiwaHomeworkAudioMixContext = null;
+    }
+    refreshMyStreamToPeers().catch((err) =>
+      console.warn("[Homework] refreshMyStreamToPeers after playback change failed", err),
+    );
   }
 });
 
@@ -8776,6 +8802,50 @@ async function mixScreenAndMicAudio(screenAudioTrack, micAudioTrack) {
 }
 
 /**
+ * Mix kaiwa's "shareable audio bus" (see
+ * kaiwa/src/utils/shareableAudioBus.ts / getShareableAudioTrackFromKaiwa()
+ * below) with the microphone, for the homework "cả lớp cùng nghe" feature -
+ * structurally identical to mixScreenAndMicAudio() above, just using its own
+ * AudioContext (kaiwaHomeworkAudioMixContext) so a mid-playback screen-share
+ * toggle can't tear this one down as a side effect.
+ * @param {MediaStreamTrack} busAudioTrack
+ * @param {MediaStreamTrack} micAudioTrack
+ * @returns {Promise<MediaStreamTrack|null>}
+ */
+async function mixKaiwaAudioBusWithMic(busAudioTrack, micAudioTrack) {
+  if (busAudioTrack && micAudioTrack) {
+    try {
+      kaiwaHomeworkAudioMixContext = new (
+        window.AudioContext || window.webkitAudioContext
+      )();
+      const destination =
+        kaiwaHomeworkAudioMixContext.createMediaStreamDestination();
+      kaiwaHomeworkAudioMixContext
+        .createMediaStreamSource(new MediaStream([busAudioTrack]))
+        .connect(destination);
+      kaiwaHomeworkAudioMixContext
+        .createMediaStreamSource(new MediaStream([micAudioTrack]))
+        .connect(destination);
+      try {
+        await kaiwaHomeworkAudioMixContext.resume();
+      } catch (_) {}
+      return destination.stream.getAudioTracks()[0] || null;
+    } catch (err) {
+      console.warn(
+        "[Homework] Unable to mix homework+mic audio, falling back to homework audio only:",
+        err,
+      );
+      return busAudioTrack;
+    }
+  } else if (busAudioTrack) {
+    return busAudioTrack;
+  } else if (micAudioTrack) {
+    return micAudioTrack;
+  }
+  return null;
+}
+
+/**
  * Update Screen Sharing UI
  * @param {boolean} isScreenStreaming - Indicates if screen sharing is active
  * @param {boolean} init - Indicates if it's the initial screen share
@@ -8977,10 +9047,23 @@ async function refreshMyStreamToPeers(stream, localAudioTrackChange = false) {
   const screenTrack = getVideoTrack(localScreenMediaStream);
 
   // Determine which audio track to use.
-  // While screen sharing, prefer the screen-share audio track (which may be mixed screen+mic).
-  // Always prefer mic audio when not screen sharing
+  // Highest priority: kaiwa homework playback (mixed with mic) - independent
+  // of screen sharing, see mixKaiwaAudioBusWithMic() above and the
+  // "dora:homeworkAudioPlaybackChanged" listener for how this flag is set.
+  // Then: while screen sharing, the screen-share audio track (which may be
+  // mixed screen+mic). Otherwise: plain mic audio.
   let audioTrack, audioStream;
-  if (isScreenStreaming && hasAudioTrack(localScreenMediaStream)) {
+  const kaiwaHomeworkAudioTrack = isKaiwaHomeworkAudioPlaying
+    ? getShareableAudioTrackFromKaiwa()
+    : null;
+  if (kaiwaHomeworkAudioTrack) {
+    const micTrack =
+      myAudioStatus && hasAudioTrack(localAudioMediaStream)
+        ? getAudioTrack(localAudioMediaStream)
+        : null;
+    audioTrack = await mixKaiwaAudioBusWithMic(kaiwaHomeworkAudioTrack, micTrack);
+    audioStream = null; // synthetic mixed track - addTrack() below falls back to new MediaStream([audioTrack])
+  } else if (isScreenStreaming && hasAudioTrack(localScreenMediaStream)) {
     audioTrack = getAudioTrack(localScreenMediaStream);
     audioStream = localScreenMediaStream;
   } else {

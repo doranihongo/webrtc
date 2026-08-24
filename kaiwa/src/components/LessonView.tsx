@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, BookOpen, ExternalLink, Languages, ListChecks, ChevronDown, MonitorPlay, Layers, Volume2 } from 'lucide-react';
+import { ArrowLeft, BookOpen, ExternalLink, Languages, ListChecks, ChevronDown, MonitorPlay, Layers, Volume2, Mic } from 'lucide-react';
 import { useCourses } from '../context/CoursesContext';
 import { useCallEmbed } from '../hooks/useCallEmbed';
 import CallControls from './CallControls';
@@ -7,12 +7,14 @@ import SlideShow from './SlideShow';
 import Blackboard from './Blackboard';
 import NotePad from './NotePad';
 import FlashcardModal from './FlashcardModal';
+import HomeworkModal from './HomeworkModal';
 import { getVocabAudioUrl, getPooledVocabAudio, preloadLessonVocabAudio } from '../utils/vocabAudioCache';
 import { buildRawSlideUrls } from '../utils/buildRawSlideUrls';
 import { signSlideUrls, SignSlideUrlsError } from '../utils/signSlideUrls';
 import { readCachedSignedSlides, writeCachedSignedSlides } from '../utils/signedSlideUrlCache';
 import { activateSlideBlobCache, getCachedSlideBlob, loadSlideBlob } from '../utils/slideBlobCache';
-import type { VocabWord, GrammarPoint } from '../types';
+import { fetchHomeworksForLesson, fetchMySubmissions, subscribeToMySubmissionChanges } from '../utils/supabaseHomework';
+import type { VocabWord, GrammarPoint, Homework } from '../types';
 
 /**
  * Khoá dùng cho `slideBlobUrlsRef` (LessonView) - lấy PATHNAME của URL đã
@@ -72,15 +74,65 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   const [isBoardOpen, setIsBoardOpen] = useState(false);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
-  const { showCallControls, isPipActive, userRole } = useCallEmbed();
+  const { showCallControls, isPipActive, userRole, isEmbeddedInCall } = useCallEmbed();
   // Chỉ giaovien/admin mới thấy nút "Slide" - học viên không có.
   const isTeacherOrAdmin = userRole === 'giaovien' || userRole === 'admin';
+  const isStudent = userRole === 'hocvien';
+
+  // true = đang mở popup "Bài tập về nhà" (xem HomeworkModal.tsx) - học
+  // viên tự nộp/xoá bài, giáo viên/admin tra bài học viên qua mã.
+  const [isHomeworkOpen, setIsHomeworkOpen] = useState(false);
+  const [homeworks, setHomeworks] = useState<Homework[]>([]);
+  // id các đề bài học viên (chính mình) ĐÃ nộp - chỉ để quyết định tiêu đề/
+  // ô báo trên NÚT "Bài tập" (xem lưới nút bên dưới). CHỈ tra danh sách đã
+  // nộp (nhẹ, qua Supabase) - KHÔNG tải byte audio nào ở đây (xem
+  // HomeworkAudioPlayer.tsx, chỉ tải khi bấm play trong popup).
+  const [mySubmittedHomeworkIds, setMySubmittedHomeworkIds] = useState<Set<string>>(new Set());
+  const allHomeworkSubmitted = homeworks.length > 0 && homeworks.every((hw) => mySubmittedHomeworkIds.has(hw.id));
 
   // --- Phát audio phát âm khi bấm vào thẻ từ vựng ---
   // Khoá nhận diện 1 buổi học, dùng để tải ngầm/cache audio riêng theo từng
   // buổi (xem utils/vocabAudioCache.ts) - vào lại đúng buổi này thì dùng
   // ngay cache cũ, sang buổi khác mới tải lại + xoá cache buổi trước.
   const lessonKey = `${courseId}_${lessonId}`;
+
+  // Danh sách đề bài tập về nhà của buổi học này (đọc thẳng qua Supabase,
+  // RLS cho phép mọi người đã đăng nhập xem - xem utils/supabaseHomework.ts).
+  // Cả 2 role đều cần: học viên để hiện khu ghi âm/nộp bài, giáo viên để
+  // map homeworkId -> tên đề bài khi hiện danh sách bài học viên đã nộp.
+  useEffect(() => {
+    let cancelled = false;
+    fetchHomeworksForLesson(lessonId).then((list) => {
+      if (!cancelled) setHomeworks(list || []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lessonId]);
+
+  // Trạng thái "đã nộp đủ chưa" cho riêng NÚT bài tập (chỉ học viên) - danh
+  // sách bài nộp (không phải file audio) nên tải ngay, không đợi mở popup;
+  // tự cập nhật realtime khi nộp/xoá bên trong HomeworkModal.
+  const homeworkIdsForButton = homeworks.map((h) => h.id).join(',');
+  useEffect(() => {
+    if (!isStudent || homeworks.length === 0) {
+      setMySubmittedHomeworkIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    const reload = () => {
+      fetchMySubmissions(homeworks.map((h) => h.id)).then((subs) => {
+        if (!cancelled && subs) setMySubmittedHomeworkIds(new Set(subs.map((s) => s.homeworkId)));
+      });
+    };
+    reload();
+    const unsubscribe = subscribeToMySubmissionChanges(reload);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStudent, homeworkIdsForButton]);
 
   // Sang buổi học khác (lessonKey đổi) -> xoá nội dung Bảng đen/Ghi chú của
   // buổi cũ (đóng luôn nếu đang mở) - key={lessonKey} truyền cho
@@ -598,7 +650,7 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
             Kanji" (xem FlashcardModal.tsx), chỉ đổi nguồn dữ liệu sang
             VocabWord của kaiwa. */}
         <div className="bg-surface-border-strong rounded-3xl p-5 md:p-6 border border-white/10 shadow-sm shrink-0">
-          <div className={`grid gap-3 ${isTeacherOrAdmin ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
+          <div className={`grid gap-3 ${isTeacherOrAdmin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
             {isTeacherOrAdmin && (
               <button
                 onClick={() => setTeacherSlideOpen(true)}
@@ -637,6 +689,23 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
               <ExternalLink className="w-6 h-6 text-white" />
               <span className="text-xs font-bold text-white uppercase tracking-wider">Tài liệu</span>
             </button>
+
+            <button
+              onClick={() => setIsHomeworkOpen(true)}
+              disabled={homeworks.length === 0}
+              // Đã nộp đủ (chỉ học viên) -> mờ đi để báo hiệu "xong rồi",
+              // nhưng KHÔNG disabled - vẫn bấm vào được để xem lại/nộp lại.
+              className={`p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md transition-all hover:-translate-y-1 disabled:opacity-40 disabled:pointer-events-none disabled:hover:translate-y-0 ${
+                isStudent && allHomeworkSubmitted
+                  ? 'bg-blue-800/40 border border-blue-400/20 opacity-60 hover:opacity-90 shadow-blue-900/10'
+                  : 'bg-blue-600 border border-blue-400/60 shadow-blue-900/30 hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-900/40'
+              }`}
+            >
+              <Mic className="w-6 h-6 text-white" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                {isStudent && allHomeworkSubmitted ? 'Đã nộp' : 'Bài tập'}
+              </span>
+            </button>
           </div>
           {isTeacherOrAdmin && slideSignError && (
             <p className="text-xs text-red-400 mt-3">
@@ -647,6 +716,7 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
             const missing = [
               vocabulary.length === 0 && 'từ vựng để luyện tập',
               !hasLessonFile && 'tài liệu',
+              homeworks.length === 0 && 'bài tập về nhà',
               isTeacherOrAdmin && !hasSlideImages && !slideProbing && !slideSignError && 'slide trình chiếu',
             ].filter(Boolean) as string[];
             if (missing.length === 0) return null;
@@ -698,6 +768,16 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
         isOpen={isFlashcardOpen}
         onClose={() => setIsFlashcardOpen(false)}
         vocabulary={vocabulary}
+      />
+
+      {/* Bài tập về nhà - học viên tự nộp/xoá, giáo viên/admin tra qua mã học viên */}
+      <HomeworkModal
+        isOpen={isHomeworkOpen}
+        onClose={() => setIsHomeworkOpen(false)}
+        homeworks={homeworks}
+        lessonId={lessonId}
+        userRole={userRole}
+        isEmbeddedInCall={isEmbeddedInCall}
       />
 
       {/* Exit Confirmation Modal */}

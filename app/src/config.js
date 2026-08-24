@@ -225,6 +225,22 @@ module.exports = {
   },
 
   // ==========================================
+  // Homework audio submissions (kaiwa "Bài tập về nhà" - student records/
+  // uploads a short audio clip, teacher looks it up by student_code and can
+  // play it, incl. mixed into a live call so both peers hear it). Reuses the
+  // SAME Google Drive OAuth account as `recording` above - only the
+  // destination folder differs.
+  // ==========================================
+  homework: {
+    enabled: getEnvBoolean(process.env.HOMEWORK_ENABLED, true), // ops kill-switch
+    maxUploadBytes:
+      parseInt(process.env.HOMEWORK_MAX_UPLOAD_BYTES, 10) || 75 * 1024 * 1024, // ~75MB, generous for 15min opus/AAC
+    maxDurationSeconds:
+      parseInt(process.env.HOMEWORK_MAX_DURATION_SECONDS, 10) || 15 * 60,
+    driveFolderId: process.env.GDRIVE_HOMEWORK_FOLDER_ID || null,
+  },
+
+  // ==========================================
   // Kaiwa slide URL signing (HMAC) - verified by a Cloudflare Worker in
   // front of the dedicated slide-image bucket/domain (not part of this
   // repo). Secret here MUST exactly match the Worker's SLIDE_SIGNING_SECRET

@@ -64,10 +64,12 @@ const axios = require("axios");
 const jwt = require("jsonwebtoken");
 const app = express();
 const fs = require("fs");
+const { Readable } = require("stream");
 const checkXSS = require("./xss.js");
 const ServerApi = require("./api");
 const MattermostController = require("./mattermost");
 const Recording = require("./recording");
+const Homework = require("./homework");
 const ShadowingYoutube = require("./shadowingYoutube");
 const Validate = require("./validate");
 const HtmlInjector = require("./htmlInjector");
@@ -107,6 +109,15 @@ const shadowingLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 15,
   message: { ok: false, code: "rate_limited", message: "Thử lại sau ít phút." },
+  keyGenerator: (req) => getIP(req),
+});
+
+// Kaiwa homework "tra mã học viên" - mã không phải bí mật cấp cao nhưng vẫn
+// nên giới hạn tốc độ thử (đoán/dò mã hàng loạt).
+const homeworkTeacherLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 60,
+  message: { error: "rate_limited" },
   keyGenerator: (req) => getIP(req),
 });
 
@@ -1281,6 +1292,329 @@ app.post("/kaiwa/sign-slide-urls", async (req, res) => {
   const signedUrls = urls.map((u) => signKaiwaSlideUrl(u, exp, slideSigningCfg.secret));
 
   return res.status(200).json({ exp, urls: signedUrls });
+});
+
+/**
+ * ============================================================
+ * Kaiwa "Bài tập về nhà" (homework audio submissions)
+ * ============================================================
+ * Auth follows the exact same shape as /kaiwa/sign-slide-urls above (cookie
+ * sb_page_token, {error,message?} JSON responses) - see homework.js's top
+ * comment for why upload is synchronous (one request, no background retry
+ * queue: this module writes Supabase rows using the caller's own short-lived
+ * token, so a retry running much later could hit a stale/expired token).
+ */
+const kaiwaHomeworkAuthCache = new Map(); // token -> { ok, role, userId, allowedCourses, validUntil }
+const KAIWA_HOMEWORK_AUTH_CACHE_TTL_MS = 60 * 1000;
+
+async function getKaiwaHomeworkAuthUser(token) {
+  const now = Date.now();
+  const cached = kaiwaHomeworkAuthCache.get(token);
+  if (cached && cached.validUntil > now) return cached.ok ? cached : null;
+
+  let result = { ok: false, validUntil: now + KAIWA_HOMEWORK_AUTH_CACHE_TTL_MS };
+  try {
+    const { data: user } = await axios.get(`${supabaseCfg.url}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${token}`, apikey: supabaseCfg.anonKey },
+      timeout: 5000,
+    });
+    if (user?.id) {
+      const { data: profiles } = await axios.get(
+        `${supabaseCfg.url}/rest/v1/profiles`,
+        {
+          params: { id: `eq.${user.id}`, select: "role,allowed_courses" },
+          headers: { Authorization: `Bearer ${token}`, apikey: supabaseCfg.anonKey },
+          timeout: 5000,
+        },
+      );
+      const role = profiles?.[0]?.role;
+      if (role) {
+        result = {
+          ok: true,
+          role,
+          userId: user.id,
+          allowedCourses: Array.isArray(profiles?.[0]?.allowed_courses)
+            ? profiles[0].allowed_courses
+            : [],
+          validUntil: now + KAIWA_HOMEWORK_AUTH_CACHE_TTL_MS,
+        };
+      }
+    }
+  } catch (err) {
+    result = { ok: false, validUntil: now + KAIWA_HOMEWORK_AUTH_CACHE_TTL_MS };
+  }
+
+  if (kaiwaHomeworkAuthCache.size > 500) {
+    for (const [key, val] of kaiwaHomeworkAuthCache) {
+      if (val.validUntil <= now) kaiwaHomeworkAuthCache.delete(key);
+    }
+  }
+  kaiwaHomeworkAuthCache.set(token, result);
+  return result.ok ? result : null;
+}
+
+const KAIWA_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function getKaiwaHomeworkById(token, homeworkId) {
+  try {
+    const { data } = await axios.get(`${supabaseCfg.url}/rest/v1/kaiwa_homeworks`, {
+      params: { id: `eq.${homeworkId}`, select: "id,lesson_id,title,deadline" },
+      headers: { Authorization: `Bearer ${token}`, apikey: supabaseCfg.anonKey },
+      timeout: 5000,
+    });
+    return data?.[0] || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function toClientHomeworkSubmission(row) {
+  return {
+    id: row.id,
+    homeworkId: row.homework_id,
+    studentId: row.student_id,
+    driveFileName: row.drive_file_name,
+    mimeType: row.mime_type,
+    durationMs: row.duration_ms,
+    createdAt: row.created_at,
+  };
+}
+
+// Học viên nộp bài - ghi âm/chọn file, gửi NGUYÊN 1 lần trong 1 request
+// (không chia chunk như /recording/chunk bên dưới - xem lý do ở đầu
+// homework.js). Upload lên Drive xảy ra ĐỒNG BỘ trong request này.
+app.post(
+  "/kaiwa/homework/submissions",
+  express.raw({ type: "*/*", limit: config.homework.maxUploadBytes }),
+  async (req, res) => {
+    const token = getCookieValue(req, "sb_page_token");
+    if (!token) return res.status(401).json({ error: "unauthorized" });
+    const authUser = await getKaiwaHomeworkAuthUser(token);
+    if (!authUser) return res.status(401).json({ error: "unauthorized" });
+    if (authUser.role !== "hocvien") return res.status(403).json({ error: "forbidden" });
+
+    const homeworkId = String(req.query.homeworkId || "");
+    if (!KAIWA_UUID_RE.test(homeworkId)) {
+      return res.status(400).json({ error: "invalid_request", message: "Thiếu/sai homeworkId." });
+    }
+    const mimeType = req.get("Content-Type") || "application/octet-stream";
+    const durationMs = parseInt(req.get("X-Homework-Duration-Ms"), 10);
+
+    const homework = await getKaiwaHomeworkById(token, homeworkId);
+    if (!homework) return res.status(404).json({ error: "homework_not_found" });
+    if (Homework.isPastDeadline(homework)) {
+      return res.status(409).json({ error: "deadline_passed" });
+    }
+
+    // Tên hiển thị của học viên cho tên file Drive - đọc dòng của chính họ
+    // (RLS cho phép), fallback về userId nếu chưa có display_name.
+    let studentDisplayName = authUser.userId;
+    try {
+      const { data: me } = await axios.get(`${supabaseCfg.url}/rest/v1/profiles`, {
+        params: { id: `eq.${authUser.userId}`, select: "display_name" },
+        headers: { Authorization: `Bearer ${token}`, apikey: supabaseCfg.anonKey },
+        timeout: 5000,
+      });
+      if (me?.[0]?.display_name) studentDisplayName = me[0].display_name;
+    } catch (err) {
+      // giữ fallback userId - không chặn nộp bài chỉ vì không lấy được tên
+    }
+
+    const result = await Homework.submitHomework({
+      token,
+      homeworkId,
+      studentId: authUser.userId,
+      studentDisplayName,
+      homeworkTitle: homework.title,
+      mimeType,
+      buffer: req.body,
+      durationMs,
+    });
+    if (!result.ok) return res.status(result.status || 502).json({ error: result.reason });
+    return res.status(200).json({ ok: true, submission: result.submission });
+  },
+);
+
+// Học viên xoá bài đã nộp (để nộp lại) - chỉ bài của chính mình, chỉ khi
+// còn hạn.
+app.delete("/kaiwa/homework/submissions/:id", async (req, res) => {
+  const token = getCookieValue(req, "sb_page_token");
+  if (!token) return res.status(401).json({ error: "unauthorized" });
+  const authUser = await getKaiwaHomeworkAuthUser(token);
+  if (!authUser) return res.status(401).json({ error: "unauthorized" });
+  if (authUser.role !== "hocvien") return res.status(403).json({ error: "forbidden" });
+
+  const submissionId = req.params.id;
+  if (!KAIWA_UUID_RE.test(submissionId)) {
+    return res.status(400).json({ error: "invalid_request" });
+  }
+
+  let submissionRow;
+  try {
+    const { data } = await axios.get(`${supabaseCfg.url}/rest/v1/kaiwa_homework_submissions`, {
+      params: { id: `eq.${submissionId}`, select: "homework_id" },
+      headers: { Authorization: `Bearer ${token}`, apikey: supabaseCfg.anonKey },
+      timeout: 5000,
+    });
+    submissionRow = data?.[0] || null;
+  } catch (err) {
+    submissionRow = null;
+  }
+  if (!submissionRow) return res.status(404).json({ error: "not_found" });
+
+  const homework = await getKaiwaHomeworkById(token, submissionRow.homework_id);
+  if (homework && Homework.isPastDeadline(homework)) {
+    return res.status(409).json({ error: "deadline_passed" });
+  }
+
+  const result = await Homework.deleteHomeworkSubmission({
+    token,
+    submissionId,
+    studentId: authUser.userId,
+  });
+  if (!result.ok) return res.status(result.status || 502).json({ error: result.reason });
+  return res.status(200).json({ ok: true });
+});
+
+// Giáo viên: tra bài nộp của 1 học viên (qua mã, xem kaiwa_resolve_student_code
+// trong SQL bàn giao) cho 1 buổi học cụ thể - hoạt động bất kỳ lúc nào,
+// không cần học viên đang trong phòng gọi.
+app.get(
+  "/kaiwa/homework/teacher-submissions",
+  homeworkTeacherLimiter,
+  async (req, res) => {
+    const token = getCookieValue(req, "sb_page_token");
+    if (!token) return res.status(401).json({ error: "unauthorized" });
+    const authUser = await getKaiwaHomeworkAuthUser(token);
+    if (!authUser) return res.status(401).json({ error: "unauthorized" });
+    if (authUser.role === "hocvien") return res.status(403).json({ error: "forbidden" });
+
+    const lessonId = String(req.query.lessonId || "");
+    const studentCode = String(req.query.studentCode || "").trim();
+    // kaiwa_lessons.id là text (không phải uuid) - vd slug gõ tay - nên chỉ
+    // kiểm tra không rỗng, giống hệt cách /kaiwa/sign-slide-urls đang làm
+    // với lessonId (không đòi định dạng cụ thể nào).
+    if (!lessonId || lessonId.length > 200) {
+      return res.status(400).json({ error: "invalid_request", message: "Thiếu/sai lessonId." });
+    }
+    if (!studentCode || studentCode.length > 64) {
+      return res.status(400).json({ error: "invalid_request", message: "Thiếu mã học viên." });
+    }
+
+    let student;
+    try {
+      const { data } = await axios.post(
+        `${supabaseCfg.url}/rest/v1/rpc/kaiwa_resolve_student_code`,
+        { p_code: studentCode },
+        { headers: { Authorization: `Bearer ${token}`, apikey: supabaseCfg.anonKey }, timeout: 5000 },
+      );
+      student = data?.[0] || null;
+    } catch (err) {
+      log.error("[Homework] kaiwa_resolve_student_code RPC failed", { error: err.message });
+      return res.status(502).json({ error: "lookup_failed" });
+    }
+    if (!student) return res.status(404).json({ error: "student_not_found" });
+
+    const lesson = await getKaiwaLessonForSigning(token, lessonId);
+    if (!lesson) return res.status(404).json({ error: "lesson_not_found" });
+    if (!isKaiwaSlideCourseAllowed(authUser, lesson.course_id)) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+
+    let submissions;
+    try {
+      const { data } = await axios.post(
+        `${supabaseCfg.url}/rest/v1/rpc/kaiwa_homework_submissions_for_teacher`,
+        { p_lesson_id: lessonId, p_student_id: student.id },
+        { headers: { Authorization: `Bearer ${token}`, apikey: supabaseCfg.anonKey }, timeout: 5000 },
+      );
+      submissions = Array.isArray(data) ? data : [];
+    } catch (err) {
+      log.error("[Homework] kaiwa_homework_submissions_for_teacher RPC failed", { error: err.message });
+      return res.status(502).json({ error: "lookup_failed" });
+    }
+
+    return res.status(200).json({
+      studentName: student.display_name || null,
+      submissions: submissions.map(toClientHomeworkSubmission),
+    });
+  },
+);
+
+// Nghe 1 bài nộp - proxy bytes từ Drive, KHÔNG bao giờ lộ URL/credential
+// Drive ra ngoài. hocvien: chỉ bài của chính mình (RLS chặn thẳng). giaovien/
+// admin: qua RPC phạm vi hẹp (RLS chặn SELECT dòng không phải của họ) rồi tự
+// check lại allowed_courses ở đây - chạy lại từ đầu trên MỌI request, không
+// tin trạng thái nào từ route danh sách phía trên.
+app.get("/kaiwa/homework/submissions/:id/audio", async (req, res) => {
+  const token = getCookieValue(req, "sb_page_token");
+  if (!token) return res.status(401).json({ error: "unauthorized" });
+  const authUser = await getKaiwaHomeworkAuthUser(token);
+  if (!authUser) return res.status(401).json({ error: "unauthorized" });
+
+  const submissionId = req.params.id;
+  if (!KAIWA_UUID_RE.test(submissionId)) return res.status(400).json({ error: "invalid_request" });
+
+  let row;
+  if (authUser.role === "hocvien") {
+    try {
+      const { data } = await axios.get(`${supabaseCfg.url}/rest/v1/kaiwa_homework_submissions`, {
+        params: {
+          id: `eq.${submissionId}`,
+          select: "id,student_id,drive_file_id,mime_type,homework_id",
+        },
+        headers: { Authorization: `Bearer ${token}`, apikey: supabaseCfg.anonKey },
+        timeout: 5000,
+      });
+      row = data?.[0] || null;
+    } catch (err) {
+      row = null;
+    }
+    if (!row) return res.status(404).json({ error: "not_found" });
+  } else {
+    try {
+      const { data } = await axios.post(
+        `${supabaseCfg.url}/rest/v1/rpc/kaiwa_homework_submission_for_teacher`,
+        { p_submission_id: submissionId },
+        { headers: { Authorization: `Bearer ${token}`, apikey: supabaseCfg.anonKey }, timeout: 5000 },
+      );
+      row = data?.[0] || null;
+    } catch (err) {
+      return res.status(502).json({ error: "lookup_failed" });
+    }
+    if (!row) return res.status(404).json({ error: "not_found" });
+
+    const homework = await getKaiwaHomeworkById(token, row.homework_id);
+    const lesson = homework ? await getKaiwaLessonForSigning(token, homework.lesson_id) : null;
+    if (!lesson || !isKaiwaSlideCourseAllowed(authUser, lesson.course_id)) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+  }
+
+  if (!row.drive_file_id) return res.status(404).json({ error: "not_found" });
+
+  let upstream;
+  try {
+    upstream = await Homework.drive.downloadFile(row.drive_file_id, {
+      range: req.headers.range,
+    });
+  } catch (err) {
+    log.error("[Homework] Drive downloadFile failed", { submissionId, error: err.message });
+    return res.status(502).json({ error: "download_failed" });
+  }
+  if (!upstream.ok) {
+    return res.status(upstream.status === 404 ? 404 : 502).json({ error: "download_failed" });
+  }
+
+  res.status(upstream.status);
+  for (const h of ["content-type", "content-length", "content-range", "accept-ranges"]) {
+    const v = upstream.headers.get(h);
+    if (v) res.setHeader(h, v);
+  }
+  if (!upstream.headers.get("content-type") && row.mime_type) {
+    res.setHeader("content-type", row.mime_type);
+  }
+  Readable.fromWeb(upstream.body).pipe(res);
 });
 
 // Receive a ~30s recording chunk from the presenter's browser and append it

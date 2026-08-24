@@ -108,3 +108,33 @@ export interface Course {
   imageUrl?: string;
   lessons: Lesson[];
 }
+
+/**
+ * 1 đề bài tập về nhà gắn với 1 buổi học (bảng kaiwa_homeworks) - giáo
+ * viên/admin tạo/sửa bằng tay qua Supabase Table Editor, chưa có form tạo
+ * riêng trong app (giống hệt kaiwa_lessons hiện nay).
+ */
+export interface Homework {
+  id: string;
+  lessonId: string;
+  title: string;
+  description?: string;
+  /** ISO string, null/undefined = không có hạn nộp. */
+  deadline?: string | null;
+}
+
+/**
+ * 1 bài nộp âm thanh của học viên cho 1 Homework (bảng
+ * kaiwa_homework_submissions). KHÔNG chứa driveFileId - server không bao
+ * giờ trả field đó ra ngoài, chỉ dùng `id` này để gọi route nghe
+ * (/kaiwa/homework/submissions/:id/audio).
+ */
+export interface HomeworkSubmission {
+  id: string;
+  homeworkId: string;
+  studentId: string;
+  driveFileName: string;
+  mimeType: string;
+  durationMs?: number | null;
+  createdAt: string;
+}

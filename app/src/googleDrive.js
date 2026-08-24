@@ -154,21 +154,38 @@ module.exports = class GoogleDrive {
    * @returns {Promise<{id: string, name: string, size: number}>}
    */
   async uploadFile(filePath, fileName, mimeType, folderId) {
+    const stat = fs.statSync(filePath);
+    const fileBuf = fs.readFileSync(filePath);
+    return this._uploadBuffer(fileBuf, fileName, mimeType, folderId, stat.size);
+  }
+
+  /**
+   * Same as `uploadFile`, but the caller already has the bytes in memory
+   * (e.g. a homework audio clip received in one HTTP request via
+   * `express.raw()`) - skips the temp-file round-trip entirely.
+   * @param {Buffer} buffer
+   * @param {string} fileName
+   * @param {string} mimeType
+   * @param {string|null} [folderId]
+   * @returns {Promise<{id: string, name: string, size: number}>}
+   */
+  async uploadBuffer(buffer, fileName, mimeType, folderId) {
+    return this._uploadBuffer(buffer, fileName, mimeType, folderId, buffer.length);
+  }
+
+  async _uploadBuffer(buffer, fileName, mimeType, folderId, sizeBytes) {
     if (!this.isConfigured()) {
       throw new Error("GoogleDrive: not configured (missing client id/secret/refresh token)");
     }
-    const stat = fs.statSync(filePath);
-    const fileBuf = fs.readFileSync(filePath);
-
-    const uploadUrl = await this._createResumableSession(fileName, mimeType, stat.size, folderId);
+    const uploadUrl = await this._createResumableSession(fileName, mimeType, sizeBytes, folderId);
 
     const putResp = await fetch(uploadUrl, {
       method: "PUT",
       headers: {
         "Content-Type": mimeType,
-        "Content-Length": String(stat.size),
+        "Content-Length": String(sizeBytes),
       },
-      body: fileBuf,
+      body: buffer,
     });
     const putJson = await putResp.json();
     if (!putResp.ok) {
@@ -176,6 +193,48 @@ module.exports = class GoogleDrive {
         "GoogleDrive: upload failed - " + putResp.status + " " + JSON.stringify(putJson),
       );
     }
-    return { id: putJson.id, name: putJson.name, size: Number(putJson.size ?? stat.size) };
+    return { id: putJson.id, name: putJson.name, size: Number(putJson.size ?? sizeBytes) };
+  }
+
+  /**
+   * Streams a file's bytes straight from Drive (`alt=media`) - used by the
+   * homework "listen" route to proxy audio to the browser without ever
+   * handing out a Drive URL/credential to the client. Forwards an optional
+   * `Range` header so `<audio>` seeking works (Safari/iOS in particular
+   * expects real `206 Partial Content` support to scrub a track).
+   * @param {string} fileId
+   * @param {{range?: string}} [opts] raw Range header value, e.g. "bytes=0-1023"
+   * @returns {Promise<Response>} the raw fetch Response - caller checks
+   *   `.ok`/`.status` and pipes `.body` through, forwarding headers as-is.
+   */
+  async downloadFile(fileId, { range } = {}) {
+    if (!this.isConfigured()) {
+      throw new Error("GoogleDrive: not configured (missing client id/secret/refresh token)");
+    }
+    const accessToken = await this._getAccessToken();
+    const headers = { Authorization: `Bearer ${accessToken}` };
+    if (range) headers.Range = range;
+    return fetch(`${LIST_URL}/${encodeURIComponent(fileId)}?alt=media`, { headers });
+  }
+
+  /**
+   * Deletes a file from Drive. Used when a homework submission gets replaced
+   * (re-upload) or removed. A file that's already gone (404) is treated as
+   * success - the caller's intent ("this file should not exist") is already
+   * satisfied.
+   * @param {string} fileId
+   */
+  async deleteFile(fileId) {
+    if (!this.isConfigured()) {
+      throw new Error("GoogleDrive: not configured (missing client id/secret/refresh token)");
+    }
+    const accessToken = await this._getAccessToken();
+    const resp = await fetch(`${LIST_URL}/${encodeURIComponent(fileId)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!resp.ok && resp.status !== 404) {
+      throw new Error("GoogleDrive: delete failed - " + resp.status + " " + (await resp.text()));
+    }
   }
 };
