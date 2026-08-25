@@ -477,7 +477,12 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   }
 
   return (
-    <div className="flex flex-col font-sans h-full">
+    // min-h-full shrink-0 (không phải h-full) - cùng lý do như
+    // CourseDetail.tsx: tránh nav sticky bị "hết chỗ bám" và biến mất khi
+    // cuộn qua khỏi 1 màn hình, vì div này là con flex trực tiếp của
+    // #lesson-view-container (App.tsx, overflow-y-auto + flex flex-col).
+    // Đi kèm flex-auto (không phải flex-1) ở <main> bên dưới.
+    <div className="flex flex-col font-sans min-h-full shrink-0">
       {/* Header Navigation */}
       <nav className="h-16 flex-shrink-0 px-6 flex items-center justify-between border-b border-white/10 bg-white/5 backdrop-blur-md z-50 sticky top-0">
         <div className="w-full flex items-center justify-between">
@@ -500,8 +505,10 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
       {/* Main Content */}
       {/* Không tự cuộn riêng - để #lesson-view-container (bọc ngoài, xem
           App.tsx) là nơi DUY NHẤT cuộn, cuộn toàn trang thay vì chỉ cuộn
-          mỗi vùng main này. */}
-      <main className="flex-1 max-w-4xl w-full mx-auto p-4 md:p-8 flex flex-col gap-6">
+          mỗi vùng main này. flex-auto (không phải flex-1): flex-basis auto
+          để chiều cao nội dung thật của main truyền lên được div cha ở
+          trên (chứa nav sticky) - xem comment ở div cha. */}
+      <main className="flex-auto max-w-4xl w-full mx-auto p-4 md:p-8 flex flex-col gap-6">
         <div className="bg-surface-border-strong p-6 md:p-10 rounded-3xl border border-white/10 shadow-sm flex flex-col gap-4">
           <div className="flex items-center gap-3 text-blue-200">
             <BookOpen className="w-6 h-6" />

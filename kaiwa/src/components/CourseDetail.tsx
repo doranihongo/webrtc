@@ -90,7 +90,17 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
   const lessons = loadedCourseDetails?.courseId === courseId ? loadedCourseDetails.lessons : [];
 
   return (
-    <div className="h-full flex flex-col font-sans">
+    // min-h-full (không phải h-full) + shrink-0: div này là con flex của
+    // #course-detail-container (App.tsx, overflow-y-auto + flex flex-col) -
+    // nếu để h-full, height:100% trở thành flex-basis cố định đúng 1
+    // màn hình, rồi flex-shrink mặc định (1) co nó lại vừa đúng 1 màn hình
+    // dù <main> bên dưới dài hơn nhiều - khiến containing block của nav
+    // sticky chỉ cao đúng 1 viewport, cuộn qua khỏi đó là nav biến mất
+    // (bug "vuốt xuống danh sách buổi học thì thanh trên cùng bị ẩn").
+    // min-h-full + shrink-0: sàn tối thiểu 1 màn hình khi nội dung ngắn,
+    // nhưng không bị ép co lại khi nội dung dài hơn - đi kèm flex-auto
+    // (không phải flex-1) ở <main> bên dưới, xem comment ở đó.
+    <div className="min-h-full shrink-0 flex flex-col font-sans">
       <nav className="h-16 flex-shrink-0 px-6 flex items-center justify-between border-b border-white/10 bg-white/5 backdrop-blur-md z-50 sticky top-0">
         <div className="w-full flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -109,7 +119,12 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
         </div>
       </nav>
 
-      <main className="flex-1 w-full p-4 md:p-8 pb-16">
+      {/* flex-auto (flex-basis: auto), không phải flex-1 (flex-basis: 0%):
+          flex-basis 0% khiến trình duyệt tính "kích thước tự nhiên" của
+          main bằng 0 khi đo kích thước nội dung cho div cha ở trên - danh
+          sách buổi học dài bao nhiêu cũng không kéo div cha (chứa nav
+          sticky) cao ra theo, xem comment ở div cha. */}
+      <main className="flex-auto w-full p-4 md:p-8 pb-16">
         <div className="max-w-5xl w-full mx-auto flex flex-col gap-8">
         {/* Hero Section */}
         <div className="bg-surface-border-strong rounded-3xl overflow-hidden shadow-sm border border-white/10">

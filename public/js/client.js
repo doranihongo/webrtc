@@ -1588,13 +1588,26 @@ async function handleConnect() {
   if (localVideoMediaStream && localAudioMediaStream) {
     await joinToChannel();
   } else {
-    await initEnumerateDevices();
+    // No separate "open camera/mic just to read labels, then close it"
+    // probe anymore (that used to be initEnumerateDevices() here) -
+    // setupLocalVideoMedia()/setupLocalAudioMedia() below now enumerate
+    // devices off their own real stream instead, so camera/mic each get
+    // opened once instead of twice on first join. This matters a lot on
+    // macOS, where each getUserMedia() camera open has much higher
+    // AVFoundation session-setup latency than on Windows - doubling it was
+    // adding several extra seconds to "vào phòng" specifically on Mac.
+    // initEnumerateVideoDevices()/initEnumerateAudioDevices() themselves
+    // are untouched and still used as a lazy fallback by handleVideo() for
+    // the "joined with camera off, turned on mid-call" case.
+    //
     // setupLocalVideoMedia()/setupLocalAudioMedia() throw (after already
-    // showing the "Truy cập bị từ chối" popup via handleMediaError) when
-    // permission is denied - catch each independently so a denial on one
-    // device doesn't abort the rest of setup below (button wiring etc.),
-    // which is what let the mic/cam toggle buttons end up with no click
-    // listener at all when permission was denied.
+    // showing the "Truy cập bị từ chối" popup via handleMediaError, for
+    // error kinds other than plain permission-denied/device-not-found -
+    // those stay silent, same as this probe's removed catch used to be)
+    // when permission is denied - catch each independently so a denial on
+    // one device doesn't abort the rest of setup below (button wiring
+    // etc.), which is what let the mic/cam toggle buttons end up with no
+    // click listener at all when permission was denied.
     try {
       await setupLocalVideoMedia();
     } catch (err) {
@@ -4195,8 +4208,13 @@ function autoSwitchHeadsetIfNeeded(devices, currentMicId, currentSpeakerId) {
 /**
  * Enumerate Audio
  * @param {object} stream
+ * @param {object} [options]
+ * @param {boolean} [options.stopAfter=true] stop the stream's tracks once
+ *   enumeration is done. Pass false when the caller is reusing a real,
+ *   still-needed stream (not a disposable probe) just to also populate the
+ *   dropdowns - the caller stays responsible for that stream's lifecycle.
  */
-async function enumerateAudioDevices(stream) {
+async function enumerateAudioDevices(stream, { stopAfter = true } = {}) {
   console.log("06. Get Audio Devices");
   let dedupedDevices = [];
   await navigator.mediaDevices
@@ -4220,7 +4238,7 @@ async function enumerateAudioDevices(stream) {
       }),
     )
     .then(async () => {
-      await stopTracks(stream);
+      if (stopAfter) await stopTracks(stream);
       isEnumerateAudioDevices = true;
       // Seed the headset auto-switch baseline so the polling fallback in
       // setupQuickDeviceSwitchDropdowns() doesn't treat these already-present
@@ -4250,8 +4268,13 @@ async function enumerateAudioDevices(stream) {
 /**
  * Enumerate Video
  * @param {object} stream
+ * @param {object} [options]
+ * @param {boolean} [options.stopAfter=true] stop the stream's tracks once
+ *   enumeration is done. Pass false when the caller is reusing a real,
+ *   still-needed stream (not a disposable probe) just to also populate the
+ *   dropdown - the caller stays responsible for that stream's lifecycle.
  */
-async function enumerateVideoDevices(stream) {
+async function enumerateVideoDevices(stream, { stopAfter = true } = {}) {
   console.log("07. Get Video Devices");
   await navigator.mediaDevices
     .enumerateDevices()
@@ -4270,7 +4293,7 @@ async function enumerateVideoDevices(stream) {
       }),
     )
     .then(async () => {
-      await stopTracks(stream);
+      if (stopAfter) await stopTracks(stream);
       isEnumerateVideoDevices = true;
     });
 }
@@ -4500,7 +4523,24 @@ async function setupLocalVideoMedia() {
         "Error accessing video device with default constraints",
         fallbackErr,
       );
-      handleMediaError("video", fallbackErr);
+      // Parity with the removed probe step (initEnumerateVideoDevices):
+      // it used to silently flip useVideo to false on any getUserMedia
+      // failure here, with no user-facing message at all. Keep that same
+      // silence for the same error kinds (plain permission-denied /
+      // no-camera-found - the only ones the probe's bare {video:true}
+      // request could ever hit) now that this is the only attempt left;
+      // still surface handleMediaError's toast for anything else (e.g.
+      // camera busy in another app), which the probe never encountered.
+      useVideo = false;
+      const silentErrorNames = [
+        "NotAllowedError",
+        "PermissionDeniedError",
+        "NotFoundError",
+        "DevicesNotFoundError",
+      ];
+      if (!silentErrorNames.includes(fallbackErr.name)) {
+        handleMediaError("video", fallbackErr);
+      }
     }
   }
 
@@ -4511,6 +4551,14 @@ async function setupLocalVideoMedia() {
   async function updateLocalVideoMediaStream(stream) {
     if (stream) {
       localVideoMediaStream = stream;
+      // Populate the video device dropdown off this real stream instead of
+      // opening a second throwaway camera stream just to read labels (see
+      // the removed initEnumerateDevices() call in handleConnect()) -
+      // guarded so this is a no-op if handleVideo()'s lazy fallback (or a
+      // re-entrant call) already did it.
+      if (!isEnumerateVideoDevices) {
+        await enumerateVideoDevices(stream, { stopAfter: false });
+      }
       await loadLocalMedia(stream, "video");
       console.log("Access granted to video device");
     }
@@ -4558,6 +4606,16 @@ async function setupLocalAudioMedia() {
         });
       }
 
+      // Populate the audio device dropdowns off this real stream instead
+      // of opening a second throwaway mic stream just to read labels (see
+      // the removed initEnumerateDevices() call in handleConnect()) - use
+      // activeStream (not the original stream, which may have already
+      // been stopped/replaced above), guarded so this is a no-op if
+      // already enumerated.
+      if (!isEnumerateAudioDevices) {
+        await enumerateAudioDevices(activeStream, { stopAfter: false });
+      }
+
       await loadLocalMedia(activeStream, "audio");
       if (useAudio) {
         localAudioMediaStream = activeStream;
@@ -4579,7 +4637,19 @@ async function setupLocalAudioMedia() {
       }
     }
   } catch (err) {
-    handleMediaError("audio", err);
+    // Parity with the removed probe step (initEnumerateAudioDevices): see
+    // the matching comment in setupLocalVideoMedia() above for why plain
+    // permission-denied/no-mic-found stays silent here.
+    useAudio = false;
+    const silentErrorNames = [
+      "NotAllowedError",
+      "PermissionDeniedError",
+      "NotFoundError",
+      "DevicesNotFoundError",
+    ];
+    if (!silentErrorNames.includes(err.name)) {
+      handleMediaError("audio", err);
+    }
   }
 }
 
