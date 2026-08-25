@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Presentation, NotebookText, PenLine, Eraser, Trash2, X, Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Presentation, NotebookText, PenLine, Eraser, Trash2, X } from 'lucide-react';
 import CallControls from './CallControls';
 
 interface SlideShowProps {
@@ -73,52 +73,6 @@ const GLOW_CURSOR = (() => {
 export default function SlideShow({ images, title, onClose, isBoardOpen, onToggleBoard, isNoteOpen, onToggleNote, showCallControls, isPipActive }: SlideShowProps) {
   const [index, setIndex] = useState(0);
   const total = images.length;
-
-  // --- Toàn màn hình ---
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  const enterFullscreen = useCallback(() => {
-    const el = document.documentElement as any;
-    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    else if (el.msRequestFullscreen) el.msRequestFullscreen();
-  }, []);
-
-  const exitFullscreen = useCallback(() => {
-    const doc = document as any;
-    if (!(doc.fullscreenElement || doc.webkitFullscreenElement || doc.msFullscreenElement)) return;
-    if (doc.exitFullscreen) doc.exitFullscreen().catch(() => {});
-    else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
-    else if (doc.msExitFullscreen) doc.msExitFullscreen();
-  }, []);
-
-  const toggleFullscreen = useCallback(() => {
-    if (isFullscreen) exitFullscreen();
-    else enterFullscreen();
-  }, [isFullscreen, enterFullscreen, exitFullscreen]);
-
-  // KHÔNG tự bật toàn màn hình khi mở "Slide" nữa (bỏ theo yêu cầu) - chỉ
-  // bật/tắt thủ công qua nút toggleFullscreen. Vẫn nghe fullscreenchange để
-  // icon nút đồng bộ đúng trạng thái (kể cả khi người dùng tự thoát bằng
-  // Esc/F11 của trình duyệt), và vẫn tự tắt lúc đóng Slide (unmount) như
-  // 1 lớp dọn dẹp an toàn - không để fullscreen "rớt" lại nếu người dùng
-  // đã tự bật tay rồi thoát Slide mà quên tắt.
-  useEffect(() => {
-    const handleChange = () => {
-      const doc = document as any;
-      setIsFullscreen(!!(doc.fullscreenElement || doc.webkitFullscreenElement || doc.msFullscreenElement));
-    };
-    document.addEventListener('fullscreenchange', handleChange);
-    document.addEventListener('webkitfullscreenchange', handleChange);
-    document.addEventListener('msfullscreenchange', handleChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleChange);
-      document.removeEventListener('webkitfullscreenchange', handleChange);
-      document.removeEventListener('msfullscreenchange', handleChange);
-      exitFullscreen();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // --- Popup xác nhận thoát trình chiếu (nền bị khóa/mờ đi phía sau) ---
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -613,17 +567,6 @@ export default function SlideShow({ images, title, onClose, isBoardOpen, onToggl
             </button>
             <Tooltip label="Ghi chú" />
           </div>
-          <div className="relative group">
-            <button
-              onClick={toggleFullscreen}
-              className={isFullscreen ? activeBtn : navBtn}
-              aria-label={isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
-            >
-              {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-            </button>
-            <Tooltip label={isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'} />
-          </div>
-
           {showCallControls && (
             <>
               <div className="w-px h-5 bg-white/15 mx-0.5" />
