@@ -726,7 +726,12 @@ const CAMERA_MAX_BITRATE_SHARING = 700_000; // ~700kbps
 const SCREEN_SHARE_MAX_WIDTH = 1920;
 const SCREEN_SHARE_MAX_HEIGHT = 1080;
 const SCREEN_SHARE_MAX_FPS = 25;
-const SCREEN_SHARE_MAX_BITRATE = 2_500_000; // ~2.5Mbps
+// 4Mbps: app này chủ yếu dùng cho học 1-1 (P2P, chỉ upload cho đúng 1 người
+// xem) nên không cần giữ mức tiết kiệm dành cho phòng đông người. 2.5Mbps
+// trước đây từng khiến nội dung chi tiết (chữ nhỏ, code, slide) bị mờ/nén
+// mạnh dù mạng khỏe, vì maxBitrate là trần CỨNG cho encoder - không liên
+// quan gì đến băng thông mạng thực tế còn trống.
+const SCREEN_SHARE_MAX_BITRATE = 4_000_000; // ~4Mbps
 // Opus average-bitrate ceiling/target (mono, voice). 48kbps sits above the
 // 24-32kbps "sufficient for voice" floor to keep pronunciation nuance
 // audible for a kaiwa/conversation-practice app, without being wasteful.
