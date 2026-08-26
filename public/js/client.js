@@ -1608,21 +1608,54 @@ async function handleConnect() {
     // one device doesn't abort the rest of setup below (button wiring
     // etc.), which is what let the mic/cam toggle buttons end up with no
     // click listener at all when permission was denied.
-    try {
-      await setupLocalVideoMedia();
-    } catch (err) {
-      console.error("[handleConnect] setupLocalVideoMedia failed", err);
+    // Mở camera + mic song song thay vì tuần tự: trên macOS mỗi lần
+    // getUserMedia() có độ trễ khởi tạo AVFoundation cao hơn hẳn Windows, nên
+    // await nối tiếp nhau sẽ cộng dồn độ trễ đó, khiến "vào phòng" chậm rõ
+    // rệt trên Mac. Dùng Promise.allSettled (KHÔNG dùng Promise.all): luôn
+    // chờ CẢ HAI xong (dù thành công hay lỗi) rồi mới đi tiếp, giữ đúng hành
+    // vi "2 try/catch độc lập" hiện tại - Promise.all sẽ ngắt ngay khi 1 cái
+    // throw, khiến code nối dây nút bấm bên dưới chạy trong khi thiết bị còn
+    // lại vẫn đang mở dở.
+    const [videoSetupResult, audioSetupResult] = await Promise.allSettled([
+      setupLocalVideoMedia(),
+      setupLocalAudioMedia(),
+    ]);
+    if (videoSetupResult.status === "rejected") {
+      console.error(
+        "[handleConnect] setupLocalVideoMedia failed",
+        videoSetupResult.reason,
+      );
     }
-    try {
-      await setupLocalAudioMedia();
-    } catch (err) {
-      console.error("[handleConnect] setupLocalAudioMedia failed", err);
+    if (audioSetupResult.status === "rejected") {
+      console.error(
+        "[handleConnect] setupLocalAudioMedia failed",
+        audioSetupResult.reason,
+      );
     }
     // Create camera tile (even if no camera, to show avatar)
     if (!useVideo || (!useVideo && !useAudio)) {
       await loadLocalMedia(new MediaStream(), "video");
     }
     getHtmlElementsById();
+    // setupLocalVideoMedia()/setupLocalAudioMedia() giờ chạy song song, nên
+    // nhánh "!useAudio -> hiện icon mic tắt trên tile video" bên trong
+    // loadLocalMedia() case "video" (chạy ngay khi camera sẵn sàng,
+    // xem loadLocalMedia() bên dưới) không còn chắc useAudio đã ở giá trị
+    // cuối cùng: catch của setupLocalAudioMedia() có thể set nó thành false
+    // trước HOẶC sau nhánh đó chạy. Áp lại đúng logic này ở đây, khi cả 2 đã
+    // settle hẳn và getHtmlElementsById() đã trỏ myAudioStatusIcon vào DOM
+    // thật, để icon luôn đúng với useAudio cuối cùng bất kể thứ tự settle.
+    // An toàn/no-op nếu useAudio đã đúng từ trước (setMediaButtonsClass/
+    // setTippy chỉ gán lại đúng giá trị cũ).
+    if (!useAudio) {
+      setMediaButtonsClass([
+        { element: myAudioStatusIcon, status: false, mediaType: "audio" },
+        { element: audioBtn, status: false, mediaType: "audio" },
+      ]);
+      if (!isMobileDevice) {
+        setTippy(myAudioStatusIcon, "Âm thanh của tôi đang tắt", "bottom");
+      }
+    }
     setButtonsToolTip();
     manageButtons();
     handleButtonsRule();
