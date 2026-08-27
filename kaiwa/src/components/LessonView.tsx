@@ -144,6 +144,24 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
 
   // id của từ đang phát (để hiện icon loa nhấp nháy đúng thẻ), null = không phát.
   const [playingVocabId, setPlayingVocabId] = useState<string | null>(null);
+  // Giữ tham chiếu sống tới utterance đang phát - Safari/iOS có bug nổi
+  // tiếng: KHÔNG tự giữ nội bộ utterance như trình duyệt khác, nếu không
+  // có biến nào tham chiếu tới nó thì bị garbage-collect giữa chừng, giọng
+  // đọc im bặt mà không báo lỗi gì (đây là nguyên nhân "bấm không ra
+  // tiếng" trên iPhone dù Android/desktop vẫn phát bình thường).
+  const ttsUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  // setTimeout đang chờ gọi speak() (xem lý do bên dưới) - cần huỷ nếu bấm
+  // dừng/bấm từ khác trước khi kịp chạy, không thì nó vẫn phát dù đã bấm
+  // dừng.
+  const ttsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopVocabAudio = () => {
+    if (ttsTimeoutRef.current !== null) {
+      clearTimeout(ttsTimeoutRef.current);
+      ttsTimeoutRef.current = null;
+    }
+    window.speechSynthesis?.cancel();
+  };
 
   // Tất cả từ vựng đều đọc bằng giọng máy trình duyệt (Web Speech API) -
   // trước đây từ có audio thu sẵn dùng file mp3 thật, từ noAudio mới đọc
@@ -154,23 +172,34 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
     if (!window.speechSynthesis) return; // trình duyệt không hỗ trợ TTS
     // Bấm lại đúng thẻ đang phát -> dừng luôn (toggle).
     if (playingVocabId === v.id) {
-      window.speechSynthesis.cancel();
+      stopVocabAudio();
       setPlayingVocabId(null);
       return;
     }
-    window.speechSynthesis.cancel();
+    stopVocabAudio();
+
     const utterance = new SpeechSynthesisUtterance(v.reading || v.word);
     utterance.lang = 'ja-JP';
-    setPlayingVocabId(v.id);
+    ttsUtteranceRef.current = utterance;
     utterance.onend = () => setPlayingVocabId((cur) => (cur === v.id ? null : cur));
     utterance.onerror = () => setPlayingVocabId((cur) => (cur === v.id ? null : cur));
-    window.speechSynthesis.speak(utterance);
+
+    setPlayingVocabId(v.id);
+    // setTimeout(0): gọi speak() NGAY sau cancel() trong cùng 1 tick đôi khi
+    // bị chính cancel() "nuốt" mất trên Safari/iOS (cancel() xử lý bất đồng
+    // bộ nội bộ) - đẩy speak() sang tick kế tiếp để tránh bị nuốt, vẫn nằm
+    // trong cùng 1 lượt xử lý sự kiện bấm nên không phá quy tắc "phải gọi
+    // trong user-gesture" của iOS.
+    ttsTimeoutRef.current = setTimeout(() => {
+      ttsTimeoutRef.current = null;
+      window.speechSynthesis.speak(utterance);
+    }, 0);
   };
 
   // Dừng giọng đọc đang phát khi rời trang buổi học.
   useEffect(() => {
     return () => {
-      window.speechSynthesis?.cancel();
+      stopVocabAudio();
     };
   }, []);
 
