@@ -8,7 +8,6 @@ import Blackboard from './Blackboard';
 import NotePad from './NotePad';
 import FlashcardModal from './FlashcardModal';
 import HomeworkModal from './HomeworkModal';
-import { getVocabAudioUrl, getPooledVocabAudio, preloadLessonVocabAudio } from '../utils/vocabAudioCache';
 import { buildRawSlideUrls } from '../utils/buildRawSlideUrls';
 import { signSlideUrls, SignSlideUrlsError } from '../utils/signSlideUrls';
 import { readCachedSignedSlides, writeCachedSignedSlides } from '../utils/signedSlideUrlCache';
@@ -90,10 +89,9 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   const [mySubmittedHomeworkIds, setMySubmittedHomeworkIds] = useState<Set<string>>(new Set());
   const allHomeworkSubmitted = homeworks.length > 0 && homeworks.every((hw) => mySubmittedHomeworkIds.has(hw.id));
 
-  // --- Phát audio phát âm khi bấm vào thẻ từ vựng ---
-  // Khoá nhận diện 1 buổi học, dùng để tải ngầm/cache audio riêng theo từng
-  // buổi (xem utils/vocabAudioCache.ts) - vào lại đúng buổi này thì dùng
-  // ngay cache cũ, sang buổi khác mới tải lại + xoá cache buổi trước.
+  // Khoá nhận diện 1 buổi học, dùng cho cache slide theo từng buổi (xem
+  // utils/slideBlobCache.ts) và key={lessonKey} của Blackboard/NotePad bên
+  // dưới - sang buổi khác mới tải lại/xoá nội dung buổi cũ.
   const lessonKey = `${courseId}_${lessonId}`;
 
   // Danh sách đề bài tập về nhà của buổi học này (đọc thẳng qua Supabase,
@@ -146,40 +144,33 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
 
   // id của từ đang phát (để hiện icon loa nhấp nháy đúng thẻ), null = không phát.
   const [playingVocabId, setPlayingVocabId] = useState<string | null>(null);
-  const vocabAudioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Tất cả từ vựng đều đọc bằng giọng máy trình duyệt (Web Speech API) -
+  // trước đây từ có audio thu sẵn dùng file mp3 thật, từ noAudio mới đọc
+  // giọng máy, nhưng đổi thống nhất về 1 nguồn duy nhất cho đồng bộ (không
+  // còn phân biệt 2 màu icon loa/2 nguồn phát nữa - xem utils/vocabAudioCache.ts
+  // cũ, giờ không còn dùng tới).
   const playVocabAudio = (v: VocabWord) => {
-    if (v.noAudio) return; // từ không có audio, xem types.ts
+    if (!window.speechSynthesis) return; // trình duyệt không hỗ trợ TTS
     // Bấm lại đúng thẻ đang phát -> dừng luôn (toggle).
     if (playingVocabId === v.id) {
-      vocabAudioRef.current?.pause();
+      window.speechSynthesis.cancel();
       setPlayingVocabId(null);
       return;
     }
-    vocabAudioRef.current?.pause();
-    // Dùng lại audio đã tải ngầm sẵn (phát tức thì) nếu có, không thì tạo
-    // mới (vd vừa vào buổi, chưa tải ngầm xong kịp).
-    const pooled = getPooledVocabAudio(lessonKey, v.id);
-    const audio = pooled || new Audio(getVocabAudioUrl(v.word, v.reading, v.targetKanji));
-    if (pooled) {
-      try {
-        audio.currentTime = 0;
-      } catch {
-        /* bỏ qua */
-      }
-    }
-    vocabAudioRef.current = audio;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(v.reading || v.word);
+    utterance.lang = 'ja-JP';
     setPlayingVocabId(v.id);
-    audio.onended = () => setPlayingVocabId((cur) => (cur === v.id ? null : cur));
-    audio.onerror = () => setPlayingVocabId((cur) => (cur === v.id ? null : cur));
-    audio.play().catch(() => setPlayingVocabId((cur) => (cur === v.id ? null : cur)));
+    utterance.onend = () => setPlayingVocabId((cur) => (cur === v.id ? null : cur));
+    utterance.onerror = () => setPlayingVocabId((cur) => (cur === v.id ? null : cur));
+    window.speechSynthesis.speak(utterance);
   };
 
-  // Dừng audio đang phát khi rời trang buổi học (KHÔNG xoá cache đã tải
-  // ngầm - cache sống ở module-level, cố tình giữ nguyên qua unmount).
+  // Dừng giọng đọc đang phát khi rời trang buổi học.
   useEffect(() => {
     return () => {
-      vocabAudioRef.current?.pause();
+      window.speechSynthesis?.cancel();
     };
   }, []);
 
@@ -195,14 +186,6 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
 
   const vocabulary: VocabWord[] = lesson?.vocabulary || [];
   const grammar: GrammarPoint[] = lesson?.grammar || [];
-
-  // Vào buổi học -> tải ngầm audio phát âm của TOÀN BỘ từ vựng ngay (không
-  // cần bấm mới tải). lessonKey đổi (sang buổi khác) mới tải lại + xoá
-  // cache buổi trước - xem utils/vocabAudioCache.ts.
-  useEffect(() => {
-    if (!lesson || vocabulary.length === 0) return;
-    preloadLessonVocabAudio(lessonKey, vocabulary);
-  }, [lessonKey, lesson, vocabulary]);
 
   // --- Tài liệu bài học (học viên) ---
   const lessonFileUrl: string | undefined = lesson?.lessonFileUrl?.trim();
@@ -549,7 +532,7 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
               <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${activeContentTab === 'vocab' ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                 <div className="overflow-hidden">
                   {vocabulary.length > 0 ? (
-                    <div className="p-4 bg-black/10 border-t border-white/10 grid sm:grid-cols-2 gap-2">
+                    <div className="p-4 bg-black/10 border-t border-white/10 grid sm:grid-cols-2 gap-2 max-h-96 overflow-y-auto custom-scrollbar">
                       {vocabulary.map((v, i) => {
                         const isPlaying = playingVocabId === v.id;
                         return (
@@ -557,12 +540,9 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
                             key={v.id}
                             type="button"
                             onClick={() => playVocabAudio(v)}
-                            disabled={v.noAudio}
-                            title={v.noAudio ? undefined : 'Bấm để nghe phát âm'}
+                            title="Bấm để nghe phát âm"
                             className={`relative p-3 pt-6 rounded-xl text-left w-full border shadow-sm transition-colors ${
-                              v.noAudio
-                                ? 'bg-blue-50 cursor-default'
-                                : isPlaying
+                              isPlaying
                                 ? 'bg-white border-blue-400 ring-2 ring-blue-400/50'
                                 : 'bg-blue-50 hover:bg-white border-blue-100/70'
                             }`}
@@ -570,13 +550,11 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
                             <span className="absolute top-2 left-2.5 text-[11px] font-bold text-blue-700/70">
                               {String(i + 1).padStart(2, '0')}
                             </span>
-                            {!v.noAudio && (
-                              <Volume2
-                                className={`absolute top-2 right-2.5 w-3.5 h-3.5 ${
-                                  isPlaying ? 'text-blue-600 animate-pulse' : 'text-blue-700/40'
-                                }`}
-                              />
-                            )}
+                            <Volume2
+                              className={`absolute top-2 right-2.5 w-3.5 h-3.5 ${
+                                isPlaying ? 'text-blue-600 animate-pulse' : 'text-blue-700/40'
+                              }`}
+                            />
                             {/* flex-wrap + break-words: từ dài tự động đẩy cách đọc
                                 xuống dòng riêng thay vì đè/tràn ra ngoài thẻ - từ
                                 ngắn thì 2 phần vẫn nằm chung 1 hàng như cũ. */}
@@ -620,7 +598,7 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
               <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${activeContentTab === 'grammar' ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                 <div className="overflow-hidden">
                   {grammar.length > 0 ? (
-                    <div className="p-4 bg-black/10 border-t border-white/10 flex flex-col gap-2">
+                    <div className="p-4 bg-black/10 border-t border-white/10 flex flex-col gap-2 max-h-96 overflow-y-auto custom-scrollbar">
                       {grammar.map((g, i) => (
                         <div key={g.id} className="rounded-xl border border-blue-100/70 bg-blue-50 hover:bg-white shadow-sm p-4 flex flex-col gap-1.5 transition-colors">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md w-fit">

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, PlayCircle, ChevronRight, Check, Lock } from 'lucide-react';
+import { ArrowLeft, PlayCircle, ChevronRight, ChevronDown, Check, Lock } from 'lucide-react';
 import { useCourses } from '../context/CoursesContext';
 import { useCallEmbed } from '../hooks/useCallEmbed';
 import { isCourseAllowed } from '../utils/courseAccess';
 import { waitForAuthUser } from '../utils/authState';
+import { getCourseStages } from '../utils/courseStages';
 import CallControls from './CallControls';
 
 
@@ -17,6 +18,20 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
   const profile: any = null;
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const { showCallControls, isPipActive } = useCallEmbed();
+  // Tập hợp chặng đang mở (accordion "KHỞI ĐỘNG/TĂNG TỐC/VỀ ĐÍCH" - xem
+  // utils/courseStages.ts) - mỗi chặng đóng/mở ĐỘC LẬP (mở chặng này không
+  // tự đóng chặng khác), khác với accordion Từ vựng/Ngữ pháp trong
+  // LessonView.tsx (chỉ 1 mục mở tại 1 thời điểm).
+  const [openStages, setOpenStages] = useState<Set<number>>(new Set());
+
+  const toggleStage = (stageIdx: number) => {
+    setOpenStages((prev) => {
+      const next = new Set(prev);
+      if (next.has(stageIdx)) next.delete(stageIdx);
+      else next.add(stageIdx);
+      return next;
+    });
+  };
 
   // Lớp phòng thủ thứ 2 - Home.tsx đã chặn không cho bấm vào khóa chưa
   // được cấp quyền rồi (onSelectCourse chỉ gọi khi isAllowed), nhưng vẫn
@@ -88,6 +103,31 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
   }
 
   const lessons = loadedCourseDetails?.courseId === courseId ? loadedCourseDetails.lessons : [];
+  // null = khóa chưa được cấu hình chia chặng -> hiển thị phẳng như cũ.
+  const courseStages = getCourseStages(course.title, lessons);
+
+  // `number` = STT hiển thị (1-based), tính sẵn ở nơi gọi để giữ đúng thứ
+  // tự liên tục qua các chặng thay vì reset về 1 mỗi chặng.
+  const renderLessonButton = (lesson: any, number: number) => {
+    const isLearned = learnedLessons[`${courseId}_${lesson.id}`];
+    return (
+      <button
+        key={lesson.id}
+        onClick={() => onSelectLesson(lesson.id)}
+        className="w-full bg-surface-border-strong p-4 md:p-6 rounded-2xl border border-white/10 shadow-sm hover:shadow-md hover:border-blue-400 transition-all flex items-center gap-4 md:gap-6 group text-left cursor-pointer"
+      >
+        <div className={`w-14 h-14 md:w-16 md:h-16 flex-shrink-0 ${isLearned ? 'bg-green-500/10 text-green-400 border-green-400/30' : 'bg-surface text-[#8fb0ce] border-white/10'} border rounded-2xl flex items-center justify-center text-lg md:text-xl font-semibold group-hover:bg-white/10 group-hover:text-white group-hover:border-white/20 transition-colors shadow-sm`}>
+          {isLearned ? <Check className="w-8 h-8 md:w-8 md:h-8 stroke-[3]" /> : String(number).padStart(2, '0')}
+        </div>
+        <div className="flex-1">
+          <h3 className="text-lg md:text-xl font-bold text-white group-hover:text-blue-200 transition-colors">{lesson.title}</h3>
+        </div>
+        <div className="hidden md:flex text-blue-200 font-bold items-center gap-2 px-5 py-2.5 rounded-xl border border-transparent group-hover:bg-white/10 group-hover:border-white/10 transition-colors">
+          Vào học <ChevronRight className="w-5 h-5" />
+        </div>
+      </button>
+    );
+  };
 
   return (
     // min-h-full (không phải h-full) + shrink-0: div này là con flex của
@@ -153,27 +193,48 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
             <div className="flex justify-center p-12">
               <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {lessons.map((lesson: any, index: number) => {
+          ) : courseStages ? (
+            /* Chia chặng (KHỞI ĐỘNG/TĂNG TỐC/VỀ ĐÍCH) - accordion, bấm tiêu
+               đề mới trượt ra danh sách buổi trong chặng đó ngay tại chỗ (vị
+               trí tiêu đề giữ nguyên, không tự cuộn trang) - mỗi chặng đóng/mở
+               độc lập, không tự đóng chặng khác (xem cơ chế grid-rows y hệt
+               accordion Từ vựng/Ngữ pháp trong LessonView.tsx). */
+            <div className="flex flex-col gap-4">
+              {courseStages.map((stage, stageIdx) => {
+                const isOpen = openStages.has(stageIdx);
                 return (
-                  <button
-                    key={lesson.id}
-                    onClick={() => onSelectLesson(lesson.id)}
-                    className="w-full bg-surface-border-strong p-4 md:p-6 rounded-2xl border border-white/10 shadow-sm hover:shadow-md hover:border-blue-400 transition-all flex items-center gap-4 md:gap-6 group text-left cursor-pointer"
+                  <div
+                    key={stage.label}
+                    className={`rounded-2xl overflow-hidden border transition-all duration-300 ${isOpen ? 'border-blue-400/50 shadow-sm' : 'border-white/10 hover:border-blue-400/30'}`}
                   >
-                    <div className={`w-14 h-14 md:w-16 md:h-16 flex-shrink-0 ${learnedLessons[`${courseId}_${lesson.id}`] ? 'bg-green-500/10 text-green-400 border-green-400/30' : 'bg-surface text-[#8fb0ce] border-white/10'} border rounded-2xl flex items-center justify-center text-lg md:text-xl font-semibold group-hover:bg-white/10 group-hover:text-white group-hover:border-white/20 transition-colors shadow-sm`}>
-                      {learnedLessons[`${courseId}_${lesson.id}`] ? <Check className="w-8 h-8 md:w-8 md:h-8 stroke-[3]" /> : String(index + 1).padStart(2, '0')}
+                    <button
+                      onClick={() => toggleStage(stageIdx)}
+                      className={`relative w-full flex items-center justify-center px-5 py-4 font-bold transition-all duration-300 ${isOpen ? 'bg-blue-600 text-white' : 'bg-white/5 text-white hover:bg-white/10'}`}
+                      aria-expanded={isOpen}
+                    >
+                      <span className="flex items-center gap-2 uppercase tracking-wide text-sm md:text-base">
+                        {stage.label}
+                        <span className="text-[11px] font-semibold opacity-70 normal-case">({stage.lessons.length} buổi)</span>
+                      </span>
+                      <ChevronDown className={`w-5 h-5 shrink-0 absolute right-5 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                      <div className="overflow-hidden">
+                        <div className="p-4 bg-black/10 border-t border-white/10 space-y-4">
+                          {stage.lessons.map((lesson: any, i: number) =>
+                            renderLessonButton(lesson, stage.startIndex + i + 1)
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <h3 className="text-lg md:text-xl font-bold text-white group-hover:text-blue-200 transition-colors">{lesson.title}</h3>
-                    </div>
-                    <div className="hidden md:flex text-blue-200 font-bold items-center gap-2 px-5 py-2.5 rounded-xl border border-transparent group-hover:bg-white/10 group-hover:border-white/10 transition-colors">
-                      Vào học <ChevronRight className="w-5 h-5" />
-                    </div>
-                  </button>
+                  </div>
                 );
               })}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {lessons.map((lesson: any, index: number) => renderLessonButton(lesson, index + 1))}
             </div>
           )}
         </div>

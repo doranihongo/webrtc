@@ -8,19 +8,20 @@ export interface VocabWord {
   exampleVietnamese?: string;
   customCells?: string[];
   /**
-   * Ghi trong JSON khi muốn tra âm thanh phát âm bằng 1 cách viết kanji
-   * KHÁC với `word` hiển thị trên web (vd `word` là dạng rút gọn/viết tắt
-   * không tra được đúng audio, nhưng đổi `word` thì lại sai hiển thị) -
-   * `word`/`reading` hiển thị trên thẻ từ vựng vẫn giữ NGUYÊN, chỉ URL âm
-   * thanh (xem utils/vocabAudioCache.ts) đổi sang tra bằng `targetKanji`
-   * (+ vẫn dùng `reading` hiện có để ghép cách đọc, trừ khi cũng muốn đổi
-   * luôn cách đọc dùng để tra thì set thêm cả `reading` cho khớp).
+   * @deprecated Không còn dùng - trước đây dùng để tra audio thu sẵn bằng 1
+   * cách viết kanji KHÁC với `word` hiển thị. Từ khi mọi từ vựng chuyển
+   * sang đọc bằng giọng máy trình duyệt (Web Speech API, xem playVocabAudio
+   * trong LessonView.tsx - đọc thẳng `reading`/`word`, không còn tra audio
+   * theo kanji nữa) thì field này không còn được code đọc tới. Giữ lại
+   * trong type để không vỡ dữ liệu buổi học cũ trên Supabase còn field này.
    */
   targetKanji?: string;
   /**
-   * true = từ này KHÔNG có audio phát âm (server audio bên thứ 3 không có
-   * hoặc phát âm sai/không mong muốn) - thẻ từ vựng vẫn hiển thị bình
-   * thường nhưng ẩn icon loa, bấm vào không làm gì (xem LessonView.tsx).
+   * @deprecated Không còn dùng - trước đây đánh dấu từ KHÔNG có audio thu
+   * sẵn để hiển thị khác đi. Từ khi mọi từ vựng đều đọc bằng giọng máy
+   * (playVocabAudio trong LessonView.tsx) thì mọi từ đều xử lý y hệt nhau,
+   * field này không còn được code đọc tới. Giữ lại trong type để không vỡ
+   * dữ liệu buổi học cũ trên Supabase còn field này.
    */
   noAudio?: boolean;
   isSeparator?: boolean;
