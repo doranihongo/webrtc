@@ -16,6 +16,21 @@ import { fetchHomeworksForLesson, fetchMySubmissions, subscribeToMySubmissionCha
 import type { VocabWord, GrammarPoint, Homework } from '../types';
 
 /**
+ * Giọng đọc máy (Web Speech API, playVocabAudio bên dưới) đọc từ vựng im
+ * bặt hoàn toàn trên iPhone thật dù đã sửa 2 lỗi WebKit đã biết (utterance
+ * bị garbage-collect, cancel()+speak() cùng tick) - nhiều khả năng do máy
+ * chưa có giọng đọc tiếng Nhật cài sẵn (khác Android/desktop luôn có giọng
+ * mặc định). Quyết định: tắt hẳn tính năng nghe phát âm trên iOS (iPhone/
+ * iPad/iPod) thay vì để bấm không có phản hồi gì, khó hiểu hơn là ẩn hẳn.
+ * navigator.platform === 'MacIntel' + maxTouchPoints > 1: bắt luôn iPadOS
+ * (báo User-Agent giống macOS nhưng có cảm ứng, xem thêm ở nhiều nguồn về
+ * cách phát hiện iPad trên iPadOS 13+).
+ */
+const IS_IOS =
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+/**
  * Khoá dùng cho `slideBlobUrlsRef` (LessonView) - lấy PATHNAME của URL đã
  * ký (bỏ qua query string `exp`/`sig`), để 1 ảnh vẫn nhận diện được đúng
  * Blob đã tải trước đó dù URL vừa được ký LẠI (làm mới token nền, đổi
@@ -169,6 +184,13 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   // còn phân biệt 2 màu icon loa/2 nguồn phát nữa - xem utils/vocabAudioCache.ts
   // cũ, giờ không còn dùng tới).
   const playVocabAudio = (v: VocabWord) => {
+    // Đã thử 2 hướng sửa bug WebKit (giữ ref utterance + delay speak() sau
+    // cancel()) nhưng iPhone thật vẫn im lặng hoàn toàn - nhiều khả năng do
+    // máy chưa có giọng đọc tiếng Nhật (iOS không tự có giọng mặc định cho
+    // ngôn ngữ chưa từng bật như Android/desktop). Quyết định: tắt hẳn tính
+    // năng nghe phát âm trên iOS thay vì để bấm vô tác dụng khó hiểu - xem
+    // IS_IOS đầu file.
+    if (IS_IOS) return;
     if (!window.speechSynthesis) return; // trình duyệt không hỗ trợ TTS
     // Bấm lại đúng thẻ đang phát -> dừng luôn (toggle).
     if (playingVocabId === v.id) {
@@ -569,9 +591,12 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
                             key={v.id}
                             type="button"
                             onClick={() => playVocabAudio(v)}
-                            title="Bấm để nghe phát âm"
+                            disabled={IS_IOS}
+                            title={IS_IOS ? undefined : 'Bấm để nghe phát âm'}
                             className={`relative p-3 pt-6 rounded-xl text-left w-full border shadow-sm transition-colors ${
-                              isPlaying
+                              IS_IOS
+                                ? 'bg-blue-50 cursor-default'
+                                : isPlaying
                                 ? 'bg-white border-blue-400 ring-2 ring-blue-400/50'
                                 : 'bg-blue-50 hover:bg-white border-blue-100/70'
                             }`}
@@ -579,11 +604,16 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
                             <span className="absolute top-2 left-2.5 text-[11px] font-bold text-blue-700/70">
                               {String(i + 1).padStart(2, '0')}
                             </span>
-                            <Volume2
-                              className={`absolute top-2 right-2.5 w-3.5 h-3.5 ${
-                                isPlaying ? 'text-blue-600 animate-pulse' : 'text-blue-700/40'
-                              }`}
-                            />
+                            {/* Tắt hẳn icon loa trên iOS - giọng máy không phát ra tiếng
+                                trên iPhone thật (xem IS_IOS đầu file), hiện icon vẫn bấm
+                                được sẽ gây hiểu lầm là app lỗi. */}
+                            {!IS_IOS && (
+                              <Volume2
+                                className={`absolute top-2 right-2.5 w-3.5 h-3.5 ${
+                                  isPlaying ? 'text-blue-600 animate-pulse' : 'text-blue-700/40'
+                                }`}
+                              />
+                            )}
                             {/* flex-wrap + break-words: từ dài tự động đẩy cách đọc
                                 xuống dòng riêng thay vì đè/tràn ra ngoài thẻ - từ
                                 ngắn thì 2 phần vẫn nằm chung 1 hàng như cũ. */}
