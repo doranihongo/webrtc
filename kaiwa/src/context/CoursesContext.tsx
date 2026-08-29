@@ -71,6 +71,25 @@ export const CoursesProvider: React.FC<{ children: React.ReactNode }> = ({ child
     fetchCourses();
   }, []);
 
+  // "dora:refreshCourses" - client.js gửi mỗi lần thật sự mở overlay trang
+  // chủ trong lúc gọi (bấm nút "Trang chủ" góc dưới-trái, xem
+  // openKaiwaOverlay trong public/js/client.js). Trang này (kaiwaOverlayIframe)
+  // chỉ tải NGẦM đúng 1 lần lúc vào phòng rồi không bao giờ tải lại trong
+  // suốt cuộc gọi, nên danh sách khóa học đọc lúc đó có thể đã cũ hoặc lỡ
+  // dính lỗi mạng thoáng qua - chủ động tải lại 1 lần mỗi khi người dùng
+  // thật sự mở ra xem, thay vì chỉ trông chờ vào retry lúc tải trang.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'dora:refreshCourses') {
+        fetchCourses();
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Realtime: ai đó sửa/thêm/xóa dòng trong kaiwa_courses hoặc
   // kaiwa_lessons trên Supabase -> mọi người đang mở app tự thấy ngay,
   // không cần F5. Tải lại danh sách khóa học, và nếu đang xem chi tiết 1

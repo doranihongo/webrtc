@@ -6554,6 +6554,18 @@ async function openKaiwaOverlay() {
   // đúng nút PiP riêng (togglePagePip, xem newPip?.addEventListener
   // trong client.html, hoặc nút "PiP" trong nav kaiwa - dora:togglePip).
   elemDisplay(kaiwaOverlayFrame, true, "flex");
+
+  // kaiwaOverlayIframe chỉ tải NGẦM đúng 1 lần lúc vào phòng (xem
+  // setGoHomeCornerBtn) rồi không bao giờ tải lại trong suốt cuộc gọi -
+  // danh sách khóa học nó đọc lúc đó có thể đã cũ, hoặc từng lỗi mạng
+  // thoáng qua do cạnh tranh CPU/băng thông với WebRTC lúc mới vào phòng.
+  // Mỗi lần thật sự mở overlay ra xem (bấm nút này), báo cho nó tải lại
+  // danh sách khóa học 1 lần - xem listener "dora:refreshCourses" trong
+  // kaiwa/src/context/CoursesContext.tsx.
+  kaiwaOverlayIframe.contentWindow?.postMessage(
+    { type: "dora:refreshCourses" },
+    window.location.origin,
+  );
 }
 
 function closeKaiwaOverlay() {

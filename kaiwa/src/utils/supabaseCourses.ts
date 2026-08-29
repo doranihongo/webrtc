@@ -23,6 +23,22 @@ function getSupabaseClient(): any | null {
   return client;
 }
 
+// Trang này còn được tải trong 1 iframe ẨN, nạp NGẦM ngay lúc vào phòng gọi
+// (kaiwaOverlayIframe, xem setGoHomeCornerBtn trong public/js/client.js) -
+// cạnh tranh CPU/băng thông trực tiếp với WebRTC đang khởi động, và sẽ
+// KHÔNG BAO GIỜ được tải lại lần nào khác trong suốt cuộc gọi. Nếu
+// fetchCourses() bị lỗi mạng/timeout thoáng qua đúng lúc đó, CoursesContext
+// rơi về FALLBACK_COURSES ([]) và không còn cơ hội thử lại - danh sách
+// khóa học trống trơn cho tới khi F5 thật sự. Tự thử lại vài lần trước khi
+// coi là lỗi thật, giống hệt fetchProfileWithRetry() trong public/js/common.js
+// (cùng nguyên nhân, xem giải thích đầy đủ ở đó).
+const FETCH_RETRIES = 3;
+const FETCH_RETRY_DELAY_MS = 1200;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export interface DbLesson {
   id: string;
   title: string;
@@ -46,10 +62,17 @@ export async function fetchCourses(): Promise<Course[] | null> {
   const client = getSupabaseClient();
   if (!client) return null;
 
-  const { data, error } = await client
-    .from('kaiwa_courses')
-    .select('id, title, description, cover_image_url, sort_order')
-    .order('sort_order', { ascending: true });
+  let data: any = null;
+  let error: any = null;
+  for (let attempt = 1; attempt <= FETCH_RETRIES; attempt++) {
+    ({ data, error } = await client
+      .from('kaiwa_courses')
+      .select('id, title, description, cover_image_url, sort_order')
+      .order('sort_order', { ascending: true }));
+
+    if (!error) break;
+    if (attempt < FETCH_RETRIES) await delay(FETCH_RETRY_DELAY_MS);
+  }
 
   if (error) {
     console.error('[kaiwa] Lỗi tải danh sách khóa học:', error.message);
@@ -70,11 +93,18 @@ export async function fetchCourseLessons(courseId: string): Promise<DbLesson[] |
   const client = getSupabaseClient();
   if (!client) return null;
 
-  const { data, error } = await client
-    .from('kaiwa_lessons')
-    .select('id, title, vocabulary, grammar, lesson_file_url, slide_folder, slide_ext, slide_count, sort_order')
-    .eq('course_id', courseId)
-    .order('sort_order', { ascending: true });
+  let data: any = null;
+  let error: any = null;
+  for (let attempt = 1; attempt <= FETCH_RETRIES; attempt++) {
+    ({ data, error } = await client
+      .from('kaiwa_lessons')
+      .select('id, title, vocabulary, grammar, lesson_file_url, slide_folder, slide_ext, slide_count, sort_order')
+      .eq('course_id', courseId)
+      .order('sort_order', { ascending: true }));
+
+    if (!error) break;
+    if (attempt < FETCH_RETRIES) await delay(FETCH_RETRY_DELAY_MS);
+  }
 
   if (error) {
     console.error('[kaiwa] Lỗi tải buổi học:', error.message);
