@@ -4,8 +4,9 @@ import type { Lesson } from '../types';
  * Chia buổi học của 1 khóa thành các "chặng" hiển thị dạng accordion trên
  * trang chi tiết khóa học (CourseDetail.tsx) - vd "KAIWA SƠ CẤP 1" có 30 buổi,
  * chia làm 3 chặng KHỞI ĐỘNG (buổi 1-6) / TĂNG TỐC (buổi 7-22) / VỀ ĐÍCH
- * (buổi 23-30) để danh sách đỡ dài, học viên bấm vào từng chặng mới thấy
- * buổi bên trong (mặc định cả 3 chặng đóng).
+ * (buổi 23-30); "KAIWA SƠ CẤP 2" cũng 30 buổi, chia KHỞI ĐỘNG (buổi 1-7) /
+ * TĂNG TỐC (buổi 8-20) / VỀ ĐÍCH (buổi 21-30) - để danh sách đỡ dài, học
+ * viên bấm vào từng chặng mới thấy buổi bên trong (mặc định cả 3 chặng đóng).
  *
  * Khóa nào KHÔNG có mặt trong bảng dưới đây thì hiển thị phẳng như cũ
  * (getCourseStages trả về null) - thêm dòng mới vào đây khi cần chia chặng
@@ -18,6 +19,11 @@ const COURSE_STAGE_CONFIG: Record<string, { label: string; count: number }[]> = 
     { label: 'KHỞI ĐỘNG', count: 6 },
     { label: 'TĂNG TỐC', count: 16 },
     { label: 'VỀ ĐÍCH', count: 8 },
+  ],
+  'kaiwa sơ cấp 2': [
+    { label: 'KHỞI ĐỘNG', count: 7 },
+    { label: 'TĂNG TỐC', count: 13 },
+    { label: 'VỀ ĐÍCH', count: 10 },
   ],
 };
 

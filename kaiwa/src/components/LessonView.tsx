@@ -694,12 +694,17 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
             Kanji" (xem FlashcardModal.tsx), chỉ đổi nguồn dữ liệu sang
             VocabWord của kaiwa. */}
         <div className="bg-surface-border-strong rounded-3xl p-5 md:p-6 border border-white/10 shadow-sm shrink-0">
-          <div className={`grid gap-3 ${isTeacherOrAdmin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
-            {isTeacherOrAdmin && (
+          {/* flex + flex-1 (thay grid cố định số cột) - buổi học KHÔNG có phần nào (vd chưa
+              có tài liệu) thì ẨN LUÔN nút đó (thay vì hiện mờ/disabled như trước), các nút còn
+              lại tự co dãn lấp đầy hàng. Slide vẫn cần disabled (không ẩn) khi đang tải/gate
+              chưa xong - CHỈ ẩn khi đã xác định chắc buổi học không có slide (hết probing,
+              không lỗi, không có ảnh). */}
+          <div className="flex flex-wrap gap-3">
+            {isTeacherOrAdmin && (slideProbing || hasSlideImages || slideSignError) && (
               <button
                 onClick={() => setTeacherSlideOpen(true)}
                 disabled={!hasSlideImages || !slideGateReady}
-                className="bg-blue-600 border border-blue-400/60 p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md shadow-blue-900/30 transition-all hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-900/40 disabled:opacity-40 disabled:pointer-events-none disabled:hover:translate-y-0"
+                className="flex-1 min-w-[110px] bg-blue-600 border border-blue-400/60 p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md shadow-blue-900/30 transition-all hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-900/40 disabled:opacity-40 disabled:pointer-events-none disabled:hover:translate-y-0"
               >
                 {slideButtonBusy ? (
                   <div className="w-6 h-6 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -716,40 +721,43 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
               </button>
             )}
 
-            <button
-              onClick={() => setIsFlashcardOpen(true)}
-              disabled={vocabulary.length === 0}
-              className="bg-blue-600 border border-blue-400/60 p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md shadow-blue-900/30 transition-all hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-900/40 disabled:opacity-40 disabled:pointer-events-none disabled:hover:translate-y-0"
-            >
-              <Layers className="w-6 h-6 text-white" />
-              <span className="text-xs font-bold text-white uppercase tracking-wider">Flashcard</span>
-            </button>
+            {vocabulary.length > 0 && (
+              <button
+                onClick={() => setIsFlashcardOpen(true)}
+                className="flex-1 min-w-[110px] bg-blue-600 border border-blue-400/60 p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md shadow-blue-900/30 transition-all hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-900/40"
+              >
+                <Layers className="w-6 h-6 text-white" />
+                <span className="text-xs font-bold text-white uppercase tracking-wider">Flashcard</span>
+              </button>
+            )}
 
-            <button
-              onClick={openLessonFile}
-              disabled={!hasLessonFile}
-              className="bg-blue-600 border border-blue-400/60 p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md shadow-blue-900/30 transition-all hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-900/40 disabled:opacity-40 disabled:pointer-events-none disabled:hover:translate-y-0"
-            >
-              <ExternalLink className="w-6 h-6 text-white" />
-              <span className="text-xs font-bold text-white uppercase tracking-wider">Tài liệu</span>
-            </button>
+            {hasLessonFile && (
+              <button
+                onClick={openLessonFile}
+                className="flex-1 min-w-[110px] bg-blue-600 border border-blue-400/60 p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md shadow-blue-900/30 transition-all hover:bg-blue-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-900/40"
+              >
+                <ExternalLink className="w-6 h-6 text-white" />
+                <span className="text-xs font-bold text-white uppercase tracking-wider">Tài liệu</span>
+              </button>
+            )}
 
-            <button
-              onClick={() => setIsHomeworkOpen(true)}
-              disabled={homeworks.length === 0}
-              // Đã nộp đủ (chỉ học viên) -> mờ đi để báo hiệu "xong rồi",
-              // nhưng KHÔNG disabled - vẫn bấm vào được để xem lại/nộp lại.
-              className={`p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md transition-all hover:-translate-y-1 disabled:opacity-40 disabled:pointer-events-none disabled:hover:translate-y-0 ${
-                isStudent && allHomeworkSubmitted
-                  ? 'bg-blue-800/40 border border-blue-400/20 opacity-60 hover:opacity-90 shadow-blue-900/10'
-                  : 'bg-blue-600 border border-blue-400/60 shadow-blue-900/30 hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-900/40'
-              }`}
-            >
-              <Mic className="w-6 h-6 text-white" />
-              <span className="text-xs font-bold text-white uppercase tracking-wider">
-                {isStudent && allHomeworkSubmitted ? 'Đã nộp' : 'Bài tập'}
-              </span>
-            </button>
+            {homeworks.length > 0 && (
+              <button
+                onClick={() => setIsHomeworkOpen(true)}
+                // Đã nộp đủ (chỉ học viên) -> mờ đi để báo hiệu "xong rồi", nhưng KHÔNG
+                // disabled - vẫn bấm vào được để xem lại/nộp lại.
+                className={`flex-1 min-w-[110px] p-3 py-4 rounded-xl flex flex-col items-center justify-center gap-2 shadow-md transition-all hover:-translate-y-1 ${
+                  isStudent && allHomeworkSubmitted
+                    ? 'bg-blue-800/40 border border-blue-400/20 opacity-60 hover:opacity-90 shadow-blue-900/10'
+                    : 'bg-blue-600 border border-blue-400/60 shadow-blue-900/30 hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-900/40'
+                }`}
+              >
+                <Mic className="w-6 h-6 text-white" />
+                <span className="text-xs font-bold text-white uppercase tracking-wider">
+                  {isStudent && allHomeworkSubmitted ? 'Đã nộp' : 'Bài tập'}
+                </span>
+              </button>
+            )}
           </div>
           {isTeacherOrAdmin && slideSignError && (
             <p className="text-xs text-red-400 mt-3">
