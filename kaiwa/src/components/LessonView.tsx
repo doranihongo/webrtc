@@ -502,6 +502,25 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
     setActiveContentTab((prev) => (prev === tab ? null : tab));
   };
 
+  // Furigana cho phần ngữ pháp: gõ "[漢字](かんじ)" trong `pattern`/`exampleJapanese`
+  // (giống cú pháp dùng ở KaiwaModal.tsx renderFurigana) sẽ hiện thành <ruby>/<rt>.
+  const renderFurigana = (text: string) => {
+    if (!text) return null;
+    const parts = text.split(/(\[[^\]]+\]\([^)]+\))/g);
+    return parts.map((part, index) => {
+      const match = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
+      if (match) {
+        return (
+          <ruby key={index} className="leading-loose">
+            {match[1]}
+            <rt className="text-[0.6em] text-blue-500 font-semibold select-none"><span className="inline-block -translate-y-0.5">{match[2]}</span></rt>
+          </ruby>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
+
   if (detailsLoading) {
     return (
       <div className="flex justify-center items-center p-12 min-h-screen">
@@ -663,11 +682,11 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
                           <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md w-fit">
                             Mẫu {i + 1}
                           </span>
-                          <p className="font-jp text-base md:text-lg font-bold text-blue-800">{g.pattern}</p>
+                          <p className="font-jp text-base md:text-lg font-bold text-blue-800">{renderFurigana(g.pattern)}</p>
                           <p className="text-sm text-zinc-600 font-medium">{g.meaning}</p>
                           {g.exampleJapanese && (
                             <div className="mt-1.5 pt-2.5 border-t border-blue-100 flex flex-col gap-0.5">
-                              <p className="font-jp text-sm text-zinc-800 font-bold">{g.exampleJapanese}</p>
+                              <p className="font-jp text-sm text-zinc-800 font-bold">{renderFurigana(g.exampleJapanese)}</p>
                               {g.exampleVietnamese && (
                                 <p className="text-xs text-zinc-600 font-bold">{g.exampleVietnamese}</p>
                               )}
