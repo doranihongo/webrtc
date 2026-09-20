@@ -15,11 +15,11 @@
 //        - role hợp lệ + is_first_login=true -> bắt buộc đổi mật khẩu.
 //        - role hợp lệ + is_first_login=false -> vào đúng trang đã yêu
 //          cầu trước đó (?redirect=..., do authGuard trong common.js
-//          gắn vào khi đá về đây), mặc định landing page ("/").
+//          gắn vào khi đá về đây), mặc định trang chủ kaiwa ("/").
 //
-// TODO (bước sau): server-side check khi Socket.IO connect (client.js
-// gắn window.__authToken, server.js cần tự verify - common.js/login.js
-// mới chỉ là lớp chặn ở giao diện, không phải lớp bảo mật thật).
+// LƯU Ý: common.js/login.js chỉ là lớp chặn ở giao diện, không phải lớp
+// bảo mật thật - các endpoint nhạy cảm (server.js, /kaiwa/*) tự verify
+// token Supabase riêng ở phía server.
 // ---------------------------------------------------------
 
 const loginLoading = document.getElementById("loginLoading");

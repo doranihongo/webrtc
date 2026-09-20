@@ -1,6 +1,6 @@
 import React from 'react';
-import { X, Mic, Square, Trash2, UploadCloud, KeyRound, Loader2, Volume2 } from 'lucide-react';
-import type { Homework, HomeworkSubmission } from '../types';
+import { X, Mic, Square, Trash2, UploadCloud, KeyRound, Loader2 } from 'lucide-react';
+import type { Homework, HomeworkSubmission } from '../../types';
 import {
   fetchMySubmissions,
   subscribeToMySubmissionChanges,
@@ -10,8 +10,7 @@ import {
   homeworkAudioUrl,
   HomeworkApiError,
   type TeacherSubmissionsResult,
-} from '../utils/supabaseHomework';
-import { registerShareableAudio } from '../utils/shareableAudioBus';
+} from '../../utils/supabaseHomework';
 import HomeworkAudioPlayer from './HomeworkAudioPlayer';
 
 /**
@@ -23,13 +22,8 @@ import HomeworkAudioPlayer from './HomeworkAudioPlayer';
  *   - hocvien: tự ghi âm/chọn file, nộp/xoá/nộp lại bài của CHÍNH MÌNH cho
  *     từng đề bài của buổi học đang xem.
  *   - giaovien/admin: 1 ô nhập MÃ HỌC VIÊN - nhập đúng mã là ra danh sách
- *     bài học viên đó đã nộp cho buổi học đang xem (hoạt động bất kỳ lúc
- *     nào, không cần học viên đang trong phòng gọi). Bấm "Nghe" một bài:
- *     luôn phát cục bộ cho giáo viên nghe trước; NẾU đang nhúng trong buổi
- *     gọi (isEmbeddedInCall), báo cho trang cha (client.js) qua postMessage
- *     để trộn thêm vào track gửi đi - cả 2 bên cùng nghe qua WebRTC. Xem
- *     kaiwa/src/utils/shareableAudioBus.ts + "dora:homeworkAudioPlaybackChanged"
- *     trong public/js/client.js.
+ *     bài học viên đó đã nộp cho buổi học đang xem. Bấm "Nghe" một bài để
+ *     phát cục bộ cho giáo viên nghe.
  */
 
 const AUDIO_MIME_CANDIDATES = [
@@ -71,7 +65,6 @@ interface HomeworkModalProps {
   homeworks: Homework[];
   lessonId: string;
   userRole?: string;
-  isEmbeddedInCall: boolean;
 }
 
 export default function HomeworkModal({
@@ -80,7 +73,6 @@ export default function HomeworkModal({
   homeworks,
   lessonId,
   userRole,
-  isEmbeddedInCall,
 }: HomeworkModalProps) {
   const isStudent = userRole === 'hocvien';
   const isTeacherOrAdmin = userRole === 'giaovien' || userRole === 'admin';
@@ -298,32 +290,8 @@ export default function HomeworkModal({
 
   // Mỗi bài nộp trong danh sách giáo viên tự có 1 <HomeworkAudioPlayer>
   // riêng (giống hệt view học viên - play/thanh tua/thời lượng, chỉ tải
-  // khi bấm play) - Set này chỉ để biết "có đang phát bài nào không" hòng
-  // báo trang cha (cả lớp cùng nghe), không điều khiển audio trực tiếp.
+  // khi bấm play).
   const [playingSubmissionIds, setPlayingSubmissionIds] = React.useState<Set<string>>(new Set());
-  const anyPlaying = playingSubmissionIds.size > 0;
-  const prevAnyPlayingRef = React.useRef(false);
-
-  const notifyPlaybackChanged = React.useCallback(
-    (playing: boolean) => {
-      if (!isEmbeddedInCall) return;
-      try {
-        window.parent.postMessage({ type: 'dora:homeworkAudioPlaybackChanged', isPlaying: playing }, window.location.origin);
-      } catch {
-        /* bỏ qua - không có gì để làm nếu không gửi được */
-      }
-    },
-    [isEmbeddedInCall],
-  );
-
-  // Chỉ báo trang cha đúng lúc THỰC SỰ đổi trạng thái "có/không bài đang
-  // phát" (không báo lặp mỗi lần Set đổi nhưng vẫn cùng trạng thái rỗng/có).
-  React.useEffect(() => {
-    if (anyPlaying !== prevAnyPlayingRef.current) {
-      prevAnyPlayingRef.current = anyPlaying;
-      notifyPlaybackChanged(anyPlaying);
-    }
-  }, [anyPlaying, notifyPlaybackChanged]);
 
   function handleSubmissionPlayingChange(id: string, isPlaying: boolean) {
     setPlayingSubmissionIds((prev) => {
@@ -578,17 +546,11 @@ export default function HomeworkModal({
                           <HomeworkAudioPlayer
                             src={homeworkAudioUrl(s.id)}
                             knownDurationSec={s.durationMs ? s.durationMs / 1000 : undefined}
-                            onAudioElementReady={registerShareableAudio}
                             onPlayingChange={(isPlaying) => handleSubmissionPlayingChange(s.id, isPlaying)}
                           />
                         </div>
                       );
                     })
-                  )}
-                  {isEmbeddedInCall && anyPlaying && (
-                    <p className="text-[11px] text-blue-300 flex items-center gap-1.5">
-                      <Volume2 className="w-3.5 h-3.5" /> Đang phát cho cả 2 bên cùng nghe qua cuộc gọi.
-                    </p>
                   )}
                 </div>
               )}

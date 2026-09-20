@@ -27,7 +27,6 @@ export default function HomeworkAudioPlayer({
   src,
   knownDurationSec,
   className,
-  onAudioElementReady,
   onPlayingChange,
 }: {
   src: string;
@@ -39,22 +38,10 @@ export default function HomeworkAudioPlayer({
    * Một khi tải xong, duration THẬT từ audio (chính xác hơn) sẽ thay vào. */
   knownDurationSec?: number;
   className?: string;
-  /** Gọi 1 lần khi thẻ <audio> bên trong đã gắn vào DOM - dùng ở view giáo
-   * viên (HomeworkModal.tsx) để đăng ký vào shareableAudioBus, phát cho cả
-   * lớp nghe qua cuộc gọi. Không dùng cho view học viên (chỉ nghe cục bộ). */
-  onAudioElementReady?: (el: HTMLAudioElement) => void;
-  /** Gọi mỗi khi trạng thái đang phát/dừng đổi - dùng ở view giáo viên để
-   * báo trang cha qua postMessage. */
+  /** Gọi mỗi khi trạng thái đang phát/dừng đổi. */
   onPlayingChange?: (isPlaying: boolean) => void;
 }) {
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
-  const audioCallbackRef = React.useCallback(
-    (el: HTMLAudioElement | null) => {
-      audioRef.current = el;
-      if (el) onAudioElementReady?.(el);
-    },
-    [onAudioElementReady],
-  );
   const [status, setStatus] = React.useState<Status>('idle');
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [duration, setDuration] = React.useState(knownDurationSec || 0);
@@ -120,7 +107,7 @@ export default function HomeworkAudioPlayer({
   return (
     <div className={`flex items-center gap-2.5 bg-black/20 rounded-xl px-2.5 py-2 min-w-0 ${className || ''}`}>
       <audio
-        ref={audioCallbackRef}
+        ref={audioRef}
         src={src}
         preload="none"
         className="hidden"

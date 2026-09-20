@@ -1,5 +1,5 @@
 /*
- * Login page — standalone stylesheet, only used by views/login.html.
+ * Login page — standalone stylesheet, only used by login.html.
  * Thẻ 2 nửa (form + mảng màu cong) trượt qua lại giữa màn "Đăng nhập"
  * và "Đổi mật khẩu" (bắt buộc lần đầu đăng nhập) - hiệu ứng "kéo rèm".
  * Reuses the shared "Ocean" design tokens from _tokens.css for color

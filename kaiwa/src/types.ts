@@ -39,26 +39,9 @@ export interface GrammarPoint {
   exampleVietnamese?: string;
 }
 
-export interface KanjiWord {
-  id: string;
-  kanji: string;
-  hanViet: string;
-  on: string;
-  kun: string;
-  meaning: string;
-  vocabList: { word: string; reading: string; meaning: string }[];
-}
-
 export interface Lesson {
   id: string;
   title: string;
-  videoId: string; // YouTube ID
-  pdfUrl: string;
-  kanjiCount?: number;
-  vocabCount?: number;
-  kanjiList?: string;
-  vocabList?: string;
-  exerciseJson?: any;
   /** Danh sách từ vựng hiển thị trong trang chi tiết buổi học (LessonView). */
   vocabulary?: VocabWord[];
   /** Danh sách ngữ pháp hiển thị trong trang chi tiết buổi học (LessonView). */

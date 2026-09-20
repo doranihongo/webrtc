@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, Presentation, NotebookText, PenLine, Eraser, Trash2, X } from 'lucide-react';
-import CallControls from './CallControls';
 
 interface SlideShowProps {
   /** Danh sách URL ảnh slide, đúng thứ tự trang (dò ra từ Lesson.slideFolder - xem types.ts). */
@@ -14,12 +13,6 @@ interface SlideShowProps {
   onToggleBoard: () => void;
   isNoteOpen: boolean;
   onToggleNote: () => void;
-  /** Đang nhúng trong 1 cuộc gọi (xem hook useCallEmbed, LessonView.tsx) -
-   * hiện thêm cụm nút PiP/Quay lại phòng học (CallControls.tsx, dùng
-   * CHUNG component với Home.tsx/LessonView.tsx, không tự vẽ lại) ở ngoài
-   * cùng bên phải, y hệt giao diện các trang khác. */
-  showCallControls: boolean;
-  isPipActive: boolean;
 }
 
 const BRUSH_SIZE = 4;
@@ -70,7 +63,7 @@ const GLOW_CURSOR = (() => {
  * đổi tức thì nữa - xem cụm state/effect "Crossfade" bên dưới, canvas A/B
  * dùng CHUNG activeSlot/slotAIndex/slotBIndex với ảnh để luôn khớp trang.
  */
-export default function SlideShow({ images, title, onClose, isBoardOpen, onToggleBoard, isNoteOpen, onToggleNote, showCallControls, isPipActive }: SlideShowProps) {
+export default function SlideShow({ images, title, onClose, isBoardOpen, onToggleBoard, isNoteOpen, onToggleNote }: SlideShowProps) {
   const [index, setIndex] = useState(0);
   const total = images.length;
 
@@ -567,12 +560,6 @@ export default function SlideShow({ images, title, onClose, isBoardOpen, onToggl
             </button>
             <Tooltip label="Ghi chú" />
           </div>
-          {showCallControls && (
-            <>
-              <div className="w-px h-5 bg-white/15 mx-0.5" />
-              <CallControls isPipActive={isPipActive} />
-            </>
-          )}
         </div>
       </div>
 

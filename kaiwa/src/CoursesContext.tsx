@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Course } from '../types';
-import { fetchCourses as fetchCoursesFromDb, fetchCourseLessons, subscribeToCourseChanges } from '../utils/supabaseCourses';
+import { Course } from './types';
+import { fetchCourses as fetchCoursesFromDb, fetchCourseLessons, subscribeToCourseChanges } from './utils/courses/supabaseCourses';
 
 type CoursesContextType = {
   courses: Course[];

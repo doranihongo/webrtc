@@ -6,15 +6,15 @@
     <title>Đăng nhập - DORA ONLINE</title>
     <meta name="robots" content="noindex, nofollow" />
 
-    <link rel="shortcut icon" href="../images/dora-logo.png" />
-    <link rel="apple-touch-icon" href="../images/dora-logo.png" />
+    <link rel="shortcut icon" href="/images/dora-logo.png" />
+    <link rel="apple-touch-icon" href="/images/dora-logo.png" />
 
-    <!-- PWA: cho phép "Thêm vào màn hình chính" ngay từ trang login -
-         giờ đây đây là trang đầu tiên người chưa đăng nhập gặp trên di
-         động, cần đủ thẻ giống landing.html thì trình duyệt mới coi là
-         cài được (apple-touch-icon ở trên phải là PNG, không phải SVG -
-         iOS không render SVG làm touch icon đáng tin cậy). -->
-    <link rel="manifest" href="../manifest.json" />
+    <!-- PWA: cho phép "Thêm vào màn hình chính" ngay từ trang login - đây
+         là trang đầu tiên người chưa đăng nhập gặp trên di động, cần đủ
+         thẻ này thì trình duyệt mới coi là cài được (apple-touch-icon ở
+         trên phải là PNG, không phải SVG - iOS không render SVG làm touch
+         icon đáng tin cậy). -->
+    <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0b1a2e" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -22,9 +22,9 @@
     <meta name="apple-mobile-web-app-title" content="DORA ONLINE" />
 
     <!-- StyleSheet - dùng chung token màu với các trang khác, còn lại
-         là CSS riêng của trang login, không đụng tới landing.css/client.css -->
-    <link rel="stylesheet" href="../css/_tokens.css" />
-    <link rel="stylesheet" href="../css/login.css" />
+         là CSS riêng của trang login -->
+    <link rel="stylesheet" href="/css/_tokens.css" />
+    <link rel="stylesheet" href="/css/login.css" />
 
     <!-- Supabase JS SDK -->
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -148,8 +148,8 @@
       </div>
     </main>
 
-    <script defer src="../js/supabaseClient.js"></script>
-    <script defer src="../js/login.js"></script>
+    <script defer src="/js/supabaseClient.js"></script>
+    <script defer src="/js/login.js"></script>
     <script>
       // Đăng ký service worker để trang này cũng "cài được" (Add to
       // Home Screen) trên di động - không load chung common.js vì

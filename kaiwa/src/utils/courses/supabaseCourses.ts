@@ -1,4 +1,4 @@
-import type { Course, VocabWord, GrammarPoint } from '../types';
+import type { Course, VocabWord, GrammarPoint } from '../../types';
 
 /**
  * Đọc/ghi khóa học + buổi học qua bảng kaiwa_courses/kaiwa_lessons trên

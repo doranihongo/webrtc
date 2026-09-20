@@ -1,17 +1,14 @@
 "use strict";
 
 // ---------------------------------------------------------
-// Icon tài khoản + bảng thông tin ở landing page. Port gần như y hệt
+// Icon tài khoản + bảng thông tin ở trang chủ kaiwa. Port gần như y hệt
 // UserProfileSidebar.tsx bên web "xóa mù kanji" (tên hiển thị, vai
 // trò, số lượng thiết bị, hạn sử dụng, đổi mật khẩu, đăng xuất, popup
 // "Thành công!") - chỉ khác màu sắc, theo đúng Ocean theme của web
 // này. Xem topbar.css cho phần CSS (hiệu ứng trượt vào, popup...).
 // ---------------------------------------------------------
 
-// Avatar icon tài khoản ở landing - CỐ ĐỊNH, luôn là ảnh này, không
-// ngẫu nhiên và không đụng tới localStorage "P2P_SETTINGS.peer_avatar"
-// (đó là avatar RIÊNG dùng trong phòng họp, do client.js tự quản lý,
-// vẫn ngẫu nhiên như cũ - 2 avatar này độc lập với nhau).
+// Avatar icon tài khoản - CỐ ĐỊNH, luôn là ảnh này.
 const ACCOUNT_AVATAR_URL = "https://api.dicebear.com/9.x/thumbs/svg?seed=ghm0gmgl";
 
 const ROLE_LABELS = {

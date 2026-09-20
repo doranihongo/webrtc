@@ -30,10 +30,7 @@ export default function App() {
       document.documentElement.style.overflow = 'hidden';
       document.body.classList.add('global-lock');
     } else {
-      // Nhúng trong cuộc gọi (embed=call) - Home.tsx tự ẩn/quản lý nút này
-      // riêng, không đụng vào ở đây.
-      const embedded = new URLSearchParams(window.location.search).get('embed') === 'call';
-      if (widget && !embedded) widget.style.display = '';
+      if (widget) widget.style.display = '';
 
       const scrollY = document.body.style.top;
       document.body.style.position = '';
@@ -74,12 +71,11 @@ export default function App() {
 
       {activeCourseId && activeLessonId && (
         <div key={activeLessonId} id="lesson-view-container" className="fixed inset-0 z-[200] bg-[linear-gradient(315deg,#16324f_0%,#24406b_45%,#345da7_100%)] overflow-y-auto hide-scrollbar w-full h-[100dvh] flex flex-col">
-          <LessonView 
-            courseId={activeCourseId} 
+          <LessonView
+            courseId={activeCourseId}
             lessonId={activeLessonId}
             onBack={() => setActiveLessonId(null)}
             onHome={navToHome}
-            onSelectLesson={(cId, lId) => { setActiveCourseId(cId); setActiveLessonId(lId); }}
           />
         </div>
       )}

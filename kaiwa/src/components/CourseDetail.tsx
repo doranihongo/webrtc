@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, PlayCircle, ChevronRight, ChevronDown, Check, Lock } from 'lucide-react';
-import { useCourses } from '../context/CoursesContext';
-import { useCallEmbed } from '../hooks/useCallEmbed';
-import { isCourseAllowed } from '../utils/courseAccess';
+import { useCourses } from '../CoursesContext';
+import { isCourseAllowed } from '../utils/courses/courseAccess';
 import { waitForAuthUser } from '../utils/authState';
-import { getCourseStages } from '../utils/courseStages';
-import CallControls from './CallControls';
+import { getCourseStages } from '../utils/courses/courseStages';
 
 
 export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson }: {
@@ -15,9 +13,7 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
   onSelectLesson: (lId: string) => void
 }) {
   const { courses, loadedCourseDetails, loadCourseDetails, detailsLoading } = useCourses();
-  const profile: any = null;
   const [showExitConfirm, setShowExitConfirm] = useState(false);
-  const { showCallControls, isPipActive } = useCallEmbed();
   // Tập hợp chặng đang mở (accordion "KHỞI ĐỘNG/TĂNG TỐC/VỀ ĐÍCH" - xem
   // utils/courseStages.ts) - mỗi chặng đóng/mở ĐỘC LẬP (mở chặng này không
   // tự đóng chặng khác), khác với accordion Từ vựng/Ngữ pháp trong
@@ -150,11 +146,7 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
             <img src="https://i.ibb.co/GvC0pFmy/Logo-tr-ng.png" alt="DORA" className="h-8 object-contain -mt-[5px]" />
           </div>
           <div className="flex items-center gap-3 sm:gap-6">
-            {showCallControls ? (
-              <CallControls isPipActive={isPipActive} />
-            ) : (
-              <button onClick={() => setShowExitConfirm(true)} className="h-10 px-3 sm:px-4 hover:text-blue-200 transition-colors uppercase border border-white/20 rounded-lg hover:border-white/40 text-xs sm:text-sm font-semibold text-white flex items-center justify-center whitespace-nowrap">Trang chủ</button>
-            )}
+            <button onClick={() => setShowExitConfirm(true)} className="h-10 px-3 sm:px-4 hover:text-blue-200 transition-colors uppercase border border-white/20 rounded-lg hover:border-white/40 text-xs sm:text-sm font-semibold text-white flex items-center justify-center whitespace-nowrap">Trang chủ</button>
           </div>
         </div>
       </nav>

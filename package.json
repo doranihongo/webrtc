@@ -1,7 +1,7 @@
 {
   "name": "mirotalk",
   "version": "1.8.75",
-  "description": "A free WebRTC browser-based video call",
+  "description": "Dora Kaiwa - Japanese learning platform",
   "main": "server.js",
   "scripts": {
     "build": "node scripts/build.js",
@@ -11,8 +11,6 @@
     "start-dev": "nodemon app/src/server.js",
     "test": "mocha tests/*.js",
     "lint": "npx prettier --write .",
-    "mailpit:up": "docker-compose -f docker-compose-mailpit.yml up -d",
-    "mailpit:down": "docker-compose -f docker-compose-mailpit.yml down",
     "docker:build": "docker build --tag mirotalk/p2p:latest .",
     "docker:rmi": "docker images |grep '<none>' |awk '{print $3}' |xargs docker rmi",
     "docker:push": "docker push mirotalk/p2p:latest",
@@ -32,16 +30,10 @@
     "url": "git+https://github.com/miroslavpejic85/mirotalk"
   },
   "keywords": [
-    "webrtc",
-    "socket.io",
-    "p2p",
     "nodejs",
-    "video",
-    "audio",
     "oidc",
     "client",
-    "server",
-    "streaming"
+    "server"
   ],
   "author": "Miroslav Pejic",
   "license": "AGPL-3.0",
@@ -51,15 +43,11 @@
     "@capacitor/browser": "^8.0.4",
     "@capacitor/core": "^8.5.0",
     "@capacitor/ios": "^8.5.0",
-    "@mattermost/client": "11.9.0",
-    "@ngrok/ngrok": "1.7.0",
     "@sentry/node": "^10.69.0",
     "axios": "^1.19.0",
-    "chokidar": "^5.0.0",
     "colors": "^1.4.0",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
-    "crypto-js": "^4.2.0",
     "dompurify": "^3.4.12",
     "dotenv": "^17.4.2",
     "esbuild": "^0.28.2",
@@ -69,14 +57,7 @@
     "he": "^1.2.0",
     "helmet": "^8.3.0",
     "httpolyglot": "0.1.2",
-    "js-yaml": "^5.2.2",
-    "jsdom": "^30.0.1",
-    "jsonwebtoken": "^9.0.3",
-    "nodemailer": "^9.0.3",
-    "qs": "^6.15.3",
-    "socket.io": "^4.8.3",
-    "swagger-ui-express": "^5.0.1",
-    "uuid": "14.0.1"
+    "jsdom": "^30.0.1"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.0",

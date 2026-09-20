@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { BookOpen, ChevronRight, MessageCircle, MessagesSquare, Lock, Unlock, Library, Users, Wrench, Repeat, Headphones, Mic, X, Film, PlayCircle, Video, PictureInPicture } from 'lucide-react';
-import { useCourses } from '../context/CoursesContext';
-import { isCourseAllowed } from '../utils/courseAccess';
+import { BookOpen, ChevronRight, MessageCircle, MessagesSquare, Lock, Unlock, Library, Users, Wrench, Repeat, Headphones, Mic, X, Film } from 'lucide-react';
+import { useCourses } from '../CoursesContext';
+import { isCourseAllowed } from '../utils/courses/courseAccess';
 import { waitForAuthUser } from '../utils/authState';
 import KaiwaModal from './KaiwaModal';
 import DictationModal from './DictationModal';
@@ -42,12 +42,6 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
   const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
   const [activeToolModal, setActiveToolModal] = useState<string | null>(null);
 
-  // Đang được nhúng (iframe) trong 1 cuộc gọi đang diễn ra (client.js
-  // mở overlay này khi giáo viên/admin bấm nút "Trang chủ" góc dưới-trái
-  // trong phòng gọi - xem setGoHomeCornerBtn trong public/js/client.js).
-  // Chỉ giaovien/admin mới thấy nút "Quay lại phòng học" - học viên vào
-  // link này (nếu có) vẫn thấy nút "Phòng học" bình thường.
-  const [isEmbeddedInCall, setIsEmbeddedInCall] = useState(false);
   const [userRole, setUserRole] = useState<string | undefined>(undefined);
   // window.__authUser.allowedCourses (cột `allowed_courses` trong
   // `profiles`) - xem kaiwa/src/utils/courseAccess.ts. Đợi qua
@@ -58,30 +52,10 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
   // false (mới mount, đang đợi authGuard ở common.js chạy xong) KHÔNG được
   // coi khóa học là "đang khóa": userRole/allowedCourses vẫn còn giá trị
   // khởi tạo rỗng lúc đó, nếu tính isAllowed ngay sẽ nháy "Đang khóa" cho
-  // mọi khóa kể cả với tài khoản admin/giáo viên - dễ thấy nhất khi trang
-  // này được tải ngầm trong iframe lúc đang gọi (isEmbeddedInCall, xem
-  // useCallEmbed.ts), lúc mạng/CPU đang bận rộn cho WebRTC nên authGuard
-  // có thể chậm hơn bình thường.
+  // mọi khóa kể cả với tài khoản admin/giáo viên.
   const [authChecked, setAuthChecked] = useState(false);
-  // Trạng thái PiP thật bên trang gọi (client.js) - chỉ có ý nghĩa khi
-  // isEmbeddedInCall, đồng bộ qua postMessage "dora:pipState" (xem
-  // useEffect bên dưới + sendPipStateToKaiwa trong public/js/client.js).
-  const [isPipActive, setIsPipActive] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const embedded = params.get('embed') === 'call';
-    setIsEmbeddedInCall(embedded);
-
-    // Nhúng trong cuộc gọi - ẩn nút tài khoản tĩnh (#kaiwaAccountWidget,
-    // xem kaiwa/index.html), nó đè đúng chỗ 2 nút PiP/quay-lại-phòng-học
-    // mới thêm trong nav và không cần thiết khi chỉ ghé trang chủ tạm
-    // giữa lúc gọi.
-    if (embedded) {
-      const widget = document.getElementById('kaiwaAccountWidget');
-      if (widget) widget.style.display = 'none';
-    }
-
     // waitForAuthUser() tự đợi window.__authReady xuất hiện rồi mới đọc,
     // thay vì coi ngay là "chưa đăng nhập" nếu authGuard (common.js) chưa
     // kịp chạy tới - xem giải thích đầy đủ trong utils/authState.ts.
@@ -93,28 +67,6 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
       setAuthChecked(true);
     });
   }, []);
-
-  const showReturnToCall =
-    isEmbeddedInCall && (userRole === 'giaovien' || userRole === 'admin');
-
-  // Đồng bộ trạng thái nút "PiP": xin trạng thái hiện tại ngay khi nút
-  // này bắt đầu hiện (overlay có thể đã tải ngầm từ trước, nên PiP có
-  // thể đã bật sẵn), rồi lắng nghe mọi lần đổi trạng thái tiếp theo (bật
-  // qua nút thật trong phòng gọi, hoặc tắt qua nút X cửa sổ PiP thật...).
-  useEffect(() => {
-    if (!showReturnToCall) return;
-
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === 'dora:pipState') {
-        setIsPipActive(!!event.data.active);
-      }
-    };
-    window.addEventListener('message', onMessage);
-    window.parent.postMessage({ type: 'dora:requestPipState' }, window.location.origin);
-
-    return () => window.removeEventListener('message', onMessage);
-  }, [showReturnToCall]);
 
   useEffect(() => {
     if (isHiddenByOverlay) return;
@@ -133,15 +85,12 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
   // cao hơn mọi popup full-screen của Home (Shadowing/Nghe chính tả/Luyện
   // phát âm dùng z-[500]/z-[200], Tài liệu tham khảo z-[200]), nên đè lên
   // đúng góc trên-phải của các popup này (chỗ nút đóng). Ẩn nút đi trong
-  // lúc 1 trong các popup đó đang mở, hiện lại khi đóng - trừ khi vẫn
-  // đang nhúng trong cuộc gọi (embed=call, widget đã bị ẩn hẳn ở effect
-  // phía trên rồi, không được hiện nhầm lại).
+  // lúc 1 trong các popup đó đang mở, hiện lại khi đóng.
   useEffect(() => {
-    if (isEmbeddedInCall) return;
     const widget = document.getElementById('kaiwaAccountWidget');
     if (!widget) return;
     widget.style.display = (isDocsModalOpen || activeToolModal) ? 'none' : '';
-  }, [isDocsModalOpen, activeToolModal, isEmbeddedInCall]);
+  }, [isDocsModalOpen, activeToolModal]);
 
   return (
     <div className={`min-h-screen flex flex-col font-sans ${showLogoutConfirm ? 'h-screen overflow-hidden' : ''}`}>
@@ -150,77 +99,10 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
              <div className="flex items-center gap-3 text-blue-700">
                <img src="https://i.ibb.co/GvC0pFmy/Logo-tr-ng.png" alt="DORA" className="h-8 object-contain -mt-[5px]" />
              </div>
-
-             {/* Nhúng trong cuộc gọi (embed=call) - thay vì nút tài khoản
-                 (bị ẩn ở useEffect trên), hiện 2 nút nhanh: "PiP" (bật/tắt
-                 cửa sổ nổi qua postMessage "dora:togglePip", không rời
-                 trang chủ) và icon máy quay (quay lại phòng học ngay,
-                 cùng "dora:returnToCall" với nút thẻ gradient bên dưới -
-                 nháy animate-pulse giống thẻ đó để luôn nổi bật). Nút PiP
-                 cố tình giữ NGUYÊN màu sắc/hình dáng của newPipBtn thật
-                 trong thanh điều khiển phòng gọi (client.html) - icon
-                 vuông, nền slate khi tắt, xanh dương khi bật - để người
-                 dùng nhận ra ngay đây là cùng 1 nút, không phải nút mới lạ. */}
-             {showReturnToCall && (
-               <div className="flex items-center gap-2">
-                 <button
-                    onClick={() => window.parent.postMessage({ type: 'dora:togglePip' }, window.location.origin)}
-                    title={isPipActive ? 'Tắt cửa sổ nổi (PiP)' : 'Bật cửa sổ nổi (PiP)'}
-                    className={`flex items-center justify-center p-2.5 rounded-xl transition-all ${
-                      isPipActive
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white/10 hover:bg-white/20 text-white'
-                    }`}
-                 >
-                    <PictureInPicture className="w-5 h-5" />
-                 </button>
-                 <button
-                    onClick={() => window.parent.postMessage({ type: 'dora:returnToCall' }, window.location.origin)}
-                    title="Quay lại phòng học"
-                    className="flex items-center justify-center w-9 h-9 rounded-xl text-white bg-[linear-gradient(135deg,#3b82f6_0%,#a855f7_35%,#ec4899_65%,#f97316_100%)] shadow-md hover:brightness-110 transition-all animate-pulse"
-                 >
-                    <Video className="w-4 h-4" />
-                 </button>
-               </div>
-             )}
           </div>
        </nav>
 
        <main className="flex-1 max-w-6xl w-full mx-auto p-4 md:p-8 flex flex-col gap-8 mb-12">
-
-          {/* Phòng học - vào phòng học trực tuyến (trước đây là nút
-              "Vào phòng học" ở nav, giờ là 1 mục riêng phía trên khu vực
-              khóa học) */}
-          <button
-             onClick={() => {
-               if (showReturnToCall) {
-                 // Đang nhúng trong cuộc gọi - báo cho client.js đóng
-                 // overlay lại (không điều hướng gì cả, cuộc gọi phía
-                 // dưới chưa từng dừng nên quay lại tức thì).
-                 window.parent.postMessage({ type: 'dora:returnToCall' }, window.location.origin);
-               } else {
-                 window.location.href = '/join';
-               }
-             }}
-             className={`w-full flex items-center gap-4 p-5 md:p-6 rounded-3xl text-white transition-all group text-left mt-2 ${
-               showReturnToCall
-                 ? 'bg-[linear-gradient(135deg,#3b82f6_0%,#a855f7_35%,#ec4899_65%,#f97316_100%)] shadow-[0_20px_48px_rgba(236,72,153,0.4)] animate-pulse'
-                 : 'bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 shadow-[0_20px_48px_rgba(75,180,222,0.25)] hover:shadow-[0_20px_48px_rgba(75,180,222,0.4)] hover:brightness-110'
-             }`}
-          >
-             <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
-                <Video className="w-7 h-7" />
-             </div>
-             <div className="flex-1 min-w-0">
-                <h3 className="text-lg md:text-xl font-bold uppercase">
-                  {showReturnToCall ? 'Quay lại phòng học' : 'Phòng học'}
-                </h3>
-                <p className={`text-sm font-medium ${showReturnToCall ? 'text-white/85' : 'text-blue-100'}`}>
-                  {showReturnToCall ? 'Đang trong cuộc gọi - bấm để quay lại' : 'Vào lớp học trực tuyến cùng giáo viên'}
-                </p>
-             </div>
-             <ChevronRight className="w-6 h-6 text-white/80 group-hover:translate-x-1 transition-transform shrink-0" />
-          </button>
 
           {/* Courses Section */}
           <section className="flex flex-col gap-8">
@@ -282,14 +164,6 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
                            Đang khóa
                          </div>
                        )}
-                       <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2 items-end pointer-events-none">
-                         {isAllowed && course.lessons && course.lessons.filter((l: any) => l.youtubeLink || l.videoId).length > 0 && (
-                           <div className="bg-white/90 backdrop-blur-sm px-3.5 py-1.5 rounded-full text-xs font-bold text-blue-700 shadow-md shadow-black/10 flex items-center gap-1.5">
-                             <PlayCircle className="w-4 h-4" />
-                             {course.lessons.filter((l: any) => l.youtubeLink || l.videoId).length} Video
-                           </div>
-                         )}
-                       </div>
                      </div>
                      
                      {/* Thông tin khóa học & Nút bấm */}
@@ -321,11 +195,7 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
              </div>
           </section>
 
-          {/* Tools + Resources Section - ẩn khi đang nhúng trong cuộc gọi
-              (embed=call): chỉ ghé trang chủ tạm để xem khóa học/buổi học,
-              không cần các mục này, đỡ phải cuộn nhiều. */}
-          {!isEmbeddedInCall && (
-            <>
+          {/* Tools + Resources Section */}
           <section className="bg-surface p-6 md:p-8 rounded-3xl border border-surface-border shadow-sm relative overflow-hidden">
              <div className="border-b border-surface-border pb-4 mb-6">
                 <h3 className="text-lg font-bold text-white uppercase flex items-center gap-2.5">
@@ -392,8 +262,6 @@ export default function Home({ onSelectCourse, onLogout, isHiddenByOverlay }: { 
                    })}
                  </div>
           </section>
-            </>
-          )}
        </main>
        
        <footer className="py-6 sm:h-14 sm:py-0 flex-shrink-0 px-6 border-t border-white/10 flex flex-col-reverse sm:flex-row items-center justify-between gap-4 text-[#8fb0ce] text-xs font-semibold tracking-widest mt-auto">

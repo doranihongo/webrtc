@@ -47,22 +47,13 @@ if (isStandalonePwa) {
 }
 
 // ---------------------------------------------------------
-// Auth guard - chạy trên cả landing page lẫn trang phòng (client.html).
+// Auth guard - chạy trên mọi trang có gắn script này (kaiwa, login).
 // Chưa đăng nhập / role không hợp lệ -> đá về trang login, kèm đường
 // dẫn hiện tại để login xong quay lại đúng chỗ.
 //
 // LƯU Ý: đây chỉ là lớp chặn ở giao diện, không phải lớp bảo mật thật -
-// server vẫn phải tự verify token khi client connect Socket.IO (xem
-// server.js), vì HTML/JS phía client luôn có thể bị bỏ qua/sửa được.
-// window.__authToken được lưu lại ở đây để client.js gắn kèm khi
-// connect Socket.IO.
-//
-// window.__authReady là Promise của lần chạy authGuard này - client.js
-// PHẢI await cái này trước khi gọi io(...), nếu không __authToken vẫn
-// còn undefined lúc đó (authGuard cần đợi 2 lượt gọi Supabase, còn
-// initClientPeer() chạy gần như ngay lập tức lúc DOMContentLoaded) ->
-// socket gửi token null -> server từ chối -> client không báo lỗi gì,
-// treo mãi ở màn hình vào phòng.
+// server vẫn phải tự verify các request nhạy cảm (xem server.js), vì
+// HTML/JS phía client luôn có thể bị bỏ qua/sửa được.
 // ---------------------------------------------------------
 function redirectToLogin() {
   const returnTo = window.location.pathname + window.location.search;
@@ -70,12 +61,11 @@ function redirectToLogin() {
     "/login?redirect=" + encodeURIComponent(returnTo);
 }
 
-// Trang (landing.html/client.html) tự gắn sẵn class "auth-pending" lên
-// <html> + CSS ẩn <body> bằng visibility:hidden, để tránh nội dung
-// hiện ra chớp nhoáng rồi mới bị đá về /login (authGuard chạy chậm hơn
-// 1 nhịp so với lúc HTML paint lần đầu vì phải chờ Supabase). Gỡ ở đây
-// khi xác thực xong. Không gỡ ở nhánh redirect - trang sắp điều hướng
-// đi rồi nên cứ để ẩn cho tới lúc đó.
+// Trang tự gắn sẵn class "auth-pending" lên <html> + CSS ẩn <body> bằng
+// visibility:hidden, để tránh nội dung hiện ra chớp nhoáng rồi mới bị đá
+// về /login (authGuard chạy chậm hơn 1 nhịp so với lúc HTML paint lần đầu
+// vì phải chờ Supabase). Gỡ ở đây khi xác thực xong. Không gỡ ở nhánh
+// redirect - trang sắp điều hướng đi rồi nên cứ để ẩn cho tới lúc đó.
 function revealPage() {
   document.documentElement.classList.remove("auth-pending");
 }
@@ -84,17 +74,10 @@ function revealPage() {
 // hình trắng mãi mãi.
 setTimeout(revealPage, 6000);
 // decodeJwtIssuedAtMs() dùng ở đây được định nghĩa chung trong
-// supabaseClient.js (load trước common.js ở cả landing.html/client.html).
+// supabaseClient.js (load trước common.js).
 
-// Trang này còn được tải trong 1 iframe ẨN, nạp NGẦM ngay lúc vào phòng
-// gọi (kaiwaOverlayIframe, xem setGoHomeCornerBtn trong
-// public/js/client.js) - cạnh tranh CPU/băng thông trực tiếp với WebRTC
-// đang khởi động, và (khác landing/client.html) sẽ KHÔNG BAO GIỜ được tải
-// lại lần nào khác trong suốt cuộc gọi. Nếu truy vấn "profiles" bị lỗi
-// mạng/timeout thoáng qua đúng lúc đó, nhánh xử lý lỗi bên dưới vốn chủ ý
-// "để lần tải trang sau tự thử lại" (không đăng xuất) sẽ không còn cơ hội
-// thử lại nào nữa với trang này - window.__authUser bị bỏ trống vĩnh viễn,
-// khiến kaiwa hiện toàn bộ khóa học là "đang khóa" dù tài khoản có quyền.
+// Nếu truy vấn "profiles" bị lỗi mạng/timeout thoáng qua, nhánh xử lý lỗi
+// bên dưới vốn chủ ý "để lần tải trang sau tự thử lại" (không đăng xuất).
 // Tự thử lại vài lần ở đây trước khi coi là lỗi mạng thật sự.
 const PROFILE_FETCH_RETRIES = 3;
 const PROFILE_FETCH_RETRY_DELAY_MS = 1200;
@@ -201,7 +184,7 @@ window.__authReady = (async function authGuard() {
     }
 
     window.__authToken = session.access_token;
-    // Dùng cho icon tài khoản/bảng thông tin ở góc trên phải (landing.html)
+    // Dùng cho icon tài khoản/bảng thông tin ở góc trên phải
     window.__authUser = {
       id: session.user.id,
       email: session.user.email,
@@ -234,194 +217,3 @@ window.__authReady = (async function authGuard() {
   }
 })();
 
-/**
- * Phát âm thanh - bản rút gọn dùng riêng cho trang landing (chưa vào
- * phòng nên chưa có bảng cài đặt tắt âm như trong client.js)
- * @param {string} name tên file .mp3 trong thư mục /sounds
- */
-async function playSound(name) {
-  try {
-    const audio = new Audio(`../sounds/${name}.mp3`);
-    audio.volume = 0.5;
-    await audio.play();
-  } catch (err) {
-    // Autoplay bị chặn (Safari) hoặc file không tồn tại - bỏ qua
-  }
-}
-
-/**
- * Tạo mã phòng ngẫu nhiên 10 ký tự: chỉ chữ IN HOA + số, luôn có ít nhất
- * 1 chữ và 1 số (không phải ngẫu nhiên thuần có thể ra toàn chữ/toàn số)
- */
-function getRandomRoomCode() {
-  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  const digits = "0123456789";
-  const all = letters + digits;
-  const pick = (chars) => chars.charAt(Math.floor(Math.random() * chars.length));
-
-  const result = [pick(letters), pick(digits)];
-  for (let i = result.length; i < 10; i++) {
-    result.push(pick(all));
-  }
-  // Fisher-Yates shuffle so the guaranteed letter/digit aren't always
-  // stuck in the first two positions
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result.join("");
-}
-
-/**
- * Hiệu ứng xáo trộn ký tự (Shuffle text) cho ô nhập tên phòng
- */
-function shuffleText(input, finalValue, duration = 600) {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  const steps = 10;
-  const interval = duration / steps;
-  let step = 0;
-
-  input.classList.add("shuffle-active");
-
-  const timer = setInterval(() => {
-    step++;
-    const progress = step / steps;
-    let display = "";
-    for (let i = 0; i < finalValue.length; i++) {
-      if (i < finalValue.length * progress) {
-        display += finalValue[i];
-      } else {
-        display += chars[Math.floor(Math.random() * chars.length)];
-      }
-    }
-    input.value = display;
-
-    if (step >= steps) {
-      clearInterval(timer);
-      input.value = finalValue;
-      setTimeout(() => input.classList.remove("shuffle-active"), 300);
-    }
-  }, interval);
-}
-
-// ---------------------------------------------------------
-// 1. Tự động điền tên phòng ngẫu nhiên khi mới vào trang - TRỪ học
-//    viên (role "hocvien"): học viên không tự tạo phòng được (server
-//    chặn ở handler "join" trong server.js nếu phòng chưa có giáo
-//    viên/admin), nên để trống bắt phải tự gõ/dán (Ctrl+V) đúng mã
-//    phòng giáo viên gửi - không có nút xáo trộn mã ngẫu nhiên nữa.
-//    Phải chờ authGuard (window.__authReady) xong mới biết role, nên
-//    khối này giờ chạy async thay vì đồng bộ ngay lúc tải trang.
-// ---------------------------------------------------------
-const roomName = document.getElementById("roomName");
-const genRoomButton = document.getElementById("genRoomButton");
-
-async function setupRoomCodeInput() {
-  if (!roomName) return; // trang này không có ô nhập mã phòng (client.html)
-
-  if (window.__authReady) {
-    await window.__authReady;
-  }
-  const isHocvien = window.__authUser?.role === "hocvien";
-
-  if (isHocvien) {
-    roomName.value = "";
-    // Không có nút xáo trộn/dán gì cho học viên - chỉ tự gõ/dán thủ
-    // công (Ctrl+V) mã phòng giáo viên gửi.
-    if (genRoomButton) {
-      genRoomButton.style.display = "none";
-      // Nút đã ẩn nhưng ô input vẫn chừa padding-right cho nó theo CSS
-      // mặc định - gắn class này để trả padding về căn giữa lại (xem
-      // .room-input-wrap.no-gen-btn trong landing.css).
-      genRoomButton.closest(".room-input-wrap")?.classList.add("no-gen-btn");
-    }
-  } else {
-    shuffleText(roomName, getRandomRoomCode());
-    setupGenRoomButton();
-  }
-
-  // Bấm Enter ở ô nhập tên phòng để truy cập
-  roomName.onkeyup = (e) => {
-    if (e.keyCode === 13) {
-      e.preventDefault();
-      joinRoom();
-    }
-  };
-}
-
-/**
- * Nút xáo trộn mã phòng ngẫu nhiên - hành vi gốc, dùng cho
- * admin/giaovien (và khi Supabase chưa cấu hình, chưa có role).
- */
-function setupGenRoomButton() {
-  if (!genRoomButton) return;
-  genRoomButton.onclick = (e) => {
-    e.preventDefault();
-    playSound("locked");
-    genRoomButton.classList.remove("spin");
-    void genRoomButton.offsetWidth; // Kích hoạt lại animation
-    genRoomButton.classList.add("spin");
-    shuffleText(roomName, getRandomRoomCode());
-  };
-  genRoomButton.addEventListener("animationend", () => {
-    genRoomButton.classList.remove("spin");
-  });
-}
-
-
-setupRoomCodeInput();
-
-// ---------------------------------------------------------
-// 2. Hiển thị phòng truy cập gần nhất (Last Room)
-// ---------------------------------------------------------
-const lastRoomContainer = document.getElementById("lastRoomContainer");
-const lastRoom = document.getElementById("lastRoom");
-const lastRoomName = window.localStorage.lastRoom
-  ? window.localStorage.lastRoom
-  : "";
-
-if (lastRoomContainer && lastRoom && lastRoomName) {
-  lastRoom.setAttribute("href", "/join/" + lastRoomName);
-  lastRoom.innerText = lastRoomName;
-  lastRoomContainer.style.display = "inline-flex"; // Hiển thị nếu có dữ liệu
-}
-
-// ---------------------------------------------------------
-// 3. Xử lý nút "Tham gia" (nút tạo/xáo trộn mã phòng đã chuyển vào
-//    setupRoomCodeInput() ở trên, vì cần biết role trước - trừ khi là
-//    học viên, đổi thành nút "Dán")
-// ---------------------------------------------------------
-const joinRoomButton = document.getElementById("joinRoomButton");
-
-if (joinRoomButton) {
-  joinRoomButton.onclick = (e) => {
-    e.preventDefault();
-    joinRoom();
-  };
-}
-
-/**
- * Xử lý kiểm tra tên và chuyển hướng người dùng vào phòng
- */
-function joinRoom() {
-  const inputVal = document.getElementById("roomName").value;
-  // Lọc XSS và định dạng lại tên phòng (đổi dấu cách thành gạch ngang)
-  const room = filterXSS(inputVal).trim().replace(/\s+/g, "-");
-
-  if (!room) {
-    popup("warning", "Tên phòng đang trống!\nVui lòng nhập tên phòng.");
-    return;
-  }
-
-  // Chặn lỗi Path Traversal
-  const pathTraversalPattern = /(\.\.(\/|\\))+/;
-  if (pathTraversalPattern.test(room)) {
-    popup("warning", "Tên phòng không hợp lệ!");
-    return;
-  }
-
-  // Lưu phòng vào LocalStorage để lần sau hiển thị ở "Last Room"
-  window.localStorage.lastRoom = room;
-  // Chuyển hướng người dùng vào URL phòng họp
-  window.location.href = "/join/" + room;
-}

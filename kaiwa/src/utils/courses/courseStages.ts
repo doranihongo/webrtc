@@ -1,4 +1,4 @@
-import type { Lesson } from '../types';
+import type { Lesson } from '../../types';
 
 /**
  * Chia buổi học của 1 khóa thành các "chặng" hiển thị dạng accordion trên

@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, BookOpen, ExternalLink, Languages, ListChecks, ChevronDown, MonitorPlay, Layers, Volume2, Mic } from 'lucide-react';
-import { useCourses } from '../context/CoursesContext';
-import { useCallEmbed } from '../hooks/useCallEmbed';
-import CallControls from './CallControls';
-import SlideShow from './SlideShow';
-import Blackboard from './Blackboard';
-import NotePad from './NotePad';
+import { useCourses } from '../CoursesContext';
+import { waitForAuthUser } from '../utils/authState';
+import SlideShow from './slideshow/SlideShow';
+import Blackboard from './slideshow/Blackboard';
+import NotePad from './slideshow/NotePad';
 import FlashcardModal from './FlashcardModal';
-import HomeworkModal from './HomeworkModal';
-import { buildRawSlideUrls } from '../utils/buildRawSlideUrls';
-import { signSlideUrls, SignSlideUrlsError } from '../utils/signSlideUrls';
-import { readCachedSignedSlides, writeCachedSignedSlides } from '../utils/signedSlideUrlCache';
-import { activateSlideBlobCache, getCachedSlideBlob, loadSlideBlob } from '../utils/slideBlobCache';
+import HomeworkModal from './homework/HomeworkModal';
+import { buildRawSlideUrls } from '../utils/slides/buildRawSlideUrls';
+import { signSlideUrls, SignSlideUrlsError } from '../utils/slides/signSlideUrls';
+import { readCachedSignedSlides, writeCachedSignedSlides } from '../utils/slides/signedSlideUrlCache';
+import { activateSlideBlobCache, getCachedSlideBlob, loadSlideBlob } from '../utils/slides/slideBlobCache';
 import { fetchHomeworksForLesson, fetchMySubmissions, subscribeToMySubmissionChanges } from '../utils/supabaseHomework';
 import type { VocabWord, GrammarPoint, Homework } from '../types';
 
@@ -65,7 +64,6 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   lessonId: string,
   onBack: () => void,
   onHome: () => void,
-  onSelectLesson?: (cId: string, lId: string) => void
 }) {
   const { courses, loadedCourseDetails, detailsLoading } = useCourses();
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -88,7 +86,10 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
   const [isBoardOpen, setIsBoardOpen] = useState(false);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
-  const { showCallControls, isPipActive, userRole, isEmbeddedInCall } = useCallEmbed();
+  const [userRole, setUserRole] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    waitForAuthUser().then((authUser) => setUserRole(authUser?.role));
+  }, []);
   // Chỉ giaovien/admin mới thấy nút "Slide" - học viên không có.
   const isTeacherOrAdmin = userRole === 'giaovien' || userRole === 'admin';
   const isStudent = userRole === 'hocvien';
@@ -546,11 +547,7 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
             <img src="https://i.ibb.co/GvC0pFmy/Logo-tr-ng.png" alt="DORA" className="h-8 object-contain -mt-[5px]" />
           </div>
           <div className="flex items-center gap-3 sm:gap-6">
-            {showCallControls ? (
-              <CallControls isPipActive={isPipActive} />
-            ) : (
-              <button onClick={() => setShowExitConfirm(true)} className="h-10 px-3 sm:px-4 hover:text-blue-200 transition-colors uppercase border border-white/20 rounded-lg hover:border-white/40 text-xs sm:text-sm font-semibold text-white flex items-center justify-center whitespace-nowrap">Trang chủ</button>
-            )}
+            <button onClick={() => setShowExitConfirm(true)} className="h-10 px-3 sm:px-4 hover:text-blue-200 transition-colors uppercase border border-white/20 rounded-lg hover:border-white/40 text-xs sm:text-sm font-semibold text-white flex items-center justify-center whitespace-nowrap">Trang chủ</button>
           </div>
         </div>
       </nav>
@@ -818,8 +815,6 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
           onToggleBoard={() => setIsBoardOpen((v) => !v)}
           isNoteOpen={isNoteOpen}
           onToggleNote={() => setIsNoteOpen((v) => !v)}
-          showCallControls={showCallControls}
-          isPipActive={isPipActive}
         />
       )}
 
@@ -848,7 +843,6 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
         homeworks={homeworks}
         lessonId={lessonId}
         userRole={userRole}
-        isEmbeddedInCall={isEmbeddedInCall}
       />
 
       {/* Exit Confirmation Modal */}
