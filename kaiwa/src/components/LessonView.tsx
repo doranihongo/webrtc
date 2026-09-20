@@ -683,9 +683,12 @@ export default function LessonView({ courseId, lessonId, onBack, onHome }: {
                           <p className="text-sm text-zinc-600 font-medium">{g.meaning}</p>
                           {g.exampleJapanese && (
                             <div className="mt-1.5 pt-2.5 border-t border-blue-100 flex flex-col gap-0.5">
-                              <p className="font-jp text-sm text-zinc-800 font-bold">{renderFurigana(g.exampleJapanese)}</p>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md w-fit mb-1">
+                                Ví dụ
+                              </span>
+                              <p className="font-jp text-base md:text-lg text-zinc-800 font-bold">{renderFurigana(g.exampleJapanese)}</p>
                               {g.exampleVietnamese && (
-                                <p className="text-xs text-zinc-600 font-bold">{g.exampleVietnamese}</p>
+                                <p className="text-sm text-zinc-600 font-bold">{g.exampleVietnamese}</p>
                               )}
                             </div>
                           )}
