@@ -25,6 +25,11 @@ const COURSE_STAGE_CONFIG: Record<string, { label: string; count: number }[]> = 
     { label: 'TĂNG TỐC', count: 13 },
     { label: 'VỀ ĐÍCH', count: 10 },
   ],
+  'kaiwa trung cấp': [
+    { label: 'KHỞI ĐỘNG', count: 12 },
+    { label: 'TĂNG TỐC', count: 12 },
+    { label: 'VỀ ĐÍCH', count: 6 },
+  ],
 };
 
 export interface CourseStage {
