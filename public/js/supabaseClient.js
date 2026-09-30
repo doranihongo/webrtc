@@ -80,7 +80,8 @@ async function syncAuthCookie() {
 // token (Supabase SDK tự làm ngầm), đăng xuất. Cũng tự fire 1 lần lúc
 // mới subscribe với session hiện có (khôi phục từ localStorage nếu có),
 // nên hầu hết các trang không cần tự gọi syncAuthCookie() thủ công.
-supabaseClient.auth.onAuthStateChange((_event, session) => {
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  if (event === "SIGNED_OUT") clearAccountCache();
   syncAuthCookieValue(session?.access_token || null);
 });
 
@@ -112,6 +113,7 @@ function isAuthInvalidError(err) {
  * tính là cùng 1 thiết bị cũ, không tốn thêm suất max_devices.
  */
 function hardResetSupabaseSession() {
+  clearAccountCache();
   try {
     const projectRef = new URL(SUPABASE_URL).hostname.split(".")[0];
     localStorage.removeItem(`sb-${projectRef}-auth-token`);
@@ -189,6 +191,46 @@ function getDeviceId() {
   return deviceId;
 }
 
+// Cache ngắn hạn trong sessionStorage (dùng chung giữa các tab cùng phiên
+// và iframe kaiwa cùng origin) cho những dữ liệu chỉ đổi khi admin sửa tay
+// trên Supabase. Mỗi request tới Supabase đều tính vào Log Ingestion (kèm
+// cả request OPTIONS của CORS) nên không đọc lại profiles/user_devices ở
+// mỗi lần tải trang. Admin sửa profile sẽ có hiệu lực sau tối đa TTL này
+// (server.js vẫn kiểm tra thật ở phía server).
+const CACHE_TTL_MS = 5 * 60 * 1000;
+// Chỉ ghi last_active lên user_devices nếu lần ghi trước đã quá lâu.
+const DEVICE_TOUCH_INTERVAL_MS = 10 * 60 * 1000;
+
+function readCache(key) {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const { at, value } = JSON.parse(raw);
+    if (Date.now() - at > CACHE_TTL_MS) return null;
+    return value;
+  } catch (err) {
+    return null;
+  }
+}
+
+function writeCache(key, value) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), value }));
+  } catch (err) {
+    // best effort - thiếu cache chỉ tốn thêm request, không ảnh hưởng đúng sai
+  }
+}
+
+function clearAccountCache() {
+  try {
+    Object.keys(sessionStorage)
+      .filter((k) => k.startsWith("acct_"))
+      .forEach((k) => sessionStorage.removeItem(k));
+  } catch (err) {
+    // best effort
+  }
+}
+
 /**
  * Kiểm tra hạn sử dụng + giới hạn thiết bị cho 1 tài khoản đã đăng
  * nhập hợp lệ (role/is_first_login/password_changed_at đã pass hết).
@@ -209,9 +251,14 @@ async function checkAccountAccess(userId, profile) {
   }
 
   const deviceId = getDeviceId();
+
+  // Thiết bị này đã được xác nhận gần đây -> khỏi đọc/ghi user_devices nữa.
+  const deviceCacheKey = `acct_device_${userId}_${deviceId}`;
+  if (readCache(deviceCacheKey)) return { ok: true };
+
   const { data: devices, error } = await supabaseClient
     .from("user_devices")
-    .select("id, device_id")
+    .select("id, device_id, last_active")
     .eq("user_id", userId);
 
   if (error) {
@@ -226,10 +273,16 @@ async function checkAccountAccess(userId, profile) {
 
   const existing = devices?.find((d) => d.device_id === deviceId);
   if (existing) {
-    await supabaseClient
-      .from("user_devices")
-      .update({ last_active: new Date().toISOString() })
-      .eq("id", existing.id);
+    const lastActiveMs = existing.last_active
+      ? new Date(existing.last_active).getTime()
+      : 0;
+    if (Date.now() - lastActiveMs > DEVICE_TOUCH_INTERVAL_MS) {
+      await supabaseClient
+        .from("user_devices")
+        .update({ last_active: new Date().toISOString() })
+        .eq("id", existing.id);
+    }
+    writeCache(deviceCacheKey, true);
     return { ok: true };
   }
 
@@ -245,5 +298,6 @@ async function checkAccountAccess(userId, profile) {
     },
     { onConflict: "user_id,device_id" },
   );
+  writeCache(deviceCacheKey, true);
   return { ok: true };
 }

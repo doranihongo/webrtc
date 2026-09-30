@@ -360,6 +360,7 @@ if (changePasswordForm) {
       }
       localStorage.setItem(`first_login_done_${userId}`, "true");
       localStorage.removeItem(changepwPendingKey(userId));
+      clearAccountCache();
 
       // QUAN TRỌNG: token hiện tại của chính thiết bị này được cấp TỪ
       // TRƯỚC lúc đổi mật khẩu (updateUser() không tự cấp token mới) -

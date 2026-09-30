@@ -87,6 +87,10 @@ function delay(ms) {
 }
 
 async function fetchProfileWithRetry(userId) {
+  const cacheKey = `acct_profile_${userId}`;
+  const cached = readCache(cacheKey);
+  if (cached) return { data: cached, error: null };
+
   let result = { data: null, error: null };
   for (let attempt = 1; attempt <= PROFILE_FETCH_RETRIES; attempt++) {
     result = await supabaseClient
@@ -103,6 +107,7 @@ async function fetchProfileWithRetry(userId) {
     if (profile || (error && isAuthInvalidError(error))) break;
     if (attempt < PROFILE_FETCH_RETRIES) await delay(PROFILE_FETCH_RETRY_DELAY_MS);
   }
+  if (result.data) writeCache(cacheKey, result.data);
   return result;
 }
 

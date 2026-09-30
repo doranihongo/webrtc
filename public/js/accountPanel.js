@@ -215,6 +215,7 @@ if (accountChangePasswordForm) {
       // chạy tiếp theo sẽ tưởng nhầm token hiện tại (cấp từ trước lúc
       // đổi) là phiên cũ rồi tự đăng xuất, y hệt bug đã gặp ở login.js.
       await supabaseClient.auth.refreshSession();
+      clearAccountCache();
 
       // Hiện popup "Thành công!" 2.5s rồi mới quay lại màn thông tin,
       // giống hệt showSuccessPopup bên UserProfileSidebar (kanji).
@@ -240,6 +241,7 @@ if (accountChangePasswordForm) {
 if (accountLogoutBtn) {
   accountLogoutBtn.addEventListener("click", async () => {
     await supabaseClient.auth.signOut();
+    clearAccountCache();
     window.location.href = "/login";
   });
 }
@@ -263,11 +265,11 @@ async function refreshAccountInfo() {
   // Lấy lại role/tên/max_devices/expires_at mới nhất - không chỉ số
   // thiết bị. Nếu lỗi mạng thì im lặng giữ nguyên dữ liệu cũ (đã hiện ở
   // trên từ window.__authUser), không làm gián đoạn người dùng.
-  const { data: profile, error: profileError } = await supabaseClient
-    .from("profiles")
-    .select("role, display_name, max_devices, expires_at")
-    .eq("id", window.__authUser.id)
-    .single();
+  // Dùng lại cache 5 phút của authGuard (fetchProfileWithRetry) thay vì
+  // gọi thêm 1 request profiles mỗi lần mở bảng/tải trang.
+  const { data: profile, error: profileError } = await fetchProfileWithRetry(
+    window.__authUser.id,
+  );
 
   if (!profileError && profile) {
     window.__authUser.role = profile.role;
@@ -292,11 +294,16 @@ async function refreshAccountInfo() {
     if (window.__authUser.role === "admin") {
       accountDeviceCount.textContent = `1/${maxDevices}`;
     } else {
-      const { data: devices, error } = await supabaseClient
-        .from("user_devices")
-        .select("id")
-        .eq("user_id", window.__authUser.id);
-      const activeCount = error ? 1 : devices?.length || 1;
+      const countKey = `acct_devcount_${window.__authUser.id}`;
+      let activeCount = readCache(countKey);
+      if (activeCount === null) {
+        const { data: devices, error } = await supabaseClient
+          .from("user_devices")
+          .select("id")
+          .eq("user_id", window.__authUser.id);
+        activeCount = error ? 1 : devices?.length || 1;
+        if (!error) writeCache(countKey, activeCount);
+      }
       accountDeviceCount.textContent = `${activeCount}/${maxDevices}`;
     }
   }
