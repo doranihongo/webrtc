@@ -136,8 +136,8 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
     // min-h-full + shrink-0: sàn tối thiểu 1 màn hình khi nội dung ngắn,
     // nhưng không bị ép co lại khi nội dung dài hơn - đi kèm flex-auto
     // (không phải flex-1) ở <main> bên dưới, xem comment ở đó.
-    <div className="min-h-full shrink-0 flex flex-col font-sans">
-      <nav className="h-16 flex-shrink-0 px-6 flex items-center justify-between border-b border-white/10 bg-white/5 backdrop-blur-md z-50 sticky top-0">
+    <div className="h-full min-h-0 flex flex-col font-sans">
+      <nav className="h-16 flex-shrink-0 px-6 flex items-center justify-between border-b border-white/10 bg-white/5 backdrop-blur-md z-50">
         <div className="w-full flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button onClick={onBack} className="hover:bg-white/10 text-white p-2 rounded-lg transition-colors border border-transparent mr-2">
@@ -156,7 +156,8 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
           main bằng 0 khi đo kích thước nội dung cho div cha ở trên - danh
           sách buổi học dài bao nhiêu cũng không kéo div cha (chứa nav
           sticky) cao ra theo, xem comment ở div cha. */}
-      <main className="flex-auto w-full p-4 md:p-8 pb-16">
+      <div className="flex-1 min-h-0 overflow-y-auto hide-scrollbar">
+      <main className="w-full p-4 md:p-8 pb-16">
         <div className="max-w-5xl w-full mx-auto flex flex-col gap-8">
         {/* Hero Section */}
         <div className="bg-surface-border-strong rounded-3xl overflow-hidden shadow-sm border border-white/10">
@@ -232,6 +233,7 @@ export default function CourseDetail({ courseId, onBack, onHome, onSelectLesson 
         </div>
         </div>
       </main>
+      </div>
 
       {/* Exit Confirmation Modal */}
       {showExitConfirm && (

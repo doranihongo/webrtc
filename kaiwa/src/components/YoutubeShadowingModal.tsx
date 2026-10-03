@@ -746,8 +746,8 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[500] flex justify-center items-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
-      <div className="bg-blue-900 w-full h-full sm:h-[92vh] max-w-6xl sm:rounded-3xl shadow-2xl border-b border-surface-border flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 relative">
+    <div className="fixed inset-0 z-[500] flex justify-center items-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 overscroll-none animate-in fade-in duration-200">
+      <div className="bg-blue-900 w-full h-full min-h-0 sm:h-[92vh] max-w-6xl sm:rounded-3xl shadow-2xl border-b border-surface-border flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 relative">
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-5 border-b border-surface-border bg-blue-800 z-10 shadow-sm shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -798,7 +798,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
 
         {/* STAGE: list - danh sách video có sẵn (lấy từ Supabase), màn mặc định lúc mở tool */}
         {stage === 'list' && (
-          <div className="flex-1 min-h-0 flex flex-col p-4 sm:p-6 gap-4 overflow-y-auto hide-scrollbar">
+          <div className="flex-1 min-h-0 flex flex-col p-4 sm:p-6 gap-4 overflow-y-auto overscroll-contain hide-scrollbar">
             {presetLoading && (
               <div className="flex-1 flex flex-col items-center justify-center gap-4 py-10">
                 <Loader2 className="w-9 h-9 text-blue-700 animate-spin" />
@@ -1047,7 +1047,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
           <div className="flex-1 min-h-0 flex flex-col">
             <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
               {/* Vùng phát video */}
-              <div className="md:w-[58%] shrink-0 flex flex-col p-4 sm:p-6 gap-4 overflow-y-auto hide-scrollbar">
+              <div className="md:w-[58%] shrink-0 flex flex-col p-4 sm:p-6 gap-4 overflow-y-auto overscroll-contain hide-scrollbar">
                 <div
                   className="relative w-full aspect-video rounded-2xl overflow-hidden bg-black shadow-lg group"
                   onMouseMove={showControlsTemporarily}
@@ -1224,7 +1224,7 @@ export default function YoutubeShadowingModal({ isOpen, onClose }: YoutubeShadow
                     Cuộn
                   </button>
                 </div>
-                <div ref={subtitleListRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 sm:px-4 pb-8 flex flex-col gap-1.5">
+                <div ref={subtitleListRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar px-3 sm:px-4 pb-8 flex flex-col gap-1.5">
                   {segments.map((seg, idx) => {
                     const active = idx === activeIndex;
                     return (
